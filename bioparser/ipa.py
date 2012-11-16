@@ -1,9 +1,10 @@
 import os
 import csv
 
+import utilities.omictools
+import networks.ontologies
+
 import data
-import omictools
-import ontologies
 
 class Function(object):
     
@@ -299,7 +300,7 @@ class IPA(object):
         
         
         
-class IngenuityOntology(ontologies.AcyclicDirectedGraph):
+class IngenuityOntology(networks.ontologies.AcyclicDirectedGraph):
     
     def __init__(self):
         """
@@ -307,7 +308,7 @@ class IngenuityOntology(ontologies.AcyclicDirectedGraph):
         super(IngenuityOntology, self).__init__()
         
 
-class IngenuityOntologyNode(ontologies.AcyclicDirectedGraphNode):
+class IngenuityOntologyNode(networks.ontologies.AcyclicDirectedGraphNode):
     
     def __init__(self, name, ipa_kind):
         """

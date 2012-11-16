@@ -2,8 +2,8 @@ import csv
 import os
 import re
 
-import data
-import omictools
+import utilities.omictools
+import bioparser.data
 
 class OMIM(object):
     

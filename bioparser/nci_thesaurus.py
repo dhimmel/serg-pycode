@@ -1,8 +1,8 @@
-import ontologies
+import networks.ontologies
 from operator import attrgetter
 
 
-class NCINode(ontologies.AcyclicDirectedGraphNode):
+class NCINode(networks.ontologies.AcyclicDirectedGraphNode):
     
     def __init__(self, code, concept_name, parents, synonyms, definition):
         """parents and synonyms are pipe delimited and should come directly
@@ -30,7 +30,7 @@ class NCINode(ontologies.AcyclicDirectedGraphNode):
                 'Children: ' + str(map(attrgetter('concept_name'), self.children)))
 
 
-class NCIOntology(ontologies.AcyclicDirectedGraph):
+class NCIOntology(networks.ontologies.AcyclicDirectedGraph):
     
     def __init__(self, path):
         """A DiseaseOntology object represents the ontology encoded by the

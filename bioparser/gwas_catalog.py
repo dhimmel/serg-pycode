@@ -1,5 +1,6 @@
 import os
-import metamap
+
+import mapping.metamap
 
 class GwasCatalog(object):
     

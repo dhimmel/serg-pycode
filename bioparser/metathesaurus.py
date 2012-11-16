@@ -2,8 +2,8 @@ import collections
 import csv
 import os
 
-import omictools
-import data
+import utilities.omictools
+import bioparser.data
 
 class Concept(object):
 
@@ -36,14 +36,14 @@ class Concept(object):
         return s
 
 
-class Metathesaurus(omictools.Shelved):
+class Metathesaurus(utilities.omictools.Shelved):
 
     def __init__(self, umls_dir=None):
         """
         Sources: http://www.nlm.nih.gov/research/umls/sourcereleasedocs/index.html#
         """
         if not umls_dir:
-            umls_dir = os.path.join(data.data_dir, 'umls', '2012AA')
+            umls_dir = os.path.join(bioparser.data.data_dir, 'umls', '2012AA')
         self.umls_dir = umls_dir
         self.meta_dir = os.path.join(self.umls_dir, 'META')
         

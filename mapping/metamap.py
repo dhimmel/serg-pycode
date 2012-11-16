@@ -4,7 +4,7 @@ import shutil
 import subprocess
 import time
 
-import omictools
+import utilities.omictools
 
 class Mapping(object):
     

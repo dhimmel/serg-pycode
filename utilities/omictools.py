@@ -2,8 +2,6 @@ import os
 import csv
 import shelve
 
-
-
 class With(object):
     
     def __init__(self, *args):

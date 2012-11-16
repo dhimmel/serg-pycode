@@ -2,11 +2,10 @@ import os
 import csv
 import collections
 
-import omictools
-import data
-import ctd
+import utilities.omictools
+import bioparser.data
 
-class SIDER(omictools.Shelved):
+class SIDER(utilities.omictools.Shelved):
     
     def __init__(self, sider_dir=None):
         """

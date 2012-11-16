@@ -1,5 +1,7 @@
 import os
 
+import utilities.omictools
+
 import ctd
 import drugbank
 import frimp
@@ -9,13 +11,13 @@ import meddra
 import metathesaurus
 import nature_predict
 import nci_thesaurus
-import omictools
 import omim
 import sider
 
 
+
 global data_dir
-data_dir = os.path.expanduser('~/Documents/serg/omicnet/data')
+data_dir = os.path.expanduser('~/Documents/serg/data-sources/')
 
 def sorted_dir_content(directory, n=0, path_type='directories', require_dated_format=False):
     """
@@ -64,7 +66,7 @@ def preceding_path(source, **kwargs):
     path = source_data_dir(source)
     return sorted_dir_content(path, n=1, **kwargs)
 
-@omictools.singleton
+@utilities.omictools.singleton
 class Data:
     
     def __init__(self):

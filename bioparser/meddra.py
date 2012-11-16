@@ -1,14 +1,14 @@
 import os
 import csv
 
-import omictools
-import data
+import utilities.omictools
+import bioparser.data
 
 class MedDRA(object):
     
     def __init__(self, release_name):
         """Read MedDRA"""
-        self.release_path = os.path.join(data.data_dir, 'meddra', release_name)
+        self.release_path = os.path.join(bioparser.data.data_dir, 'meddra', release_name)
         self.name_to_code = None
         self.code_to_name = None
         self.codes = None

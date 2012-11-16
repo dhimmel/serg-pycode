@@ -1,7 +1,7 @@
 import os
 
 import data
-import omictools
+import utilities.omictools
 
 class Gene(object):
     
@@ -48,7 +48,7 @@ class HGNC(object):
                            'RefSeq IDs': 'refseq_ids', 
                            'OMIM ID (mapped data supplied by NCBI)': 'omim_id'}
         keys_requiring_splitting = ['previous_symbols', 'synonyms', 'refseq_ids']
-        for line_dict in omictools.read_tdt(self.hgnc_path):
+        for line_dict in utilities.omictools.read_tdt(self.hgnc_path):
             if line_dict['Status'] != 'Approved':
                 continue
             line_dict = {converted_key: line_dict[key] for key, converted_key in key_conversions.items()}

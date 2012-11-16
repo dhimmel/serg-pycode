@@ -2,7 +2,7 @@ import os
 import csv
 import gzip
 
-import omictools
+import utilities.omictools
 
 
 
@@ -23,7 +23,7 @@ class CTD(object):
         path = os.path.join(self.ctd_dir, 'CTD_chemicals.tsv.gz')
         
         with gzip.GzipFile(path) as f:
-            reader = csv.DictReader(omictools.CommentedFile(f), headings, delimiter='\t')
+            reader = csv.DictReader(utilities.omictools.CommentedFile(f), headings, delimiter='\t')
             for row_dict in reader:
                 for heading in compound_columns:
                     compound_value = row_dict[heading]
