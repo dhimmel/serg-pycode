@@ -14,6 +14,12 @@ class Gene(object):
     def __eq__(self, other):
         return self.symbol == other.symbol
     
+    def __str__(self):
+        return 'HUGU Gene: ' + self.symbol
+
+    def __repr__(self):
+        return self.symbol    
+    
 class HGNC(object):
     
     def __init__(self, hgnc_dir=None):
@@ -30,7 +36,7 @@ class HGNC(object):
         """
         Produce a generator where each item is a gene.
         
-        Website: http://www.genenames.org/cgi-bin/hgnc_stats.pl
+        Website: http://www.genenames.org/cgi-bin/hgnc_stats
         Download the "complete HGNC dataset"
         
         Genes with Status 'Entry Withdrawn' or 'Symbol Withdrawn' are excluded.
@@ -89,7 +95,7 @@ class HGNC(object):
         if self.entrez_to_gene:
             return self.entrez_to_gene
         genes = self.get_genes()
-        entrez_to_gene = {gene.entrez_id: gene for gene in genes}
+        self.entrez_to_gene = {gene.entrez_id: gene for gene in genes}
         return self.entrez_to_gene        
         
 if __name__ == '__main__':

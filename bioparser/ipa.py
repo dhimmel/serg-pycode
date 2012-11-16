@@ -8,14 +8,14 @@ import data
 
 class Function(object):
     
-    effect_types = {'affects', 'increases', 'decreases'}
+    effect_kinds = {'affects', 'increases', 'decreases'}
     
     def __init__(self, name):
         """
         An ingenuity Function
         """
         self.name = name
-        self.molecules = dict.fromkeys(self.effect_types, list())
+        self.molecules = dict.fromkeys(self.effect_kinds, list())
         
     def __hash__(self):
         return hash(self.name)
@@ -31,12 +31,14 @@ class Function(object):
 
 class Molecule(object):
 
-    def __init__(self, symbol):
+    def __init__(self, symbol, kind, synonyms, **kwargs):
         """
-        set of all types:
+        set of all kinds:
         set(['chemical - kinase inhibitor', 'biologic drug', 'chemical drug', 'growth factor', 'translation regulator', 'kinase', 'chemical - other', 'enzyme', 'other', 'phosphatase', 'transcription regulator', 'ion channel', 'cytokine', 'chemical - endogenous mammalian', 'mature microRNA', 'chemical - protease inhibitor', 'transporter', 'peptidase', 'microRNA', 'chemical - endogenous non-mammalian', 'chemical reagent', 'transmembrane receptor', 'chemical toxicant', 'ligand-dependent nuclear receptor', 'G-protein coupled receptor'])
         """
         self.symbol = symbol
+        self.kind = kind
+        self.synonyms = synonyms
     
     def __hash__(self):
         return hash(self.symbol)
@@ -52,18 +54,24 @@ class Molecule(object):
 
 class Drug(Molecule):
     
-    def __init__(self, symbol):
-        super(Drug, self).__init__(symbol)
+    def __init__(self, **kwargs):
+        super(Drug, self).__init__(**kwargs)
+        if 'targets' in kwargs:
+            self.targets = kwargs['targets']
 
-class IPAGene(Molecule):
+class Gene(Molecule):
     
-    def __init__(self, symbol):
-        super(Drug, self).__init__(symbol)
+    def __init__(self, entrez_gene_name, location, drugs, entrez_id_human, **kwargs):
+        super(Gene, self).__init__(**kwargs)
+        self.entrez_gene_name = entrez_gene_name
+        self.location = location
+        self.drugs = drugs
+        self.entrez_id_human = entrez_id_human
 
 class Other(Molecule):
     
-    def __init__(self, symbol):
-        super(Other, self).__init__(symbol)
+    def __init__(self, **kwargs):
+        super(Other, self).__init__(**kwargs)
 
 
 class IPA(object):
@@ -75,19 +83,21 @@ class IPA(object):
         if not ipa_dir:
             ipa_dir = data.current_path('ipa')
         self.ipa_dir = ipa_dir
-    
+        
+        self.drugs = set()
+        self.molecules = set()
+        self.genes = set()
+        
     def build(self):
         """
         """
         print 'Building Ingenuity IPA'
-                
-        molecule_generator = self.read_annotations('annotations-query_disease.txt')
-        #for molecule in molecules:
-        self.molecules = set(molecule_generator)
-            
+        self.drugs = set(self.read_drugs())   
+        self.molecules = set(self.read_annotations('annotations-query_disease.txt'))
+        
+        #self.symbol_to_molecule = {molecule.symbol: molecule for molecule in self.molecules}
         
         
-        self.symbol_to_molecule = {molecule.symbol: molecule for molecule in self.molecules}
         self.functions = set()
         function_generator = self.read_functions('associated_molecules-query_disease.txt')
         for function in function_generator:
@@ -95,7 +105,8 @@ class IPA(object):
         self.name_to_function = {function.name: function for function in self.functions}
         print len(self.name_to_function), 'functions'
         self.build_ontology()
-
+        
+        
         # Incorporate effect on function information
         effect_generator = self.read_effect_on_function('effect_on_function-query_disease.txt')
         for effect in effect_generator:
@@ -104,9 +115,16 @@ class IPA(object):
             function = self.name_to_function[name]
             function.molecules[effect['effect']] = molecules
         
-        self.drugs = set(self.read_drugs('drugs.txt'))
-        self.genes = data.Data().hgnc.get_genes()
-
+        #data.Data().hgnc.get_genes()
+        self.genes = {molecule for molecule in self.molecules if isinstance(molecule, Gene)}
+        # Parse drugs for each gene
+        valid_symbols = {drug.symbol for drug in self.drugs}
+        for gene in self.genes:
+            drugs = gene.drugs
+            drugs = self.parse_molecules(drugs, ', ', valid_symbols)
+            gene.drugs = drugs
+        self.molecules = self.drugs | self.molecules
+        self.symbol_to_molecule = {molecule.symbol: molecule for molecule in self.molecules}
 
     def build_ontology(self):
         """Build IPA Ontology"""
@@ -153,22 +171,24 @@ class IPA(object):
                 if len(children) == 1 and node.name == children[0].name:
                     self.ontology.remove_node(node)
 
-    def parse_molecules(self, unsplit, total_number):
+    def parse_molecules(self, unsplit, splitter, valid_symbols, total_number=None):
         """ """
-        molecules = list()
+        symbols = list()
         while unsplit:
-            symbol, unsplit = self.split_one(unsplit)
-            while unsplit and symbol not in self.symbol_to_molecule:
-                addition, unsplit = self.split_one(unsplit)
+            symbol, unsplit = self.split_one(unsplit, splitter)
+            while unsplit and symbol not in valid_symbols:
+                addition, unsplit = self.split_one(unsplit, splitter)
                 symbol += ', ' + addition
-            molecule = self.symbol_to_molecule[symbol]
-            molecules.append(molecule)
-        assert len(molecules) == total_number
-        return molecules
+            if symbol not in valid_symbols:
+                print symbol
+                raise ValueError
+            symbols.append(symbol)
+        assert total_number is None or len(symbols) == total_number
+        return symbols
     
     
     @staticmethod
-    def split_one(unsplit, splitter=', '):
+    def split_one(unsplit, splitter):
         """Perform a single comma-space left string split. Returns the head 
         before the first split and the tail as the remainder of the string."""
         split = unsplit.split(', ', 1)
@@ -196,45 +216,45 @@ class IPA(object):
     def read_annotations(self, file_name):
         """
         """
+        assert self.drugs
+        
         path = os.path.join(self.ipa_dir, file_name)
-        fieldnames = ['symbol','synonyms', 'entrez_gene_name', 'location',
-                      'type', 'biomarker_applications', 'drugs',
+        fieldnames = ['symbol', 'synonyms', 'entrez_gene_name', 'location',
+                      'kind', 'biomarker_applications', 'drugs',
                       'entrez_id_human', 'entrez_id_mouse', 'entrez_id_rat']
         with IPAExportReader(path, fieldnames) as dict_reader:
             for row in dict_reader:
-                #if row['entrez_gene_name'] == '--':
-                #    row['entrez_gene_name'] == None
                 for key, value in row.items():
                     if value in {'', ' ', '--'}:
                         row[key] = None
-                molecule = Molecule(row['symbol'])
-                molecule.__dict__.update(row)
+                molecule = Other(**row)
+                if molecule in self.drugs:
+                    molecule = Drug(**row)
+                if row['entrez_id_human'] and row['kind'] != 'microRNA':
+                    molecule = Gene(**row)
                 yield molecule
     
-    def read_drugs(self, file_name):
+    def read_drugs(self, file_name='drugs-and-chemicals.txt'):
         """
         Under "genes and chemicals" tab click advanced search. Under "molecule
-        types check "biological drug" and "chemical drug". Then search and
+        kinds check "biological drug" and "chemical drug". Then search and
         export.
         """
         path = os.path.join(self.ipa_dir, file_name)
         fieldnames = ['number', 'symbol', 'matched_term', 'synonyms', 'entrez',
-                      'location', 'type', 'biomarker_applications', 'drugs',
+                      'location', 'kind', 'biomarker_applications', 'drugs',
                       'targets']
-        delete_fields = {'number', 'matched_term', 'entrez', 'location',
-                         'biomarker_applications', 'drugs'}
         plural_fields = {'targets'}
         with IPAExportReader(path, fieldnames) as dict_reader:
             for row in dict_reader:
-                for fieldname in delete_fields:
-                    del row[fieldname]
+                del row[None]
                 for key, value in row.items():
-                    if value == '':
-                        row[key] = None
+                    if value == '' or value == ' ':
+                        value = None
+                        row[key] = value
                     if key in plural_fields:
                         row[key] = list() if value is None else value.split(',')
-                drug = Drug(row['symbol'])
-                drug.__dict__.update(row)
+                drug = Drug(**row)
                 yield drug
         
         
@@ -256,11 +276,6 @@ class IPA(object):
                 # Molecules
                 number_of_molecules = int(row['number_of_molecules'])
                 row['number_of_molecules'] = number_of_molecules
-                """
-                unsplit = row['molecules']
-                molecules = self.parse_molecules(unsplit, number_of_molecules)
-                row['molecules'] = molecules
-                """              
                 function = Function(row['name'])
                 del row['molecules']
                 function.__dict__.update(row)
@@ -272,13 +287,17 @@ class IPA(object):
         Select all results and click "effect on function".
         Select all processes and export
         """
+        
+        assert self.molecules
+        
         path = os.path.join(self.ipa_dir, file_name)
         fieldnames = ['function_annotation','molecules', 'number_of_molecules']
+        valid_symbols = {molecule.symbol for molecule in self.molecules}
         with IPAExportReader(path, fieldnames) as dict_reader:
             for row in dict_reader:
                 function_annotation = row['function_annotation']
                 effect, function_annotation = function_annotation.split(' ', 1)
-                assert effect in Function.effect_types
+                assert effect in Function.effect_kinds
                 row['effect'] = effect
                 function_annotation, occurances = function_annotation.rsplit(' ', 1)
                 #occurances = occurances.strip('()')
@@ -292,7 +311,7 @@ class IPA(object):
                 number_of_molecules = int(row['number_of_molecules'])
                 row['number_of_molecules'] = number_of_molecules
                 unsplit = row['molecules']
-                molecules = self.parse_molecules(unsplit, number_of_molecules)                
+                molecules = self.parse_molecules(unsplit, ', ', valid_symbols, number_of_molecules)                
                 row['molecules'] = molecules
                 row['name'] = name
                 row['function'] = self.name_to_function[name]
@@ -329,6 +348,8 @@ class IngenuityOntologyNode(networks.ontologies.AcyclicDirectedGraphNode):
 
 class IPAExportReader(object):
     
+    none_strings = {'', ' ', '--'}
+    
     def __init__(self, path, fieldnames):
         self.path = path
         self.fieldnames = fieldnames
@@ -350,17 +371,21 @@ if __name__ == '__main__':
     #onto_structure_path = os.path.join(ipa.ipa_dir, 'ipa-ontology-structure.txt')
     #ipa.ontology.write_structure(onto_structure_path)
     for i, molecule in enumerate(ipa.molecules):
-        if molecule.entrez_id_human:
-            gene = data.Data().hgnc.get_symbol_to_gene().get(molecule.symbol)
-            #if not gene:
-            #    print molecule.symbol, '\t', molecule.entrez_id_human
-            #print molecule.symbol, '\t', molecule.type, '\t', molecule.entrez_id_human
-            if gene:
-                drugs = molecule.drugs
-                if not drugs:
-                    continue
-                print molecule.symbol, drugs
-
+        if isinstance(molecule, Gene):
+            """
+            #gene = data.Data().hgnc.get_symbol_to_gene().get(molecule.symbol)
+            gene = data.Data().hgnc.get_entrez_to_gene().get(molecule.entrez_id_human)
+            if not gene:
+                print molecule.symbol, '\t', molecule.kind, '\t', molecule.entrez_id_human
+            #print molecule.symbol, '\t', molecule.kind, '\t', molecule.entrez_id_human
+            """
+            drugs = molecule.drugs
+            if not drugs:
+                continue
+            for drug in drugs:
+                print drug
+                assert molecule.symbol in ipa.symbol_to_molecule[drug].targets
+            #print molecule.symbol, drugs
 
     #print(ipa.name_to_node['phospholipidosis of lysosome'].children)
     #print list(ipa.functions)[1]    
