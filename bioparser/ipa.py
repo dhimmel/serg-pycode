@@ -94,10 +94,7 @@ class IPA(object):
         print 'Building Ingenuity IPA'
         self.drugs = set(self.read_drugs())   
         self.molecules = set(self.read_annotations('annotations-query_disease.txt'))
-        
-        #self.symbol_to_molecule = {molecule.symbol: molecule for molecule in self.molecules}
-        
-        
+                
         self.functions = set()
         function_generator = self.read_functions('associated_molecules-query_disease.txt')
         for function in function_generator:
@@ -105,7 +102,6 @@ class IPA(object):
         self.name_to_function = {function.name: function for function in self.functions}
         print len(self.name_to_function), 'functions'
         self.build_ontology()
-        
         
         # Incorporate effect on function information
         effect_generator = self.read_effect_on_function('effect_on_function-query_disease.txt')
@@ -115,16 +111,24 @@ class IPA(object):
             function = self.name_to_function[name]
             function.molecules[effect['effect']] = molecules
         
-        #data.Data().hgnc.get_genes()
-        self.genes = {molecule for molecule in self.molecules if isinstance(molecule, Gene)}
+        
+        """
         # Parse drugs for each gene
+        # NOT POSSIBLE UNTIL WE SURPASS THE 5000 result search limit for
+        # genes and chemicals which affects the "chemical - endogenous mammal"
+        # category.
         valid_symbols = {drug.symbol for drug in self.drugs}
+        print len(valid_symbols), 'drugs'
         for gene in self.genes:
             drugs = gene.drugs
             drugs = self.parse_molecules(drugs, ', ', valid_symbols)
             gene.drugs = drugs
+        """
         self.molecules = self.drugs | self.molecules
         self.symbol_to_molecule = {molecule.symbol: molecule for molecule in self.molecules}
+        self.genes = {molecule for molecule in self.molecules if isinstance(molecule, Gene)}        
+        self.others = {molecule for molecule in self.molecules if isinstance(molecule, Other)}        
+
 
     def build_ontology(self):
         """Build IPA Ontology"""
@@ -176,9 +180,12 @@ class IPA(object):
         symbols = list()
         while unsplit:
             symbol, unsplit = self.split_one(unsplit, splitter)
+            #print '-------------------------------------'
             while unsplit and symbol not in valid_symbols:
+                #print symbol
                 addition, unsplit = self.split_one(unsplit, splitter)
-                symbol += ', ' + addition
+                symbol += splitter + addition
+                
             if symbol not in valid_symbols:
                 print symbol
                 raise ValueError
@@ -234,11 +241,15 @@ class IPA(object):
                     molecule = Gene(**row)
                 yield molecule
     
-    def read_drugs(self, file_name='drugs-and-chemicals.txt'):
+    def read_drugs(self, file_name='drugs.txt'):
         """
         Under "genes and chemicals" tab click advanced search. Under "molecule
         kinds check "biological drug" and "chemical drug". Then search and
         export.
+        
+        To get a usuable symbol from ipa gene symbols run:
+        symbol = gene.symbol.split('/')[0]
+        symbol = symbol.split(' (')[0]
         """
         path = os.path.join(self.ipa_dir, file_name)
         fieldnames = ['number', 'symbol', 'matched_term', 'synonyms', 'entrez',
@@ -379,6 +390,7 @@ if __name__ == '__main__':
                 print molecule.symbol, '\t', molecule.kind, '\t', molecule.entrez_id_human
             #print molecule.symbol, '\t', molecule.kind, '\t', molecule.entrez_id_human
             """
+            """
             drugs = molecule.drugs
             if not drugs:
                 continue
@@ -386,7 +398,7 @@ if __name__ == '__main__':
                 print drug
                 assert molecule.symbol in ipa.symbol_to_molecule[drug].targets
             #print molecule.symbol, drugs
-
+            """
     #print(ipa.name_to_node['phospholipidosis of lysosome'].children)
     #print list(ipa.functions)[1]    
     

@@ -51,7 +51,8 @@ class HGNC(object):
                            'Chromosome': 'chromosome',
                            'Entrez Gene ID': 'entrez_id',
                            'Ensembl Gene ID': 'ensembl_id',
-                           'RefSeq IDs': 'refseq_ids', 
+                           'RefSeq IDs': 'refseq_ids',
+                           'Entrez Gene ID (mapped data supplied by NCBI)': 'entrez_id_ncbi_mapped',
                            'OMIM ID (mapped data supplied by NCBI)': 'omim_id'}
         keys_requiring_splitting = ['previous_symbols', 'synonyms', 'refseq_ids']
         for line_dict in utilities.omictools.read_tdt(self.hgnc_path):
@@ -95,7 +96,8 @@ class HGNC(object):
         if self.entrez_to_gene:
             return self.entrez_to_gene
         genes = self.get_genes()
-        self.entrez_to_gene = {gene.entrez_id: gene for gene in genes}
+        self.entrez_to_gene = {gene.entrez_id_ncbi_mapped: gene for gene in genes}
+        self.entrez_to_gene.update({gene.entrez_id: gene for gene in genes})
         return self.entrez_to_gene        
         
 if __name__ == '__main__':

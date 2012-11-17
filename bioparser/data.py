@@ -5,8 +5,9 @@ import utilities.omictools
 import ctd
 import drugbank
 import frimp
-import hgnc
 import gwas_catalog
+import hgnc
+import ipa
 import meddra
 import metathesaurus
 import nature_predict
@@ -70,12 +71,13 @@ def preceding_path(source, **kwargs):
 class Data:
     
     def __init__(self):
-        print 'initializing DataObjects'
+        #print 'initializing DataObjects'
         self.ctd = ctd.CTD(current_path('ctd'))
         self.drugbank = drugbank.DrugBank(current_path('drugbank'))
         self.frimp = frimp.IMP(current_path('imp'))
         self.gwas_catalog = gwas_catalog.GwasCatalog(current_path('gwas-catalog'))
         self.hgnc = hgnc.HGNC(current_path('hgnc'))
+        self.ipa = ipa.IPA()
         self.meddra = meddra.MedDRA(current_path('meddra'))
         self.metathesaurus = metathesaurus.Metathesaurus()
         self.omim = omim.OMIM(current_path('omim'))
