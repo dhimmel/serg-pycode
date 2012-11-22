@@ -1,6 +1,8 @@
 import os
 import csv
 
+import networkx
+
 import utilities.omictools
 import networks.ontologies
 
@@ -84,6 +86,8 @@ class IPA(object):
             ipa_dir = data.current_path('ipa')
         self.ipa_dir = ipa_dir
         
+        self.networkx = None
+        
         self.drugs = set()
         self.molecules = set()
         self.genes = set()
@@ -129,7 +133,6 @@ class IPA(object):
         self.genes = {molecule for molecule in self.molecules if isinstance(molecule, Gene)}        
         self.others = {molecule for molecule in self.molecules if isinstance(molecule, Other)}        
 
-
     def build_ontology(self):
         """Build IPA Ontology"""
         self.ontology = IngenuityOntology()
@@ -174,7 +177,73 @@ class IPA(object):
                 children = list(node.children)
                 if len(children) == 1 and node.name == children[0].name:
                     self.ontology.remove_node(node)
-
+    
+    def build_networkx(self):
+        """
+        """
+        if self.networkx:
+            return self.networkx
+        self.build()
+        
+        hgnc = data.Data().hgnc
+        entrez_to_hgnc = hgnc.get_entrez_to_gene()
+        symbol_to_hgnc = hgnc.get_symbol_to_gene()
+                
+        g = networkx.Graph(name='ipanet')
+        ################################################################################
+        ################################# Create Nodes #################################
+        
+        # Create drug nodes
+        targets = set()
+        for drug in self.drugs:
+            g.add_node(drug.symbol, kind='drug')
+            targets |= set(drug.targets)
+        
+        # Create disease nodes
+        for disease in self.functions:
+            g.add_node(disease.name, kind='disease')
+        
+        # Create gene nodes
+        hugu_genes_added = set()
+        for gene in self.genes:
+            entrez_id = gene.entrez_id_human.split('|')[0]
+            hgnc_gene = entrez_to_hgnc.get(entrez_id)
+            if hgnc_gene:
+                hugu_genes_added.add(hgnc_gene)
+            hugu_symbol = hgnc_gene.symbol if hgnc_gene else None
+            g.add_node(gene.symbol, hugu_symbol=hugu_symbol, kind='gene')
+        for target in targets:
+            if target not in g:
+                hgnc_gene = symbol_to_hgnc.get(target)
+                if hgnc_gene:
+                    hugu_genes_added.add(hgnc_gene)
+                hugu_symbol = hgnc_gene.symbol if hgnc_gene else None
+                g.add_node(target, hugu_symbol=hugu_symbol, kind='gene')
+        del targets
+        
+        missing_hugu_genes = set(hgnc.get_genes()) - hugu_genes_added
+        for hgnc_gene in missing_hugu_genes:
+            if hgnc_gene.symbol in g:
+                raise Exception('pre-existing ipa symbol matching gene name')
+            g.add_node(hgnc_gene.symbol, hugu_symbol=hgnc_gene.symbol, kind='gene')
+        
+        ################################################################################
+        ################################# Create Edges #################################
+        # Create drug-gene links from drug target annotations.
+        for drug in self.drugs:
+            for target in drug.targets:
+                g.add_edge(drug.symbol, target)
+        
+        # Create disease-gene and disease-drug links from ipa function annotations.
+        for disease in self.functions:
+            for effect, molecules in disease.molecules.items():
+                for molecule in molecules:
+                    if disease.name in g and molecule in g:
+                        g.add_edge(disease.name, molecule, effect=effect)
+        
+        self.networkx = g
+        return self.networkx
+    
     def parse_molecules(self, unsplit, splitter, valid_symbols, total_number=None):
         """ """
         symbols = list()
@@ -192,7 +261,6 @@ class IPA(object):
             symbols.append(symbol)
         assert total_number is None or len(symbols) == total_number
         return symbols
-    
     
     @staticmethod
     def split_one(unsplit, splitter):
@@ -219,7 +287,6 @@ class IPA(object):
             synonyms = list()
         return name, synonyms
         
-    
     def read_annotations(self, file_name):
         """
         """
@@ -258,7 +325,6 @@ class IPA(object):
         plural_fields = {'targets'}
         with IPAExportReader(path, fieldnames) as dict_reader:
             for row in dict_reader:
-                del row[None]
                 for key, value in row.items():
                     if value == '' or value == ' ':
                         value = None
@@ -267,8 +333,7 @@ class IPA(object):
                         row[key] = list() if value is None else value.split(',')
                 drug = Drug(**row)
                 yield drug
-        
-        
+      
     def read_functions(self, file_name):
         """
         """
@@ -370,35 +435,35 @@ class IPAExportReader(object):
         for i in xrange(3):
             self.f.next() # skip line
         reader = csv.DictReader(self.f, fieldnames=self.fieldnames, delimiter='\t')
-        return reader
+        for row in reader:
+            if None in row:
+                del row[None]
+            for key, value in row.items():
+                row[key] = self.to_ascii(value)
+            yield row
     
     def __exit__(self, *args, **kwargs):
         self.f.close()
 
+    @staticmethod
+    def to_ascii(s):
+        return unicode(s, encoding='utf-8').encode('ascii', 'replace')
 
 if __name__ == '__main__':
     ipa = IPA()
-    ipa.build()
-    #onto_structure_path = os.path.join(ipa.ipa_dir, 'ipa-ontology-structure.txt')
-    #ipa.ontology.write_structure(onto_structure_path)
-    for i, molecule in enumerate(ipa.molecules):
-        if isinstance(molecule, Gene):
-            """
-            #gene = data.Data().hgnc.get_symbol_to_gene().get(molecule.symbol)
-            gene = data.Data().hgnc.get_entrez_to_gene().get(molecule.entrez_id_human)
-            if not gene:
-                print molecule.symbol, '\t', molecule.kind, '\t', molecule.entrez_id_human
-            #print molecule.symbol, '\t', molecule.kind, '\t', molecule.entrez_id_human
-            """
-            """
-            drugs = molecule.drugs
-            if not drugs:
-                continue
-            for drug in drugs:
-                print drug
-                assert molecule.symbol in ipa.symbol_to_molecule[drug].targets
-            #print molecule.symbol, drugs
-            """
-    #print(ipa.name_to_node['phospholipidosis of lysosome'].children)
-    #print list(ipa.functions)[1]    
+    g = ipa.build_networkx()
+    print networkx.info(g)
+    connected_nodes = (node for node, degree in g.degree_iter() if degree)
+    g_connected = g.subgraph(connected_nodes)
+    print networkx.info(g_connected)
+    gml_path = '/home/dhimmels/Documents/serg/ipanet/ipanet.gml'
+    networkx.write_gml(g_connected, gml_path)
+    print 'IPA network written as GML'
+    pkl_path = '/home/dhimmels/Documents/serg/ipanet/ipanet.pkl'
+    networkx.write_gpickle(g_connected, pkl_path)
+    print 'IPA network written as pickle'
+
     
+    
+    #onto_structure_path = os.path.join(ipa.ipa_dir, 'ipa-ontology-structure.txt')
+    #ipa.ontology.write_structure(onto_structure_path
