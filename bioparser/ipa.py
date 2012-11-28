@@ -232,14 +232,21 @@ class IPA(object):
         # Create drug-gene links from drug target annotations.
         for drug in self.drugs:
             for target in drug.targets:
-                g.add_edge(drug.symbol, target)
+                g.add_edge(drug.symbol, target, kind='target')
         
         # Create disease-gene and disease-drug links from ipa function annotations.
         for disease in self.functions:
             for effect, molecules in disease.molecules.items():
                 for molecule in molecules:
                     if disease.name in g and molecule in g:
-                        g.add_edge(disease.name, molecule, effect=effect)
+                        if g.node[molecule]['kind'] == 'drug':
+                            if effect == 'decreases':
+                                kind = 'indication'
+                            else:
+                                kind = 'disease_modifying_drug'
+                        else:
+                            kind = 'disease_gene'
+                        g.add_edge(disease.name, molecule, effect=effect, kind=kind)
         
         self.networkx = g
         return self.networkx
@@ -451,6 +458,7 @@ class IPAExportReader(object):
 
 if __name__ == '__main__':
     ipa = IPA()
+
     g = ipa.build_networkx()
     print networkx.info(g)
     connected_nodes = (node for node, degree in g.degree_iter() if degree)
@@ -462,8 +470,12 @@ if __name__ == '__main__':
     pkl_path = '/home/dhimmels/Documents/serg/ipanet/ipanet.pkl'
     networkx.write_gpickle(g_connected, pkl_path)
     print 'IPA network written as pickle'
+    
+    """
+    ipa.build()
+    onto_structure_path = os.path.join(ipa.ipa_dir, 'ipa-ontology-structure.txt')
+    ipa.ontology.write_structure(onto_structure_path)
 
+    """
     
     
-    #onto_structure_path = os.path.join(ipa.ipa_dir, 'ipa-ontology-structure.txt')
-    #ipa.ontology.write_structure(onto_structure_path
