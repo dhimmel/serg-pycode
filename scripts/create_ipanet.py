@@ -3,7 +3,7 @@ import random
 
 import networkx
 import numpy
-import sklearn
+import sklearn.linear_model
 
 import bioparser.data
 
@@ -98,12 +98,13 @@ for node, neighbor, data in g.edges_iter(data=True):
     kind = data['kind']
     edge = node, neighbor
     kind_to_edges.setdefault(kind, set()).add(edge)
+
 for key, value in kind_to_edges.items():
     print key, len(value)
 
 # Select positives and negatives
 indications = list(kind_to_edges['indication'])
-num_of_positives = len(indications) / 3
+num_of_positives = len(indications) / 200
 positives = random.sample(indications, num_of_positives)
 drugs = kind_to_nodes['drug']
 diseases = kind_to_nodes['disease']
@@ -114,6 +115,7 @@ while len(negatives) < num_of_positives:
     if not g.has_edge(disease, drug):
         edge = drug, disease
         negatives.append(edge)
+
 # delete positives edges from the network
 g.remove_edges_from(positives)
 total_path_counts(g)
@@ -123,7 +125,12 @@ training_edges = negatives + positives
 y = numpy.repeat([0, 1], [len(negatives), len(positives)])
 
 npcs_by_edge = [normalized_path_counts(*edge) for edge in training_edges]
-metapaths = list(set(npc.keys() for npc in npcs_by_edge))
+
+metapaths = set()
+for npc in npcs_by_edge:
+    metapaths |= set(npc.keys())
+
+metapaths = list(metapaths)
 metapaths.sort(key=lambda x: len(x))
 
 
@@ -135,12 +142,19 @@ for npc in npcs_by_edge:
         if value is None:
             value = 0.0
         x_row.append(value)
-    X.append(X)
+    X.append(x_row)
+
 X = numpy.array(X)
 
 logreg = sklearn.linear_model.LogisticRegression()
 logreg.fit(X, y)
-       
+y_predicted = logreg.predict_proba(X)[:,1]
+
+fpr, tpr, thresholds = sklearn.metrics.roc_curve(y, y_predicted)
+sklearn.metrics.auc(fpr, tpr)
+
+feature_file = '/home/dhimmels/Documents/serg/ipanet/features.txt'
+numpy.savetxt(feature_file, numpy.column_stack((X, y.T)))
 
 
 #print g.node['multiple sclerosis']
