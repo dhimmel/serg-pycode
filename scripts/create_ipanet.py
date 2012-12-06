@@ -1,4 +1,5 @@
 import collections
+import os
 import random
 
 import networkx
@@ -6,101 +7,123 @@ import numpy
 import sklearn.linear_model
 
 import bioparser.data
+import networks.schema
 
 
+ipanet_dir = '/home/dhimmels/Documents/serg/ipanet/'
+pkl_path = os.path.join(ipanet_dir, 'ipanet.pkl')
+gml_path = os.path.join(ipanet_dir, 'ipanet.gml')
 
-def total_path_counts(g):
-    """Computes the total path counts ending and starting with each node. Saves
-    the results in the data dictionary for the node under the keys:
-    'ending_paths' and 'starting_paths'. Computation is dynamic to improve
-    efficiency.
+def build_networkx():
     """
-    for node, data in g.nodes_iter(data=True):
-        kind = data['kind']
-        paths = collections.Counter([(kind, )])
-        data['ending_paths'] = paths
-        data['starting_paths'] = paths
-        data['temp_ending_paths'] = collections.Counter()
-        data['temp_starting_paths'] = collections.Counter()
+    """
+    ipa = bioparser.data.Data().ipa
+    ipa.build()
+
+    hgnc = bioparser.data.Data().hgnc
+    entrez_to_hgnc = hgnc.get_entrez_to_gene()
+    symbol_to_hgnc = hgnc.get_symbol_to_gene()
+            
+    g = networkx.MultiGraph(name='ipanet')
+    ################################################################################
+    ################################# Create Nodes #################################
     
-    for i in range(3):
-        
-        for node, data in g.nodes_iter(data=True):
-            kind = data['kind']
-            neighbors = g.neighbors_iter(node)
-            for neighbor in neighbors:
-                neighbor_data = g.node[neighbor]
-                
-                # Ending Paths
-                neighbor_ending_paths = neighbor_data['ending_paths']
-                for neighbor_path, count in neighbor_ending_paths.iteritems():
-                    path = list(neighbor_path)
-                    path.append(kind)
-                    path = tuple(path)
-                    data['temp_ending_paths'][path] += count
-                
-                # Starting Paths            
-                neighbor_starting_paths = neighbor_data['starting_paths']
-                for neighbor_path, count in neighbor_starting_paths.iteritems():
-                    path = [kind] + list(neighbor_path)
-                    path = tuple(path)
-                    data['temp_starting_paths'][path] += count
-        
-        for node, data in g.nodes_iter(data=True):
-            data['ending_paths'] += data['temp_ending_paths']
-            data['temp_ending_paths'] = collections.Counter()
-            data['starting_paths'] += data['temp_starting_paths']
-            data['temp_starting_paths'] = collections.Counter()
+    # Create drug nodes
+    targets = set()
+    for drug in ipa.drugs:
+        g.add_node(drug.symbol, kind='drug')
+        targets |= set(drug.targets)
     
-    # Delete temporary attibutes
-    for node, data in g.nodes_iter(data=True):
-        del data['temp_ending_paths']
-        del data['temp_starting_paths']
+    # Create disease nodes
+    for disease in ipa.functions:
+        g.add_node(disease.name, kind='disease')
+    
+    # Create gene nodes
+    hugu_genes_added = set()
+    for gene in ipa.genes:
+        entrez_id = gene.entrez_id_human.split('|')[0]
+        hgnc_gene = entrez_to_hgnc.get(entrez_id)
+        if hgnc_gene:
+            hugu_genes_added.add(hgnc_gene)
+        hugu_symbol = hgnc_gene.symbol if hgnc_gene else None
+        g.add_node(gene.symbol, hugu_symbol=hugu_symbol, kind='gene')
+    for target in targets:
+        if target not in g:
+            hgnc_gene = symbol_to_hgnc.get(target)
+            if hgnc_gene:
+                hugu_genes_added.add(hgnc_gene)
+            hugu_symbol = hgnc_gene.symbol if hgnc_gene else None
+            g.add_node(target, hugu_symbol=hugu_symbol, kind='gene')
+    del targets
+    
+    missing_hugu_genes = set(hgnc.get_genes()) - hugu_genes_added
+    for hgnc_gene in missing_hugu_genes:
+        if hgnc_gene.symbol in g:
+            raise Exception('pre-existing ipa symbol matching gene name')
+        g.add_node(hgnc_gene.symbol, hugu_symbol=hgnc_gene.symbol, kind='gene')
+    
+    ################################################################################
+    ################################# Create Edges #################################
+    # Create drug-gene links from drug target annotations.
+    for drug in ipa.drugs:
+        for target in drug.targets:
+            g.add_edge(drug.symbol, target, key='target')
+    
+    # Create disease-gene and disease-drug links from ipa function annotations.
+    for disease in ipa.functions:
+        for effect, molecules in disease.molecules.items():
+            for molecule in molecules:
+                if disease.name in g and molecule in g:
+                    if g.node[molecule]['kind'] == 'drug':
+                        if effect == 'decreases':
+                            kind = 'indication'
+                        else:
+                            kind = 'disease_modifying_drug'
+                    else:
+                        kind = 'risk'
+                    g.add_edge(disease.name, molecule, effect=effect, key=kind)
+    
+    
+    # Define schema for network
+    node_kinds = {'drug', 'disease', 'gene'}
+    edge_tuples = [('drug', 'gene', 'target'),
+                   ('gene', 'disease', 'risk'),
+                   ('drug', 'disease', 'indication')]
+    schema = networks.schema.UndirectedSchema(node_kinds, edge_tuples)
+    g.graph['schema'] = schema
+    
+    return g
 
-def path_counts(source, target, cutoff=3):
-    metapath_counter = collections.Counter()
-    paths = networkx.all_simple_paths(g, source, target, cutoff)
-    for path in paths:
-        metapath = tuple(g.node[node]['kind'] for node in path)
-        metapath_counter[metapath] += 1
-    return metapath_counter
 
-def normalized_path_counts(source, target, cutoff=3):
-    numerator = path_counts(source, target, cutoff) + path_counts(target, source, cutoff)
-    denomenator = g.node[source]['starting_paths'] + g.node[target]['ending_paths']
-    npc = dict()
-    for metapath, counts in numerator.items():
-        denom = denomenator[metapath]
-        if denom != 0:
-            npc[metapath] = float(counts) / denom
-    return npc
+def purify(g):
+    """Keep only edges of specified kinds and then remove unconnected nodes."""
+    # Remove improper edge kinds
+    valid_edge_kinds = {'target', 'risk', 'indication'}
+    for node, neighbor, key in g.edges_iter(keys=True):
+        if key not in valid_edge_kinds:
+            g.remove_edge(node, neighbor, key)
+    
+    # Remove unconnected nodes
+    unconnected_nodes = (node for node, degree in g.degree_iter() if not degree)
+    g.remove_nodes_from(unconnected_nodes)        
+
+if __name__ == '__main__':
+    g = build_networkx()
+    print networkx.info(g)
+    purify(g)
+    print networkx.info(g)
+    networkx.write_gml(g, gml_path)
+    print 'IPA network written as GML'
+    networkx.write_gpickle(g, pkl_path)
+    print 'IPA network written as pickle'
 
 
+
+
+"""
 pkl_path = '/home/dhimmels/Documents/serg/ipanet/ipanet.pkl'
 g = networkx.read_gpickle(pkl_path)
 
-# Create a dictionary of node kind to edges
-kind_to_nodes = dict()
-for node, data in g.nodes_iter(data=True):
-    kind = data['kind']
-    kind_to_nodes.setdefault(kind, set()).add(node)
-
-# Delete improper edge kinds
-valid_edge_kinds = {'target', 'disease_gene', 'indication'}
-for node, neighbor, data in g.edges_iter(data=True):
-    kind = data['kind']
-    if kind not in valid_edge_kinds:
-        g.remove_edge(node, neighbor)
-
-# Create a dictionary of edge kind to edges
-kind_to_edges = dict()
-for node, neighbor, data in g.edges_iter(data=True):
-    kind = data['kind']
-    edge = node, neighbor
-    kind_to_edges.setdefault(kind, set()).add(edge)
-
-for key, value in kind_to_edges.items():
-    print key, len(value)
 
 # Select positives and negatives
 indications = list(kind_to_edges['indication'])
@@ -187,24 +210,4 @@ path_counts = path_counts(source, target)
 
 
 #print 'Number of connected components:', networkx.number_connected_components(g)
-
-
 """
-for node, data in g.nodes_iter(data=True):
-    print node
-    print data
-    print g.neighbors(node)
-"""    
-
-
-
-
-
-
-
-################################################################################
-################################# Network Stats ################################
-#execfile('create_ipanet.py')
-
-if __name__ == '__main__':
-    pass

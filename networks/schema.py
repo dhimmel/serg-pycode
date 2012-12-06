@@ -61,29 +61,20 @@ class UndirectedSchema(Schema):
         return paths
 
 
-def path_count(g, source, target, metapath):
-    """ """
-    assert g.node[source]['kind'] == metapath[0]
-    assert g.node[target]['kind'] == metapath[-1]
-    metapath.pop(0)
-    paths = [[source]]
-    while metapath:
-        edge_key = metapath.pop(0)
-        node_kind = metapath.pop(0)
-        current_depth_paths = list()
-        while paths:
-            preceeding_path = current_depth_paths.pop()
-            node = preceeding_path[-1]
-            
-            for node, neighbor, key in g.edges(node, keys=True):
-                neighbor_kind = g.node[neighbor]['kind']
-                if key == edge_key and neighbor_kind == node_kind:
-                    path = preceeding_path + [edge_key, neighbor]
-                    current_depth_paths.append(path)
-        paths = current_depth_paths
-    paths_from_source = len(paths)
-    paths = filter(lambda path: path[-1] == target, paths)
-    return len(paths), paths
+class Network(object):
+    
+    def __init__(self, schema, g, name=None):
+        self.schema = schema
+        self.g = g
+        if name:
+            g.graph['name'] = name
+        
+class UndirectedNetwork(Network):
+    
+    def __init__(self, schema, name=None):
+        g = networkx.MultiGraph()
+        super(Network, self).__init__(schema, g, name)
+
 
 if __name__ == '__main__':
     node_kinds = {'drug', 'disease', 'gene'}

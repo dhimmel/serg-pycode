@@ -458,24 +458,7 @@ class IPAExportReader(object):
 
 if __name__ == '__main__':
     ipa = IPA()
-
-    g = ipa.build_networkx()
-    print networkx.info(g)
-    connected_nodes = (node for node, degree in g.degree_iter() if degree)
-    g_connected = g.subgraph(connected_nodes)
-    print networkx.info(g_connected)
-    gml_path = '/home/dhimmels/Documents/serg/ipanet/ipanet.gml'
-    networkx.write_gml(g_connected, gml_path)
-    print 'IPA network written as GML'
-    pkl_path = '/home/dhimmels/Documents/serg/ipanet/ipanet.pkl'
-    networkx.write_gpickle(g_connected, pkl_path)
-    print 'IPA network written as pickle'
-    
-    """
     ipa.build()
     onto_structure_path = os.path.join(ipa.ipa_dir, 'ipa-ontology-structure.txt')
-    ipa.ontology.write_structure(onto_structure_path)
-
-    """
-    
+    ipa.ontology.write_structure(onto_structure_path)    
     
