@@ -1,15 +1,121 @@
 import networkx
+import collections
 
-def get_paths(g, source, target, metapath):
+def longest_matching_shortcut(metapath, shortcuts):
+    """Returns the longest shortcut in shortcuts which left aligns to match
+    metapath. If no metapath does not begin with any shortcut, None is returned.
+    """
+    metapath_len = len(metapath)
+    match = None
+    match_len = 0
+    for shortcut in shortcuts:
+        shortcut_len = len(shortcut)
+        if (shortcut_len <= metapath_len
+            and all(shortcut[i] == metapath[i] for i in xrange(shortcut_len))
+            and match_len < shortcut_len):
+            match = shortcut
+            match_len = shortcut_len
+    return match
+
+def source_to_target_node_count(g, metapath, source, shortcuts=None):
+    """Returns a counter with nodes as keys and number of paths of type metatype
+    reaching node as the count. Use path_to_nodes dictionary to enable speedup."""
+    if g.node[source]['kind'] != metapath[0]:
+        return None
+
+    metapath_position = 0
+    counter = collections.Counter()
+    counter[source] = 1
+    
+    while metapath_position < len(metapath) - 1:
+        remaining_path = metapath[metapath_position: ]
+        node_counter_temp = collections.Counter()        
+        
+        if len(remaining_path) > 3 and shortcuts:
+            shortcut = longest_matching_shortcut(remaining_path, shortcuts)
+            for node, count in counter.items():
+                nodes_counter = g.node[node]['path_to_nodes_counter'][shortcut]
+                for destination, destination_count in nodes_counter.iteritems():
+                    node_counter_temp[destination] += destination_count * count
+            metapath_position += len(shortcut) - 1
+        
+        else:
+            node_kind = remaining_path[2]            
+            edge_key = remaining_path[1]
+            for node, count in counter.iteritems():
+                for node, neighbor, key in g.edges(node, keys=True):
+                    neighbor_kind = g.node[neighbor]['kind']
+                    if key == edge_key and neighbor_kind == node_kind:
+                        node_counter_temp[neighbor] += count   
+            metapath_position += 2
+            
+        counter = node_counter_temp
+        
+    return counter
+
+def path_counter(g, metapaths, source, target=None, shortcuts=None):
+    """Count the number of paths between source and target for desired
+    metapaths.
+    """
+    counter = collections.Counter()
+    for metapath in metapaths:
+        target_to_counts = source_to_target_node_count(g, metapath, source, shortcuts)
+        if target:
+            count = target_to_counts[target]
+        else:
+            count = sum(target_to_counts.itervalues())
+        counter[metapath] = count
+    return counter
+
+def shortcuts_for_metapaths(metapaths, shortcut_len=2):
     """ """
-    assert g.node[source]['kind'] == metapath[0]
-    assert g.node[target]['kind'] == metapath[-1]
-    metapath = list(metapath)
-    metapath.pop(0)
+    shorcuts = set()
+    for metapath in metapaths:
+        num_nodes = len(metapath) / 2
+        depth = 0
+        while depth + shortcut_len <= num_nodes:
+            start = depth * 2
+            end = start + shortcut_len * 2 + 1
+            shortcut = metapath[start:end]
+            shortcut = tuple(shortcut)
+            shorcuts.add(shortcut)
+            depth += shortcut_len
+    return shorcuts
+
+def compute_shortcuts(g, shortcuts):
+    """ """
+    for source_node in g.nodes_iter():
+        path_to_nodes_counter = dict()
+        for path in shortcuts:
+            counter = source_to_target_node_count(g, path, source_node)
+            if counter is not None:
+                path_to_nodes_counter[path] = counter
+        g.node[source_node]['path_to_nodes_counter'] = path_to_nodes_counter
+
+
+
+
+###############################################################################
+
+
+
+def get_paths(g, metapath, source, target=None):
+    """
+    Get paths of kind metapath from the source to the target. If target is
+    not specified, all paths from source of kind metpath are returned. If
+    a source or target is specified which does not match the source or target
+    node kind in the metapath, None is returned.
+    """
+    if g.node[source]['kind'] != metapath[0]:
+        return None
+    if target and g.node[target]['kind'] != metapath[-1]:
+        return None
+    metapath = collections.deque(metapath)
+    metapath.popleft()
     paths = [[source]]
     while metapath:
-        edge_key = metapath.pop(0)
-        node_kind = metapath.pop(0)
+        edge_key = metapath.popleft()
+        node_kind = metapath.popleft()
         current_depth_paths = list()
         while paths:
             preceeding_path = paths.pop()
@@ -21,12 +127,12 @@ def get_paths(g, source, target, metapath):
                     path = preceeding_path + [edge_key, neighbor]
                     current_depth_paths.append(path)
         paths = current_depth_paths
-    paths_from_source = len(paths)
-    paths = filter(lambda path: path[-1] == target, paths)
+    if target:
+        paths = filter(lambda path: path[-1] == target, paths)
     return paths
 
 
-def get_precompute_metapaths(metapaths):
+def get_metapath_shortcuts_old(metapaths):
     """ """
     path_heads = set()
     path_tails = set()
@@ -38,11 +144,19 @@ def get_precompute_metapaths(metapaths):
             path_tails.add(tuple(metapath[-5:]))
     return path_heads, path_tails
 
- 
 
 
-
-
+def compute_path_to_nodes_old(g, metapaths):
+    for source_node in g.nodes_iter():
+        path_to_nodes_counter = dict() #dict.fromkeys(paths, list())
+        for path in paths:
+            all_paths = get_paths(g, path, source_node)
+            if all_paths is None:
+                continue
+            source_nodes = [one_path[-1] for one_path in all_paths]
+            path_to_nodes_counter[path] = source_nodes
+        g.node[source_node]['path_to_nodes'] = path_to_nodes
+        print source_node
 
 
 

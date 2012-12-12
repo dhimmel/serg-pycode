@@ -1,5 +1,4 @@
 import networkx
-import matplotlib.pyplot
 
 class Schema(object):
     

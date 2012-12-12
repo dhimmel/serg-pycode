@@ -3,8 +3,7 @@ import os
 import random
 
 import networkx
-import numpy
-import sklearn.linear_model
+#import sklearn.linear_model
 
 import bioparser.data
 import networks.schema
