@@ -60,12 +60,30 @@ def path_counter(g, metapaths, source, target=None, shortcuts=None):
     counter = collections.Counter()
     for metapath in metapaths:
         target_to_counts = source_to_target_node_count(g, metapath, source, shortcuts)
+        #if target_to_counts is None:
+        #    continue
+        print source, target
+        print target_to_counts
         if target:
             count = target_to_counts[target]
         else:
             count = sum(target_to_counts.itervalues())
         counter[metapath] = count
     return counter
+
+
+def normalized_path_counter(g, metapaths, source, target, shortcuts=None):
+    numerator = path_counter(g, metapaths, source, target, shortcuts)
+    denomenator = (path_counter(g, metapaths, source, None, shortcuts) + 
+                   path_counter(g, metapaths, target, None, shortcuts))
+    
+    npc = dict()
+    for metapath, counts in numerator.items():
+        denom = denomenator[metapath]
+        npc[metapath] = float(counts) / denom if denom else 0.0
+    return npc
+
+
 
 def shortcuts_for_metapaths(metapaths, shortcut_len=2):
     """ """
@@ -93,6 +111,26 @@ def compute_shortcuts(g, shortcuts):
         g.node[source_node]['path_to_nodes_counter'] = path_to_nodes_counter
 
 
+def get_kind_to_nodes(g):
+    # Create a dictionary of node kind to edges
+    kind_to_nodes = dict()
+    for node, data in g.nodes_iter(data=True):
+        kind = data['kind']
+        kind_to_nodes.setdefault(kind, set()).add(node)
+    return kind_to_nodes
+
+def get_kind_to_edges(g):
+    # Create a dictionary of edge kind to edges
+    kind_to_edges = dict()
+    for node, neighbor, key in g.edges_iter(keys=True):
+        edge = node, neighbor
+        kind_to_edges.setdefault(key, set()).add(edge)    
+    return kind_to_edges
+
+def print_edge_kind_counts(g):
+    kind_to_edges = get_kind_to_edges(g)
+    for key, value in kind_to_edges.items():
+        print key, len(value)
 
 
 ###############################################################################
@@ -160,26 +198,6 @@ def compute_path_to_nodes_old(g, metapaths):
 
 
 
-def get_kind_to_nodes(g):
-    # Create a dictionary of node kind to edges
-    kind_to_nodes = dict()
-    for node, data in g.nodes_iter(data=True):
-        kind = data['kind']
-        kind_to_nodes.setdefault(kind, set()).add(node)
-    return kind_to_nodes
-
-def get_kind_to_edges(g):
-    # Create a dictionary of edge kind to edges
-    kind_to_edges = dict()
-    for node, neighbor, key in g.edges_iter(keys=True):
-        edge = node, neighbor
-        kind_to_edges.setdefault(key, set()).add(edge)    
-    return kind_to_edges
-
-def print_edge_kind_counts(g):
-    kind_to_edges = get_kind_to_edges(g)
-    for key, value in kind_to_edges.items():
-        print key, len(value)
 
 
 

@@ -173,6 +173,11 @@ class IPA(object):
         
         # Remove function_classes with a single child with the same name
         for node in list(self.ontology.nodes):
+            if node.ipa_kind == 'function_category':
+                children = list(node.children)
+                child_names = {child.name for child in children}
+                if node.name in child_names:
+                    print node.name
             if node.ipa_kind == 'function_class':
                 children = list(node.children)
                 if len(children) == 1 and node.name == children[0].name:
