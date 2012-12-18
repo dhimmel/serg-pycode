@@ -56,14 +56,15 @@ def source_to_target_node_count(g, metapath, source, shortcuts=None):
 def path_counter(g, metapaths, source, target=None, shortcuts=None):
     """Count the number of paths between source and target for desired
     metapaths.
+    BUGGGGG: target to source doesn't work. reversed metapaths.
     """
     counter = collections.Counter()
     for metapath in metapaths:
         target_to_counts = source_to_target_node_count(g, metapath, source, shortcuts)
         #if target_to_counts is None:
         #    continue
-        print source, target
-        print target_to_counts
+        #print source, target
+        #print target_to_counts
         if target:
             count = target_to_counts[target]
         else:
@@ -74,9 +75,14 @@ def path_counter(g, metapaths, source, target=None, shortcuts=None):
 
 def normalized_path_counter(g, metapaths, source, target, shortcuts=None):
     numerator = path_counter(g, metapaths, source, target, shortcuts)
-    denomenator = (path_counter(g, metapaths, source, None, shortcuts) + 
-                   path_counter(g, metapaths, target, None, shortcuts))
-    
+    denomenator = collections.Counter()
+    all_paths_source = g.node[source]['all_paths']
+    all_paths_target = g.node[source]['all_paths']
+    for metapath in metapaths:
+        denomenator[metapath] += all_paths_source[metapath]
+        reversed_metapath = tuple(reversed(metapath))
+        denomenator[metapath] += all_paths_target[reversed_metapath]    
+        
     npc = dict()
     for metapath, counts in numerator.items():
         denom = denomenator[metapath]
@@ -132,10 +138,61 @@ def print_edge_kind_counts(g):
     for key, value in kind_to_edges.items():
         print key, len(value)
 
+def total_path_counts(g, depth):
+    """Computes the total path counts ending and starting with each node. Saves
+    the results in the data dictionary for the node under the keys:
+    'ending_paths' and 'starting_paths'. Computation is dynamic to improve
+    efficiency.
+    """
+    for node, data in g.nodes_iter(data=True):
+        kind = data['kind']
+        paths = collections.Counter([(kind, )])
+        #data['ending_paths'] = paths
+        data['all_paths'] = paths
+        #data['temp_ending_paths'] = collections.Counter()
+        data['temp_starting_paths'] = collections.Counter()
+    
+    for i in range(depth):
+        
+        for node, data in g.nodes_iter(data=True):
+            kind = data['kind']
+            neighbors = g.neighbors_iter(node)
+            for node, neighbor, key in g.edges(node, keys=True):
+                neighbor_data = g.node[neighbor]
+                
+                """
+                # Ending Paths
+                neighbor_ending_paths = neighbor_data['ending_paths']
+                for neighbor_path, count in neighbor_ending_paths.iteritems():
+                    path = list(neighbor_path)
+                    path.append(key)
+                    path.append(kind)
+                    path = tuple(path)
+                    data['temp_ending_paths'][path] += count
+                """
+                
+                # Starting Paths            
+                neighbor_starting_paths = neighbor_data['all_paths']
+                for neighbor_path, count in neighbor_starting_paths.iteritems():
+                    path = [kind, key] + list(neighbor_path)
+                    path = tuple(path)
+                    data['temp_starting_paths'][path] += count
+        
+        for node, data in g.nodes_iter(data=True):
+            #data['ending_paths'] += data['temp_ending_paths']
+            #data['temp_ending_paths'] = collections.Counter()
+            data['all_paths'] += data['temp_starting_paths']
+            data['temp_starting_paths'] = collections.Counter()
+    
+    # Delete temporary attibutes
+    for node, data in g.nodes_iter(data=True):
+        #del data['temp_ending_paths']
+        del data['temp_starting_paths']
 
 ###############################################################################
 
-
+################################################################################
+################################## Deprecate ###################################
 
 def get_paths(g, metapath, source, target=None):
     """
@@ -198,60 +255,6 @@ def compute_path_to_nodes_old(g, metapaths):
 
 
 
-
-
-
-
-################################################################################
-################################## Deprecate ###################################
-
-def total_path_counts(g):
-    """Computes the total path counts ending and starting with each node. Saves
-    the results in the data dictionary for the node under the keys:
-    'ending_paths' and 'starting_paths'. Computation is dynamic to improve
-    efficiency.
-    """
-    for node, data in g.nodes_iter(data=True):
-        kind = data['kind']
-        paths = collections.Counter([(kind, )])
-        data['ending_paths'] = paths
-        data['starting_paths'] = paths
-        data['temp_ending_paths'] = collections.Counter()
-        data['temp_starting_paths'] = collections.Counter()
-    
-    for i in range(3):
-        
-        for node, data in g.nodes_iter(data=True):
-            kind = data['kind']
-            neighbors = g.neighbors_iter(node)
-            for neighbor in neighbors:
-                neighbor_data = g.node[neighbor]
-                
-                # Ending Paths
-                neighbor_ending_paths = neighbor_data['ending_paths']
-                for neighbor_path, count in neighbor_ending_paths.iteritems():
-                    path = list(neighbor_path)
-                    path.append(kind)
-                    path = tuple(path)
-                    data['temp_ending_paths'][path] += count
-                
-                # Starting Paths            
-                neighbor_starting_paths = neighbor_data['starting_paths']
-                for neighbor_path, count in neighbor_starting_paths.iteritems():
-                    path = [kind] + list(neighbor_path)
-                    path = tuple(path)
-                    data['temp_starting_paths'][path] += count
-        
-        for node, data in g.nodes_iter(data=True):
-            data['ending_paths'] += data['temp_ending_paths']
-            data['temp_ending_paths'] = collections.Counter()
-            data['starting_paths'] += data['temp_starting_paths']
-            data['temp_starting_paths'] = collections.Counter()
-    
-    # Delete temporary attibutes
-    for node, data in g.nodes_iter(data=True):
-        del data['temp_ending_paths']
-        del data['temp_starting_paths']
 
 def path_counts(source, target, cutoff=3):
     metapath_counter = collections.Counter()

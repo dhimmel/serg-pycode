@@ -8,27 +8,8 @@ import networkx
 import networks.networkx_extensions as nxext
 
 
-ipanet_dir = '/home/dhimmels/Documents/serg/ipanet/'
-pkl_path = os.path.join(ipanet_dir, 'ipanet.pkl')
-"""
-pkl_with_shortcuts_path = os.path.join(ipanet_dir, 'ipanet-with-shortcuts.pkl')
-if os.path.exists(pkl_with_shortcuts_path):
-    pkl_path = os.path.join(ipanet_dir, 'ipanet-with-shortcuts.pkl')
-"""
-g = networkx.read_gpickle(pkl_path)
-print 'loaded network from pickle'
-
-# prepare schema and metapaths
-schema = g.graph['schema']
-source_kind = 'drug'
-target_kind = 'disease'
-metapaths = schema.metapaths(source_kind, target_kind, 4)
-#for metapath in metapaths: print schema.path_as_str(metapath)
-#nxext.print_edge_kind_counts(g)
-
-
-
-
+################################################################################
+################################## Functions ###################################
 
 def choose_learning_indications(g, pos_num=6000, neg_num=6000):
     # Select positives and negatives
@@ -51,15 +32,44 @@ def choose_learning_indications(g, pos_num=6000, neg_num=6000):
     g.remove_edges_from(positives)
     return positives, negatives
 
-positives, negatives = choose_learning_indications(g, 2000, 2000)
+def prepare(g):
+    positives, negatives = choose_learning_indications(g, 2000, 2000)
+    g.graph['positives'] = positives
+    g.graph['negatives'] = negatives
+    # compute shorcuts
+    print 'computing shortcuts'
+    nxext.compute_shortcuts(g, shortcuts)
+    print 'computing total path counts'
+    nxext.total_path_counts(g, depth)
+    
+################################################################################
+################################## Execution ###################################
 
-# compute shorcuts
-shortcuts = nxext.shortcuts_for_metapaths(metapaths)
-print 'computing shortcuts'
-nxext.compute_shortcuts(g, shortcuts)
-#print shortcuts
-#networkx.write_gpickle(g, pkl_with_shortcuts_path)
 
+depth = 4
+ipanet_dir = '/home/dhimmels/Documents/serg/ipanet/'
+pkl_with_shortcuts_path = os.path.join(ipanet_dir, 'ipanet-with-shortcuts.pkl')
+if not os.path.exists(pkl_with_shortcuts_path):
+    pkl_path = os.path.join(ipanet_dir, 'ipanet.pkl')
+    g = networkx.read_gpickle(pkl_path)
+    schema = g.graph['schema']
+    source_kind, target_kind = 'drug', 'disease'
+    metapaths = schema.metapaths(source_kind, target_kind, depth)
+    shortcuts = nxext.shortcuts_for_metapaths(metapaths)
+    prepare(g)
+    networkx.write_gpickle(g, pkl_with_shortcuts_path)
+    print 'Shortcut gpickle written'
+else:
+    g = networkx.read_gpickle(pkl_with_shortcuts_path)
+    schema = g.graph['schema']
+    source_kind, target_kind = 'drug', 'disease'
+    metapaths = schema.metapaths(source_kind, target_kind, depth)
+    shortcuts = nxext.shortcuts_for_metapaths(metapaths)
+
+########################
+## Compute features
+positives = g.graph['positives']
+negatives = g.graph['negatives']
 
 feature_file_path = os.path.join(ipanet_dir + 'features.txt')
 feature_file = open(feature_file_path, 'w')
@@ -71,15 +81,19 @@ for status in (0, 1):
     for source, target in edges:
         print source + '\t' + target
         npc_dict = nxext.normalized_path_counter(g, metapaths, source, target, shortcuts=shortcuts)
+        npc_dict = {schema.path_as_str(key): value for key, value in npc_dict.items()}
         npc_dict['status'] = status
         dict_writer.writerow(npc_dict)
 feature_file.close()
 
-
+"""
+nxext.total_path_counts(g, depth)
+print g.node['interferon beta-1a']['all_paths']
+print g.node['multiple sclerosis']['all_paths']
 
 #source = 'interferon beta-1a'
 #target = 'multiple sclerosis'
 
 #print nxext.path_counter(g, metapaths, source, target, shortcuts=shortcuts)
 #print nxext.path_counter(g, metapaths, source, target=None, shortcuts=shortcuts)
-
+"""
