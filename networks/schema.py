@@ -34,6 +34,16 @@ class Schema(object):
             if i % 2:
                 path[i] = ' <--' +  path[i] + '--> '
         return ''.join(path)
+
+    @staticmethod
+    def path_as_abbrev_str(path):
+        path = list(path)
+        for i in range(len(path)):
+            if path[i] == 'drug':
+                path[i] = 'chemical'
+            abbrev = path[i][0]
+            path[i] = abbrev.lower() if i % 2 else abbrev.upper()
+        return ''.join(path)
     
 class UndirectedSchema(Schema):
     

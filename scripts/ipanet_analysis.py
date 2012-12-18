@@ -2,6 +2,7 @@ import os
 import csv
 import sys
 import random
+import collections
 
 import networkx
 
@@ -68,23 +69,63 @@ else:
 
 ########################
 ## Compute features
+"""
 positives = g.graph['positives']
 negatives = g.graph['negatives']
-
 feature_file_path = os.path.join(ipanet_dir + 'features.txt')
 feature_file = open(feature_file_path, 'w')
-fieldnames = ['status'] + [schema.path_as_str(metapath) for metapath in metapaths]
+fieldnames = ['source', 'target', 'status'] + [schema.path_as_abbrev_str(metapath) for metapath in metapaths]
 dict_writer = csv.DictWriter(feature_file, fieldnames=fieldnames, delimiter='\t')
 dict_writer.writeheader()
 for status in (0, 1):
     edges = positives if status else negatives
     for source, target in edges:
         print source + '\t' + target
-        npc_dict = nxext.normalized_path_counter(g, metapaths, source, target, shortcuts=shortcuts)
-        npc_dict = {schema.path_as_str(key): value for key, value in npc_dict.items()}
+        npc_dict = nxext.focussed_normalized_path_counter(g, metapaths, source, target, shortcuts=shortcuts)
+        npc_dict = {schema.path_as_abbrev_str(key): value for key, value in npc_dict.items()}
+        npc_dict['source'] = source
+        npc_dict['target'] = target
         npc_dict['status'] = status
         dict_writer.writerow(npc_dict)
 feature_file.close()
+"""
+#######################
+## Compute features for all pairs
+
+
+feature_file_path = os.path.join(ipanet_dir + 'features-all-pairs.txt')
+feature_file = open(feature_file_path, 'w')
+fieldnames = ['source', 'target', 'status'] + [schema.path_as_abbrev_str(metapath) for metapath in metapaths]
+dict_writer = csv.DictWriter(feature_file, fieldnames=fieldnames, delimiter='\t')
+dict_writer.writeheader()
+
+positives = set(g.graph['positives'])
+negatives = set(g.graph['negatives'])
+
+kind_to_nodes = nxext.get_kind_to_nodes(g)
+drugs = kind_to_nodes['drug']
+
+metapath_abbrevs = map(schema.path_as_abbrev_str, metapaths)
+for source in drugs:
+    print source
+    target_to_metapath_to_npc = nxext.normalized_path_counter(g, metapaths, source, shortcuts)
+    for target, metapath_to_npc in target_to_metapath_to_npc.iteritems():
+        metapath_to_npc = {schema.path_as_abbrev_str(key): value for key, value in metapath_to_npc.items()}
+        row_dict = dict.fromkeys(metapath_abbrevs, 0.0)
+        row_dict.update(metapath_to_npc)
+        row_dict['source'] = source
+        row_dict['target'] = target
+        edge = source, target
+        if edge in negatives:
+            status = 2
+        elif edge in positives:
+            status = 3
+        else: 
+            status = int(g.has_edge(source, target, 'indication'))
+        row_dict['status'] = status
+        dict_writer.writerow(row_dict)
+feature_file.close()
+ 
 
 """
 nxext.total_path_counts(g, depth)

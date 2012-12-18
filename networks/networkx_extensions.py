@@ -53,18 +53,54 @@ def source_to_target_node_count(g, metapath, source, shortcuts=None):
         
     return counter
 
-def path_counter(g, metapaths, source, target=None, shortcuts=None):
+
+
+def path_counter(g, metapaths, source, shortcuts=None):
     """Count the number of paths between source and target for desired
     metapaths.
-    BUGGGGG: target to source doesn't work. reversed metapaths.
+    """
+    target_to_metapath_to_count = dict()
+    for metapath in metapaths:
+        target_to_count = source_to_target_node_count(g, metapath, source, shortcuts)
+        for target, count in target_to_count.iteritems():
+            counter = target_to_metapath_to_count.setdefault(target, collections.Counter())
+            counter[metapath] = count
+    return target_to_metapath_to_count
+
+
+def normalized_path_counter(g, metapaths, source, shortcuts=None):
+    target_to_metapath_to_count = path_counter(g, metapaths, source, shortcuts)
+    target_to_metapath_to_npc = dict()
+    all_paths_source = g.node[source]['all_paths']
+    source_denomenator = collections.Counter()
+    for metapath in metapaths:
+        source_denomenator[metapath] += all_paths_source[metapath]
+
+
+    for target, metapath_to_count in target_to_metapath_to_count.iteritems():
+        all_paths_target = g.node[target]['all_paths']
+        denomenator = collections.Counter()
+        for metapath in metapaths:
+            reversed_metapath = tuple(reversed(metapath))
+            denomenator[metapath] = source_denomenator[metapath] + all_paths_target[reversed_metapath]    
+
+        metapath_to_npc = dict()
+        for metapath, count in metapath_to_count.items():
+            denom = denomenator[metapath]
+            metapath_to_npc[metapath] = float(count) / denom if denom else 0.0
+        target_to_metapath_to_npc[target] = metapath_to_npc
+        
+    return target_to_metapath_to_npc
+
+
+
+def focussed_path_counter(g, metapaths, source, target=None, shortcuts=None):
+    """Count the number of paths between source and target for desired
+    metapaths.
     """
     counter = collections.Counter()
     for metapath in metapaths:
         target_to_counts = source_to_target_node_count(g, metapath, source, shortcuts)
-        #if target_to_counts is None:
-        #    continue
-        #print source, target
-        #print target_to_counts
         if target:
             count = target_to_counts[target]
         else:
@@ -73,11 +109,11 @@ def path_counter(g, metapaths, source, target=None, shortcuts=None):
     return counter
 
 
-def normalized_path_counter(g, metapaths, source, target, shortcuts=None):
-    numerator = path_counter(g, metapaths, source, target, shortcuts)
+def focussed_normalized_path_counter(g, metapaths, source, target, shortcuts=None):
+    numerator = focussed_path_counter(g, metapaths, source, target, shortcuts)
     denomenator = collections.Counter()
     all_paths_source = g.node[source]['all_paths']
-    all_paths_target = g.node[source]['all_paths']
+    all_paths_target = g.node[target]['all_paths']
     for metapath in metapaths:
         denomenator[metapath] += all_paths_source[metapath]
         reversed_metapath = tuple(reversed(metapath))
