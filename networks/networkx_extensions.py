@@ -69,6 +69,8 @@ def path_counter(g, metapaths, source, shortcuts=None):
 
 
 def normalized_path_counter(g, metapaths, source, shortcuts=None):
+    """Compute normalized path count between source and all targets connected
+    by atleast one metapath."""
     target_to_metapath_to_count = path_counter(g, metapaths, source, shortcuts)
     target_to_metapath_to_npc = dict()
     all_paths_source = g.node[source]['all_paths']
@@ -85,10 +87,18 @@ def normalized_path_counter(g, metapaths, source, shortcuts=None):
             denomenator[metapath] = source_denomenator[metapath] + all_paths_target[reversed_metapath]    
 
         metapath_to_npc = dict()
+        
+        for metapath, denom in denomenator.iteritems():
+            numer = metapath_to_count[metapath]
+            metapath_to_npc[metapath] = float(numer) / denom if denom else None
+        target_to_metapath_to_npc[target] = metapath_to_npc
+            
+        """
         for metapath, count in metapath_to_count.items():
             denom = denomenator[metapath]
-            metapath_to_npc[metapath] = float(count) / denom if denom else 0.0
+            metapath_to_npc[metapath] = float(count) / denom # if denom else None
         target_to_metapath_to_npc[target] = metapath_to_npc
+        """
         
     return target_to_metapath_to_npc
 

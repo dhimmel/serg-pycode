@@ -111,7 +111,7 @@ for source in drugs:
     target_to_metapath_to_npc = nxext.normalized_path_counter(g, metapaths, source, shortcuts)
     for target, metapath_to_npc in target_to_metapath_to_npc.iteritems():
         metapath_to_npc = {schema.path_as_abbrev_str(key): value for key, value in metapath_to_npc.items()}
-        row_dict = dict.fromkeys(metapath_abbrevs, 0.0)
+        row_dict = dict.fromkeys(metapath_abbrevs, None)
         row_dict.update(metapath_to_npc)
         row_dict['source'] = source
         row_dict['target'] = target
