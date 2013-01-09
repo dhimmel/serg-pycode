@@ -96,11 +96,11 @@ class IPA(object):
         """
         """
         print 'Building Ingenuity IPA'
-        self.drugs = set(self.read_drugs())   
-        self.molecules = set(self.read_annotations('annotations-query_disease.txt'))
+        self.drugs = set(self.read_drugs('drugs.txt'))   
+        self.molecules = set(self.read_molecules('molecules.txt'))
                 
         self.functions = set()
-        function_generator = self.read_functions('associated_molecules-query_disease.txt')
+        function_generator = self.read_functions('functions.txt')
         for function in function_generator:
             self.functions.add(function)
         self.name_to_function = {function.name: function for function in self.functions}
@@ -108,7 +108,7 @@ class IPA(object):
         self.build_ontology()
         
         # Incorporate effect on function information
-        effect_generator = self.read_effect_on_function('effect_on_function-query_disease.txt')
+        effect_generator = self.read_effects('effects.txt')
         for effect in effect_generator:
             name = effect['name']
             molecules = effect['molecules']
@@ -299,8 +299,13 @@ class IPA(object):
             synonyms = list()
         return name, synonyms
         
-    def read_annotations(self, file_name):
+    def read_molecules(self, file_name='molecules.txt'):
         """
+        With all results from functions query selected, click "Annotations". 
+        A new window appears titled "Molecule Annotations". Click on 
+        "Customize Table" and select all checkboxes to include "Synonym(s)".
+        Click checkbox to select all annotations. Then click the export icon
+        and save file in tab delimited format as molecules.txt. Close window.
         """
         assert self.drugs
         
@@ -322,9 +327,11 @@ class IPA(object):
     
     def read_drugs(self, file_name='drugs.txt'):
         """
-        Under "genes and chemicals" tab click advanced search. Under "molecule
-        kinds check "biological drug" and "chemical drug". Then search and
-        export.
+        Under "Genes and Chemicals" tab, click "Advanced Search".
+        Under "Molecule Type(s) check "biologic drug" and "chemical drug".
+        Export limit is 5000 items so future exports may need to do separate
+        exports for biologic and chemical drugs. Click export and save file in
+        tab delimited format as drugs.txt.
         
         To get a usuable symbol from ipa gene symbols run:
         symbol = gene.symbol.split('/')[0]
@@ -346,8 +353,14 @@ class IPA(object):
                 drug = Drug(**row)
                 yield drug
       
-    def read_functions(self, file_name):
+    def read_functions(self, file_name='functions.txt'):
         """
+        Under the “Functions and Diseases” tab query “disease”. Ensure the
+        display mode is set to show categories (default) as opposed to a simple
+        list of functions. If a “Show categories” button is visible, it must
+        be clicked. The query matches 9805 functions and diseases. 
+        Check “Matching Functions & Diseases” to select all. Click export
+        and save file in tab delimited format as drugs.txt.
         """
         path = os.path.join(self.ipa_dir, file_name)
         fieldnames = ['category','function_class', 'function_annotation', 'molecules',
@@ -369,11 +382,13 @@ class IPA(object):
                 function.__dict__.update(row)
                 yield function
 
-    def read_effect_on_function(self, file_name):
+    def read_effects(self, file_name='effects.txt'):
         """
-        Query "disease" in functions and disease searchbar (top middle tab).
-        Select all results and click "effect on function".
-        Select all processes and export
+        With all results from a function query selected click
+        "Effect on Function". A dialog box which says "Opening" appears.
+        Search takes several minutes to complete. When complete a new window
+        opens titled "Effect on function". Check box to select all processes
+        and export as a text file named effects.txt.
         """
         
         assert self.molecules

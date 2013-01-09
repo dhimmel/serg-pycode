@@ -47,7 +47,7 @@ def prepare(g):
 ################################## Execution ###################################
 
 
-depth = 4
+depth = 6
 ipanet_dir = '/home/dhimmels/Documents/serg/ipanet/'
 pkl_with_shortcuts_path = os.path.join(ipanet_dir, 'ipanet-with-shortcuts.pkl')
 if not os.path.exists(pkl_with_shortcuts_path):
@@ -64,8 +64,10 @@ else:
     g = networkx.read_gpickle(pkl_with_shortcuts_path)
     schema = g.graph['schema']
     source_kind, target_kind = 'drug', 'disease'
-    metapaths = schema.metapaths(source_kind, target_kind, depth)
+    #### MUST BE UNDONE
+    metapaths = schema.metapaths(source_kind, target_kind, 5)
     shortcuts = nxext.shortcuts_for_metapaths(metapaths)
+    metapaths = schema.metapaths(source_kind, target_kind, depth)
 
 ########################
 ## Compute features
@@ -93,7 +95,7 @@ feature_file.close()
 ## Compute features for all pairs
 
 
-feature_file_path = os.path.join(ipanet_dir + 'features-all-pairs.txt')
+feature_file_path = os.path.join(ipanet_dir + 'features-len-6.txt')
 feature_file = open(feature_file_path, 'w')
 fieldnames = ['source', 'target', 'status'] + [schema.path_as_abbrev_str(metapath) for metapath in metapaths]
 dict_writer = csv.DictWriter(feature_file, fieldnames=fieldnames, delimiter='\t')
@@ -123,6 +125,8 @@ for source in drugs:
         else: 
             status = int(g.has_edge(source, target, 'indication'))
         row_dict['status'] = status
+        if status < 2:
+            continue
         dict_writer.writerow(row_dict)
 feature_file.close()
  
