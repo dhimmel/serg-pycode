@@ -100,8 +100,10 @@ class IPA(object):
         self.molecules = set(self.read_molecules('molecules.txt'))
                 
         self.functions = set()
+        self.categories = set()
         function_generator = self.read_functions('functions.txt')
         for function in function_generator:
+            self.categories.add(function.category)
             self.functions.add(function)
         self.name_to_function = {function.name: function for function in self.functions}
         print len(self.name_to_function), 'functions'
@@ -145,7 +147,7 @@ class IPA(object):
 
         node_to_node = dict()
         for function in self.functions:
-            
+                        
             node_attributes = ([function.category, 'function_category'],
                                [function.function_class, 'function_class'],
                                [function.name, 'function'])
@@ -175,87 +177,12 @@ class IPA(object):
         for node in list(self.ontology.nodes):
             if node.ipa_kind == 'function_category':
                 children = list(node.children)
-                child_names = {child.name for child in children}
-                if node.name in child_names:
-                    print node.name
             if node.ipa_kind == 'function_class':
                 children = list(node.children)
                 if len(children) == 1 and node.name == children[0].name:
                     self.ontology.remove_node(node)
     
-    def build_networkx(self):
-        """
-        """
-        if self.networkx:
-            return self.networkx
-        self.build()
         
-        hgnc = data.Data().hgnc
-        entrez_to_hgnc = hgnc.get_entrez_to_gene()
-        symbol_to_hgnc = hgnc.get_symbol_to_gene()
-                
-        g = networkx.Graph(name='ipanet')
-        ################################################################################
-        ################################# Create Nodes #################################
-        
-        # Create drug nodes
-        targets = set()
-        for drug in self.drugs:
-            g.add_node(drug.symbol, kind='drug')
-            targets |= set(drug.targets)
-        
-        # Create disease nodes
-        for disease in self.functions:
-            g.add_node(disease.name, kind='disease')
-        
-        # Create gene nodes
-        hugu_genes_added = set()
-        for gene in self.genes:
-            entrez_id = gene.entrez_id_human.split('|')[0]
-            hgnc_gene = entrez_to_hgnc.get(entrez_id)
-            if hgnc_gene:
-                hugu_genes_added.add(hgnc_gene)
-            hugu_symbol = hgnc_gene.symbol if hgnc_gene else None
-            g.add_node(gene.symbol, hugu_symbol=hugu_symbol, kind='gene')
-        for target in targets:
-            if target not in g:
-                hgnc_gene = symbol_to_hgnc.get(target)
-                if hgnc_gene:
-                    hugu_genes_added.add(hgnc_gene)
-                hugu_symbol = hgnc_gene.symbol if hgnc_gene else None
-                g.add_node(target, hugu_symbol=hugu_symbol, kind='gene')
-        del targets
-        
-        missing_hugu_genes = set(hgnc.get_genes()) - hugu_genes_added
-        for hgnc_gene in missing_hugu_genes:
-            if hgnc_gene.symbol in g:
-                raise Exception('pre-existing ipa symbol matching gene name')
-            g.add_node(hgnc_gene.symbol, hugu_symbol=hgnc_gene.symbol, kind='gene')
-        
-        ################################################################################
-        ################################# Create Edges #################################
-        # Create drug-gene links from drug target annotations.
-        for drug in self.drugs:
-            for target in drug.targets:
-                g.add_edge(drug.symbol, target, kind='target')
-        
-        # Create disease-gene and disease-drug links from ipa function annotations.
-        for disease in self.functions:
-            for effect, molecules in disease.molecules.items():
-                for molecule in molecules:
-                    if disease.name in g and molecule in g:
-                        if g.node[molecule]['kind'] == 'drug':
-                            if effect == 'decreases':
-                                kind = 'indication'
-                            else:
-                                kind = 'disease_modifying_drug'
-                        else:
-                            kind = 'disease_gene'
-                        g.add_edge(disease.name, molecule, effect=effect, kind=kind)
-        
-        self.networkx = g
-        return self.networkx
-    
     def parse_molecules(self, unsplit, splitter, valid_symbols, total_number=None):
         """ """
         symbols = list()
@@ -355,11 +282,11 @@ class IPA(object):
       
     def read_functions(self, file_name='functions.txt'):
         """
-        Under the “Functions and Diseases” tab query “disease”. Ensure the
+        Under the "Functions and Diseases" tab query "disease". Ensure the
         display mode is set to show categories (default) as opposed to a simple
-        list of functions. If a “Show categories” button is visible, it must
+        list of functions. If a "Show categories" button is visible, it must
         be clicked. The query matches 9805 functions and diseases. 
-        Check “Matching Functions & Diseases” to select all. Click export
+        Check "Matching Functions & Diseases" to select all. Click export
         and save file in tab delimited format as drugs.txt.
         """
         path = os.path.join(self.ipa_dir, file_name)
@@ -478,7 +405,12 @@ class IPAExportReader(object):
 
 if __name__ == '__main__':
     ipa = IPA()
+    print ipa.ipa_dir
     ipa.build()
-    onto_structure_path = os.path.join(ipa.ipa_dir, 'ipa-ontology-structure.txt')
-    ipa.ontology.write_structure(onto_structure_path)    
+    
+    
+    g = ipa.build_networkx()
+    
+    #onto_structure_path = os.path.join(ipa.ipa_dir, 'ipa-ontology-structure.txt')
+    #ipa.ontology.write_structure(onto_structure_path)    
     

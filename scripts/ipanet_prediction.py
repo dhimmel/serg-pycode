@@ -1,2 +1,93 @@
 import sklearn.linear_model
 
+"""
+pkl_path = '/home/dhimmels/Documents/serg/ipanet/ipanet.pkl'
+g = networkx.read_gpickle(pkl_path)
+
+
+# Select positives and negatives
+indications = list(kind_to_edges['indication'])
+num_of_positives = len(indications) / 200
+positives = random.sample(indications, num_of_positives)
+drugs = kind_to_nodes['drug']
+diseases = kind_to_nodes['disease']
+negatives = list()
+while len(negatives) < num_of_positives:
+    disease = (set(random.choice(indications)) & diseases).pop()
+    drug = (set(random.choice(indications)) & drugs).pop()
+    if not g.has_edge(disease, drug):
+        edge = drug, disease
+        negatives.append(edge)
+
+# delete positives edges from the network
+g.remove_edges_from(positives)
+total_path_counts(g)
+
+# Create predictor and response arrays
+training_edges = negatives + positives
+y = numpy.repeat([0, 1], [len(negatives), len(positives)])
+
+npcs_by_edge = [normalized_path_counts(*edge) for edge in training_edges]
+
+metapaths = set()
+for npc in npcs_by_edge:
+    metapaths |= set(npc.keys())
+
+metapaths = list(metapaths)
+metapaths.sort(key=lambda x: len(x))
+
+
+X = list()
+for npc in npcs_by_edge:
+    x_row = list()
+    for metapath in metapaths:
+        value = npc.get(metapath)
+        if value is None:
+            value = 0.0
+        x_row.append(value)
+    X.append(x_row)
+
+X = numpy.array(X)
+
+logreg = sklearn.linear_model.LogisticRegression()
+logreg.fit(X, y)
+y_predicted = logreg.predict_proba(X)[:,1]
+
+fpr, tpr, thresholds = sklearn.metrics.roc_curve(y, y_predicted)
+sklearn.metrics.auc(fpr, tpr)
+
+feature_file = '/home/dhimmels/Documents/serg/ipanet/features.txt'
+numpy.savetxt(feature_file, numpy.column_stack((X, y.T)))
+
+
+#print g.node['multiple sclerosis']
+
+
+
+
+        
+
+
+
+
+source = 'multiple sclerosis'
+target = 'interferon beta-1a'
+normalized_path_counts(source, target)
+
+
+
+path_counts = path_counts(source, target)
+
+#print compute_metapath_counter(source, source)
+#print compute_metapath_counter(target, target)
+
+
+
+
+#print networkx.info(g)
+#node_kind_counts = collections.Counter(data['kind'] for node, data in g.nodes_iter(data=True))
+#print node_kind_counts
+
+
+#print 'Number of connected components:', networkx.number_connected_components(g)
+"""

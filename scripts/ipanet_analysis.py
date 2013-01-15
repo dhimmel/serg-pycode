@@ -49,9 +49,13 @@ def prepare(g):
 
 depth = 6
 ipanet_dir = '/home/dhimmels/Documents/serg/ipanet/'
-pkl_with_shortcuts_path = os.path.join(ipanet_dir, 'ipanet-with-shortcuts.pkl')
+pkl_name = '130114-1'
+pkl_path = os.path.join(ipanet_dir, 'networks', pkl_name + '.pkl')
+g = networkx.read_gpickle(pkl_with_shortcuts_path)
+
+
 if not os.path.exists(pkl_with_shortcuts_path):
-    pkl_path = os.path.join(ipanet_dir, 'ipanet.pkl')
+    pkl_path = os.path.join(ipanet_dir, 'networks', pkl_name + '.pkl')
     g = networkx.read_gpickle(pkl_path)
     schema = g.graph['schema']
     source_kind, target_kind = 'drug', 'disease'
