@@ -53,11 +53,11 @@ class UndirectedSchema(Schema):
         g = networkx.MultiGraph()
         super(UndirectedSchema, self).__init__(g, node_kinds, edge_tuples)
         
-    def metapaths(self, source, target, cutoff=3):
-        paths = networkx.all_simple_paths(self.g, source, target, cutoff)
+    def metapaths(self, source, target, max_length):
+        paths = networkx.all_simple_paths(self.g, source, target, max_length)
         potential_paths = [[source]]
         paths = list()
-        for depth in range(cutoff):
+        for depth in range(max_length):
             current_depth_paths = list()
             for potential_path in potential_paths:
                 for node, neighbor, key in self.g.edges(potential_path[-1], keys=True):

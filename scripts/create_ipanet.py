@@ -30,10 +30,12 @@ def disease_function_subset(ipa, printing=False):
             disease_names.add(function.name)
     diseases_to_remove = read_diseases_to_remove()
     disease_names -= diseases_to_remove
+    
+    
     disease_functions = {ipa.name_to_function[disease] for disease in disease_names}
     print len(disease_functions), 'diseases'
     
-    ## Removed function names
+    ## print random sample of removed function names
     omitted_functions = {function.name for function in ipa.functions - disease_functions}
     if printing:
         for function_name in random.sample(omitted_functions, 20):
@@ -124,7 +126,7 @@ def build_networkx():
                    ('drug', 'disease', 'indication')]
     schema = networks.schema.UndirectedSchema(node_kinds, edge_tuples)
     g.graph['schema'] = schema
-    
+    g.graph['prepared'] = False
     return g
 
 
@@ -157,8 +159,7 @@ def save_as_pickle(g, name):
 if __name__ == '__main__':
     g = build_networkx()
     purify(g)
-    
-    #print networkx.info(g)
-    #save_as_pickle(g, '130114-1')
+    print networkx.info(g)
+    save_as_pickle(g, '130116-1')
 
 

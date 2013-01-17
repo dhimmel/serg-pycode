@@ -1,5 +1,7 @@
-import networkx
 import collections
+import random
+
+import networkx
 
 def longest_matching_shortcut(metapath, shortcuts):
     """Returns the longest shortcut in shortcuts which left aligns to match
@@ -93,67 +95,92 @@ def normalized_path_counter(g, metapaths, source, shortcuts=None):
             metapath_to_npc[metapath] = float(numer) / denom if denom else None
         target_to_metapath_to_npc[target] = metapath_to_npc
             
-        """
-        for metapath, count in metapath_to_count.items():
-            denom = denomenator[metapath]
-            metapath_to_npc[metapath] = float(count) / denom # if denom else None
-        target_to_metapath_to_npc[target] = metapath_to_npc
-        """
-        
     return target_to_metapath_to_npc
 
 
-
-def focussed_path_counter(g, metapaths, source, target=None, shortcuts=None):
-    """Count the number of paths between source and target for desired
-    metapaths.
+def learning_edge_subset(g, num_pos, num_neg):
     """
-    counter = collections.Counter()
-    for metapath in metapaths:
-        target_to_counts = source_to_target_node_count(g, metapath, source, shortcuts)
-        if target:
-            count = target_to_counts[target]
-        else:
-            count = sum(target_to_counts.itervalues())
-        counter[metapath] = count
-    return counter
+    Returns a tuple of (num_pos positives edges, num_neg negative edges). 
+    Selected edges are of kind g.graph['edge_kind'], start at the node kind
+    specified by g.graph['source_kind'], and end at the node kind specified by
+    g.graph['target_kind']. Negatives are randomly selected to reflect the 
+    degree distribution of positives. Positives are randomly selected from all
+    the edges of the specified kind. Edges selected as positives are removed
+    from the graph.
+    """
+    assert g.graph['source_kind']
+    assert g.graph['target_kind']
+    assert g.graph['edge_kind']
+    
+    kind_to_nodes = get_kind_to_nodes(g)
+    kind_to_edges = get_kind_to_edges(g)
+    source_kind = g.graph['source_kind']
+    target_kind = g.graph['target_kind']
+    edge_kind = g.graph['edge_kind']
+    sources = kind_to_nodes[source_kind]
+    targets = kind_to_nodes[target_kind]
+    edge_order_key = lambda edge: edge if edge[0] in sources else (edge[1], edge[0])
+    edges = list(kind_to_edges[edge_kind])
+    edges = map(edge_order_key, edges)
+    # Randomly select negatices to mirror positive node degree
+    negatives = list()
+    while len(negatives) < num_neg:
+        source = random.choice(edges)[0]
+        target = random.choice(edges)[1]
+        if not g.has_edge(source, target):
+            edge = source, target
+            negatives.append(edge)
+    # Randomly select positives
+    positives = random.sample(edges, num_pos)
+    g.remove_edges_from(positives)    
+    return positives, negatives
 
+def prepare_for_feature_computation(g, max_path_length, edge_kind_tuple,
+                                    num_pos, num_neg):
+    """
+    Compute metapaths, shortcuts, positives edges, and negative edges. Modify
+    network by removing positive edges. Annotate nodes with computed shortcuts
+    and path count counters.
+    """
+    source_kind, edge_kind, target_kind = edge_kind_tuple
+    g.graph['source_kind'] = source_kind
+    g.graph['target_kind'] = target_kind
+    g.graph['edge_kind'] = edge_kind
+    
+    g.graph['max_path_length'] = max_path_length
+    
+    g.graph['metapaths'] = g.graph['schema'].metapaths(source_kind, target_kind, max_path_length)
+    g.graph['shortcuts'] = shortcuts_for_metapaths(g.graph['metapaths'], 2)
 
-def focussed_normalized_path_counter(g, metapaths, source, target, shortcuts=None):
-    numerator = focussed_path_counter(g, metapaths, source, target, shortcuts)
-    denomenator = collections.Counter()
-    all_paths_source = g.node[source]['all_paths']
-    all_paths_target = g.node[target]['all_paths']
-    for metapath in metapaths:
-        denomenator[metapath] += all_paths_source[metapath]
-        reversed_metapath = tuple(reversed(metapath))
-        denomenator[metapath] += all_paths_target[reversed_metapath]    
-        
-    npc = dict()
-    for metapath, counts in numerator.items():
-        denom = denomenator[metapath]
-        npc[metapath] = float(counts) / denom if denom else 0.0
-    return npc
+    g.graph['positives'], g.graph['negatives'] = learning_edge_subset(g, num_pos, num_neg)
+    print 'computing shortcuts'
+    compute_shortcuts(g)
+    print 'computing total path counts'
+    total_path_counts(g)
+    g.graph['prepared'] = True
 
-
-
-def shortcuts_for_metapaths(metapaths, shortcut_len=2):
-    """ """
+    
+def shortcuts_for_metapaths(metapaths, shortcut_length):
+    """Compute desired shortcuts for faster computation of metapaths."""
     shorcuts = set()
     for metapath in metapaths:
         num_nodes = len(metapath) / 2
         depth = 0
-        while depth + shortcut_len <= num_nodes:
+        while depth + shortcut_length <= num_nodes:
             start = depth * 2
-            end = start + shortcut_len * 2 + 1
+            end = start + shortcut_length * 2 + 1
             shortcut = metapath[start:end]
             shortcut = tuple(shortcut)
             shorcuts.add(shortcut)
-            depth += shortcut_len
+            depth += shortcut_length
     return shorcuts
 
-def compute_shortcuts(g, shortcuts):
-    """ """
+def compute_shortcuts(g):
+    """Annotate each node in the graph with a dictionary named
+    path_to_nodes_counter. Dictionary keys are relevant shortcut metapaths.
+    The value corresponding to a shortcut metapath key is a counter with target
+    nodes as keys and number of paths following the metapath as counts."""
+    shortcuts = g.graph['shortcuts']
     for source_node in g.nodes_iter():
         path_to_nodes_counter = dict()
         for path in shortcuts:
@@ -164,7 +191,7 @@ def compute_shortcuts(g, shortcuts):
 
 
 def get_kind_to_nodes(g):
-    # Create a dictionary of node kind to edges
+    """Create a dictionary of node kind to edges"""
     kind_to_nodes = dict()
     for node, data in g.nodes_iter(data=True):
         kind = data['kind']
@@ -172,7 +199,7 @@ def get_kind_to_nodes(g):
     return kind_to_nodes
 
 def get_kind_to_edges(g):
-    # Create a dictionary of edge kind to edges
+    """Create a dictionary of edge kind to edges."""
     kind_to_edges = dict()
     for node, neighbor, key in g.edges_iter(keys=True):
         edge = node, neighbor
@@ -184,12 +211,13 @@ def print_edge_kind_counts(g):
     for key, value in kind_to_edges.items():
         print key, len(value)
 
-def total_path_counts(g, depth):
+def total_path_counts(g):
     """Computes the total path counts ending and starting with each node. Saves
     the results in the data dictionary for the node under the keys:
     'ending_paths' and 'starting_paths'. Computation is dynamic to improve
     efficiency.
     """
+    depth = g.graph['max_path_length']
     for node, data in g.nodes_iter(data=True):
         kind = data['kind']
         paths = collections.Counter([(kind, )])
@@ -234,88 +262,3 @@ def total_path_counts(g, depth):
     for node, data in g.nodes_iter(data=True):
         #del data['temp_ending_paths']
         del data['temp_starting_paths']
-
-###############################################################################
-
-################################################################################
-################################## Deprecate ###################################
-
-def get_paths(g, metapath, source, target=None):
-    """
-    Get paths of kind metapath from the source to the target. If target is
-    not specified, all paths from source of kind metpath are returned. If
-    a source or target is specified which does not match the source or target
-    node kind in the metapath, None is returned.
-    """
-    if g.node[source]['kind'] != metapath[0]:
-        return None
-    if target and g.node[target]['kind'] != metapath[-1]:
-        return None
-    metapath = collections.deque(metapath)
-    metapath.popleft()
-    paths = [[source]]
-    while metapath:
-        edge_key = metapath.popleft()
-        node_kind = metapath.popleft()
-        current_depth_paths = list()
-        while paths:
-            preceeding_path = paths.pop()
-            node = preceeding_path[-1]
-            
-            for node, neighbor, key in g.edges(node, keys=True):
-                neighbor_kind = g.node[neighbor]['kind']
-                if key == edge_key and neighbor_kind == node_kind:
-                    path = preceeding_path + [edge_key, neighbor]
-                    current_depth_paths.append(path)
-        paths = current_depth_paths
-    if target:
-        paths = filter(lambda path: path[-1] == target, paths)
-    return paths
-
-
-def get_metapath_shortcuts_old(metapaths):
-    """ """
-    path_heads = set()
-    path_tails = set()
-    for metapath in metapaths:
-        metapath_length = len(metapath) / 2
-        if metapath_length > 2:
-            path_heads.add(tuple(metapath[:5]))
-        if metapath_length > 3:
-            path_tails.add(tuple(metapath[-5:]))
-    return path_heads, path_tails
-
-
-
-def compute_path_to_nodes_old(g, metapaths):
-    for source_node in g.nodes_iter():
-        path_to_nodes_counter = dict() #dict.fromkeys(paths, list())
-        for path in paths:
-            all_paths = get_paths(g, path, source_node)
-            if all_paths is None:
-                continue
-            source_nodes = [one_path[-1] for one_path in all_paths]
-            path_to_nodes_counter[path] = source_nodes
-        g.node[source_node]['path_to_nodes'] = path_to_nodes
-        print source_node
-
-
-
-
-def path_counts(source, target, cutoff=3):
-    metapath_counter = collections.Counter()
-    paths = networkx.all_simple_paths(g, source, target, cutoff)
-    for path in paths:
-        metapath = tuple(g.node[node]['kind'] for node in path)
-        metapath_counter[metapath] += 1
-    return metapath_counter
-
-def normalized_path_counts(source, target, cutoff=3):
-    numerator = path_counts(source, target, cutoff) + path_counts(target, source, cutoff)
-    denomenator = g.node[source]['starting_paths'] + g.node[target]['ending_paths']
-    npc = dict()
-    for metapath, counts in numerator.items():
-        denom = denomenator[metapath]
-        if denom != 0:
-            npc[metapath] = float(counts) / denom
-    return npc
