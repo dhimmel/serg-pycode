@@ -15,13 +15,16 @@ ipanet_dir = '/home/dhimmels/Documents/serg/ipanet/'
 network_id = '130116-1'
 
 
-pkl_path_prepared = os.path.join(ipanet_dir, 'networks', network_id + '.prepared.pkl')
+pkl_path_prepared = os.path.join(ipanet_dir, 'networks', network_id, 'prepared-graph.pkl')
 if not os.path.exists(pkl_path_prepared):
     print 'preparing network for feature computation.'
-    pkl_path = os.path.join(ipanet_dir, 'networks', network_id + '.pkl')
+    pkl_path = os.path.join(ipanet_dir, 'networks', network_id, 'graph.pkl')
     g = networkx.read_gpickle(pkl_path)
-
-    max_path_length = 3
+    
+    
+    ###########################################################################
+    ### Variables to set
+    max_path_length = 6
     edge_kind_tuple = ('drug', 'indication', 'disease')
     num_pos, num_neg = 2000, 2000
 
@@ -41,7 +44,7 @@ metapaths = g.graph['metapaths']
 shortcuts = g.graph['shortcuts']
 
 
-feature_file_path = os.path.join(ipanet_dir, 'networks', network_id + '.features.pkl')
+feature_file_path = os.path.join(ipanet_dir, 'networks', network_id, 'features.txt')
 feature_file = open(feature_file_path, 'w')
 fieldnames = ['source', 'target', 'status'] + [schema.path_as_abbrev_str(metapath) for metapath in metapaths]
 dict_writer = csv.DictWriter(feature_file, fieldnames=fieldnames, delimiter='\t')

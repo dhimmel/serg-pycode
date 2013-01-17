@@ -150,8 +150,8 @@ def node_degree_list(g, printing=False):
             print degree_list[i]
     return degree_list
 
-def save_as_pickle(g, name):
-    pkl_path = os.path.join(ipanet_dir, 'networks', name + '.pkl')
+def save_as_pickle(g, network_id):
+    pkl_path = os.path.join(ipanet_dir, 'networks', network_id, 'graph.pkl')
     networkx.write_gpickle(g, pkl_path)
     print 'IPA network saved to', pkl_path
     

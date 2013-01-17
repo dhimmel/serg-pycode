@@ -91,7 +91,7 @@ def normalized_path_counter(g, metapaths, source, shortcuts=None):
         metapath_to_npc = dict()
         
         for metapath, denom in denomenator.iteritems():
-            numer = metapath_to_count[metapath]
+            numer = 2 * metapath_to_count[metapath]
             metapath_to_npc[metapath] = float(numer) / denom if denom else None
         target_to_metapath_to_npc[target] = metapath_to_npc
             
