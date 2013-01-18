@@ -19,12 +19,14 @@ def longest_matching_shortcut(metapath, shortcuts):
             match_len = shortcut_len
     return match
 
-def source_to_target_node_count(g, metapath, source, shortcuts=None):
+def source_to_target_node_count(g, metapath, source):
     """Returns a counter with nodes as keys and number of paths of type metatype
     reaching node as the count. Use path_to_nodes dictionary to enable speedup."""
     if g.node[source]['kind'] != metapath[0]:
         return None
-
+    
+    shortcuts = g.graph.get('shortcuts')
+    
     metapath_position = 0
     counter = collections.Counter()
     counter[source] = 1
@@ -57,23 +59,23 @@ def source_to_target_node_count(g, metapath, source, shortcuts=None):
 
 
 
-def path_counter(g, metapaths, source, shortcuts=None):
+def path_counter(g, metapaths, source):
     """Count the number of paths between source and target for desired
     metapaths.
     """
     target_to_metapath_to_count = dict()
     for metapath in metapaths:
-        target_to_count = source_to_target_node_count(g, metapath, source, shortcuts)
+        target_to_count = source_to_target_node_count(g, metapath, source)
         for target, count in target_to_count.iteritems():
             counter = target_to_metapath_to_count.setdefault(target, collections.Counter())
             counter[metapath] = count
     return target_to_metapath_to_count
 
 
-def normalized_path_counter(g, metapaths, source, shortcuts=None):
+def normalized_path_counter(g, metapaths, source):
     """Compute normalized path count between source and all targets connected
     by atleast one metapath."""
-    target_to_metapath_to_count = path_counter(g, metapaths, source, shortcuts)
+    target_to_metapath_to_count = path_counter(g, metapaths, source)
     target_to_metapath_to_npc = dict()
     all_paths_source = g.node[source]['all_paths']
     source_denomenator = collections.Counter()
@@ -150,11 +152,11 @@ def prepare_for_feature_computation(g, max_path_length, edge_kind_tuple,
     g.graph['max_path_length'] = max_path_length
     
     g.graph['metapaths'] = g.graph['schema'].metapaths(source_kind, target_kind, max_path_length)
-    g.graph['shortcuts'] = shortcuts_for_metapaths(g.graph['metapaths'], 2)
 
     g.graph['positives'], g.graph['negatives'] = learning_edge_subset(g, num_pos, num_neg)
     print 'computing shortcuts'
-    compute_shortcuts(g)
+    shortcuts = shortcuts_for_metapaths(g.graph['metapaths'], 2)
+    compute_shortcuts(g, shortcuts)
     print 'computing total path counts'
     total_path_counts(g)
     g.graph['prepared'] = True
@@ -175,12 +177,11 @@ def shortcuts_for_metapaths(metapaths, shortcut_length):
             depth += shortcut_length
     return shorcuts
 
-def compute_shortcuts(g):
+def compute_shortcuts(g, shortcuts):
     """Annotate each node in the graph with a dictionary named
     path_to_nodes_counter. Dictionary keys are relevant shortcut metapaths.
     The value corresponding to a shortcut metapath key is a counter with target
     nodes as keys and number of paths following the metapath as counts."""
-    shortcuts = g.graph['shortcuts']
     for source_node in g.nodes_iter():
         path_to_nodes_counter = dict()
         for path in shortcuts:
@@ -188,7 +189,7 @@ def compute_shortcuts(g):
             if counter is not None:
                 path_to_nodes_counter[path] = counter
         g.node[source_node]['path_to_nodes_counter'] = path_to_nodes_counter
-
+    g.graph['shortcuts'] = shortcuts
 
 def get_kind_to_nodes(g):
     """Create a dictionary of node kind to edges"""
@@ -205,6 +206,11 @@ def get_kind_to_edges(g):
         edge = node, neighbor
         kind_to_edges.setdefault(key, set()).add(edge)    
     return kind_to_edges
+
+def print_node_kind_counts(g):
+    kind_to_nodes = get_kind_to_nodes(g)
+    for key, value in kind_to_nodes.items():
+        print key, len(value)
 
 def print_edge_kind_counts(g):
     kind_to_edges = get_kind_to_edges(g)

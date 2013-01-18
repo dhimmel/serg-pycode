@@ -9,7 +9,62 @@ import networkx
 import networks.networkx_extensions as nxext
 
 
+def edge_status(g, source, target):
+    """Returns the status for an edge.
+    0 - Negative evaluation edge
+    1 - Positive evaluation edge
+    2 - Non existent network edge
+    3 - Existent network edge
+    """
+    edge = source, target
+    if edge in g.graph['negatives']:
+        status = 0
+    elif edge in g.graph['positives']:
+        status = 1
+    else: 
+        status = int(g.has_edge(source, target, g.graph['edge_kind'])) + 2
 
+def feature_generator(g):
+    """
+    Generates features (only NPC for now) based on the graph specifications.
+    """
+    schema = g.graph['schema']
+    metapaths = g.graph['metapaths']
+    metapath_abbrevs = [schema.path_as_abbrev_str(metapath) for metapath in metapaths]
+    kind_to_nodes = nxext.get_kind_to_nodes(g)
+    sources = kind_to_nodes[g.graph['source_kind']]
+    for source in sources:
+        print source
+        target_to_metapath_to_npc = nxext.normalized_path_counter(g, metapaths, source)
+        for target, metapath_to_npc in target_to_metapath_to_npc.iteritems():
+            metapath_to_npc = {schema.path_as_abbrev_str(key): value for key, value in metapath_to_npc.items()}
+            feature_dict = dict.fromkeys(metapath_abbrevs, None)
+            feature_dict.update(metapath_to_npc)
+            feature_dict['source'] = source
+            feature_dict['target'] = target
+            status = edge_status(g, source, target)
+            yield feature_dict    
+
+
+def write_features(g, path, status_subset = None):
+    """
+    If status_subset is None all edges are written despite status.
+    """
+    schema = g.graph['schema']
+    metapaths = g.graph['metapaths']
+    feature_file = open(feature_file_path, 'w')
+    fieldnames = ['source', 'target', 'status'] + [schema.path_as_abbrev_str(metapath) for metapath in metapaths]
+    dict_writer = csv.DictWriter(feature_file, fieldnames=fieldnames, delimiter='\t')
+    dict_writer.writeheader()
+
+    for feature_dict in feature_generator(g):
+        if status_subset is None or feature_dict['status'] in status_subset:
+            dict_writer.writerow(feature_dict)
+    feature_file.close()
+        
+
+################################################################################
+################# Execution
 
 ipanet_dir = '/home/dhimmels/Documents/serg/ipanet/'
 network_id = '130116-1'
@@ -35,47 +90,7 @@ else:
     print 'reading', pkl_path_prepared
     g = networkx.read_gpickle(pkl_path_prepared)
 
-
-###########################################
-## Compute features for all pairs
-
-schema = g.graph['schema']
-metapaths = g.graph['metapaths']
-shortcuts = g.graph['shortcuts']
-
-
 feature_file_path = os.path.join(ipanet_dir, 'networks', network_id, 'features.txt')
-feature_file = open(feature_file_path, 'w')
-fieldnames = ['source', 'target', 'status'] + [schema.path_as_abbrev_str(metapath) for metapath in metapaths]
-dict_writer = csv.DictWriter(feature_file, fieldnames=fieldnames, delimiter='\t')
-dict_writer.writeheader()
+write_features(g, feature_file_path)
 
-positives = set(g.graph['positives'])
-negatives = set(g.graph['negatives'])
 
-kind_to_nodes = nxext.get_kind_to_nodes(g)
-drugs = kind_to_nodes['drug']
-
-metapath_abbrevs = map(schema.path_as_abbrev_str, metapaths)
-for source in drugs:
-    print source
-    target_to_metapath_to_npc = nxext.normalized_path_counter(g, metapaths, source, shortcuts)
-    for target, metapath_to_npc in target_to_metapath_to_npc.iteritems():
-        metapath_to_npc = {schema.path_as_abbrev_str(key): value for key, value in metapath_to_npc.items()}
-        row_dict = dict.fromkeys(metapath_abbrevs, None)
-        row_dict.update(metapath_to_npc)
-        row_dict['source'] = source
-        row_dict['target'] = target
-        edge = source, target
-        if edge in negatives:
-            status = 2
-        elif edge in positives:
-            status = 3
-        else: 
-            status = int(g.has_edge(source, target, 'indication'))
-        row_dict['status'] = status
-        if status < 2:
-            continue
-        dict_writer.writerow(row_dict)
-feature_file.close()
- 
