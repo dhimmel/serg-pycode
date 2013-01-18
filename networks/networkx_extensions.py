@@ -151,7 +151,10 @@ def prepare_for_feature_computation(g, max_path_length, edge_kind_tuple,
     
     g.graph['max_path_length'] = max_path_length
     
-    g.graph['metapaths'] = g.graph['schema'].metapaths(source_kind, target_kind, max_path_length)
+    metapaths = g.graph['schema'].metapaths(source_kind, target_kind, max_path_length)
+    prediction_kind = (source_kind, edge_kind, target_kind)
+    metapaths.remove(prediction_kind)
+    g.graph['metapaths'] = metapaths
 
     g.graph['positives'], g.graph['negatives'] = learning_edge_subset(g, num_pos, num_neg)
     print 'computing shortcuts'
