@@ -1,5 +1,17 @@
 import sklearn.linear_model
 
+
+
+source = 'interferon beta-1a'
+target = 'Multiple Sclerosis'
+
+metapaths = g.graph['metapaths']
+#metapaths.append(('drug', 'indication', 'disease'))
+metapath_to_paths = get_metapath_to_paths(g, source, target=None, metapaths, cutoff=2)
+print metapath_to_paths
+
+reversed_metapaths = tuple(reversed(metapath) for metapath in metapaths)
+
 """
 pkl_path = '/home/dhimmels/Documents/serg/ipanet/ipanet.pkl'
 g = networkx.read_gpickle(pkl_path)

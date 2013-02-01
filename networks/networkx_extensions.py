@@ -1,5 +1,6 @@
 import collections
 import random
+import os
 
 import networkx
 
@@ -271,3 +272,73 @@ def total_path_counts(g):
     for node, data in g.nodes_iter(data=True):
         #del data['temp_ending_paths']
         del data['temp_starting_paths']
+
+
+def get_paths(g, metapath, source, target=None):
+    """
+    Get paths of kind metapath from the source to the target. If target is
+    not specified, all paths from source of kind metpath are returned. If
+    a source or target is specified which does not match the source or target
+    node kind in the metapath, None is returned.
+    """
+    if g.node[source]['kind'] != metapath[0]:
+        return None
+    if target and g.node[target]['kind'] != metapath[-1]:
+        return None
+    metapath = collections.deque(metapath)
+    metapath.popleft()
+    paths = [[source]]
+    while metapath:
+        edge_key = metapath.popleft()
+        node_kind = metapath.popleft()
+        current_depth_paths = list()
+        while paths:
+            preceeding_path = paths.pop()
+            node = preceeding_path[-1]
+            
+            for node, neighbor, key in g.edges(node, keys=True):
+                neighbor_kind = g.node[neighbor]['kind']
+                if key == edge_key and neighbor_kind == node_kind:
+                    path = preceeding_path + [edge_key, neighbor]
+                    current_depth_paths.append(path)
+        paths = current_depth_paths
+    if target:
+        paths = filter(lambda path: path[-1] == target, paths)
+    return paths
+
+def get_metapath_to_paths(g, source, target=None, metapaths=[], cutoff=None):
+    """Return a dictionary of metapath to paths connecting source and target
+    nodes. Cutoff removes metapaths exceeding the specified length.
+    """
+    if cutoff is not None:
+        metapaths = filter(lambda x: (len(x) / 2) <= cutoff, metapaths)
+    metapath_to_paths = dict()
+    for metapath in metapaths:
+        paths = get_paths(g, metapath, source, target)
+        metapath_to_paths[metapath] = paths
+    return metapath_to_paths
+    
+
+
+def all_simple_paths(g, source, target, metapaths, cutoff=None):
+    """Return dictionary of metapath to a list of paths following that metapath
+    between the source and target. Only metapaths in metapaths are returned.
+    If metapaths are provided cutoff is the max metapath length. Otherwise
+    cutoff must be specified and all metapaths found with length less than or
+    equal to cutoff are returned.
+    """
+    assert metapaths is not None or cutoff is not None
+    if cutoff is None:
+        cutoff = max(len(metapath) / 2 for metapath in metapaths)
+    all_paths = networkx.all_simple_paths(g, source, target, cutoff)
+    #print all_paths
+    return all_paths
+
+if __name__ =='__main__':
+    ipanet_dir = '/home/dhimmels/Documents/serg/ipanet/'
+    network_id = '130116-1'
+    pkl_path_prepared = os.path.join(ipanet_dir, 'networks', network_id, 'prepared-graph.pkl')
+    g = networkx.read_gpickle(pkl_path_prepared)
+
+
+
