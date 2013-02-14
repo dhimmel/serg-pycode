@@ -9,11 +9,10 @@ import bioparser.data
 import networks.schema
 
 
-ipanet_dir = '/home/dhimmels/Documents/serg/ipanet/'
 #gml_path = os.path.join(ipanet_dir, 'ipanet.gml')
 
 def read_diseases_to_remove():
-    path = os.path.join(ipanet_dir, 'manually-removed-disease-nodes.txt')
+    path = os.path.join(network_dir, 'manually-removed-diseases.txt')
     with open(path) as f:
         diseases = {line.strip() for line in f}
     return diseases
@@ -124,7 +123,10 @@ def build_networkx():
     edge_tuples = [('drug', 'gene', 'target'),
                    ('gene', 'disease', 'risk'),
                    ('drug', 'disease', 'indication')]
-    schema = networks.schema.UndirectedSchema(node_kinds, edge_tuples)
+    kind_to_abbrev = {'drug': 'C', 'disease': 'D', 'gene': 'G',
+                      'risk': 'r', 'indication': 'i', 'target': 't'}
+    
+    schema = networks.schema.UndirectedSchema(node_kinds, edge_tuples, kind_to_abbrev)
     g.graph['schema'] = schema
     g.graph['prepared'] = False
     return g
@@ -150,19 +152,23 @@ def node_degree_list(g, printing=False):
             print degree_list[i]
     return degree_list
 
-def save_as_pickle(g, network_id):
-    network_dir = os.path.join(ipanet_dir, 'networks', network_id)
-    if not os.path.exists(network_dir):
-        os.mkdir(network_dir)
-    pkl_path = os.path.join(network_dir, 'graph.pkl')
+def save_as_pickle(g):
+    graph_dir = os.path.join(network_dir, 'graphs')
+    if not os.path.exists(graph_dir):
+        os.makedirs(graph_dir)
+    pkl_path = os.path.join(graph_dir, 'graph.pkl')
     networkx.write_gpickle(g, pkl_path)
     print 'IPA network saved to', pkl_path
     
 
 if __name__ == '__main__':
+    ipanet_dir = '/home/dhimmels/Documents/serg/ipanet/'
+    network_id = '130116-1'
+    network_dir = os.path.join(ipanet_dir, 'networks', network_id)
+
     g = build_networkx()
     purify(g)
     print networkx.info(g)
-    save_as_pickle(g, '130116-1')
+    save_as_pickle(g)
 
 

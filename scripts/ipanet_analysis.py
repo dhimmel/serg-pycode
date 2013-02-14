@@ -16,22 +16,26 @@ import networks.features
 
 ipanet_dir = '/home/dhimmels/Documents/serg/ipanet/'
 network_id = '130116-1'
+network_dir = os.path.join(ipanet_dir, 'networks', network_id)
+graph_dir = os.path.join(network_dir, 'graphs')
 
-pkl_path_prepared = os.path.join(ipanet_dir, 'networks', network_id, 'prepared-graph.pkl')
+pkl_path_prepared = os.path.join(graph_dir, 'prepared-graph.pkl')
 if not os.path.exists(pkl_path_prepared):
     print 'preparing network for feature computation.'
-    pkl_path = os.path.join(ipanet_dir, 'networks', network_id, 'graph.pkl')
+    pkl_path = os.path.join(graph_dir, 'graph.pkl')
     g = networkx.read_gpickle(pkl_path)
     
-    ###########################################################################
     ### Variables to set
     max_path_length = 6
     edge_kind_tuple = ('drug', 'indication', 'disease')
     num_pos, num_neg = 2000, 2000
 
-    nxext.prepare_for_feature_computation(g, max_path_length, edge_kind_tuple, num_pos, num_neg)
-    print 'writing prepared gpickle'
+    nxext.prepare_feature_computation(g, max_path_length, edge_kind_tuple, num_pos, num_neg)
+    pkl_path_learning = os.path.join(graph_dir, 'learning-graph.pkl')
+    networkx.write_gpickle(g, pkl_path_learning)
+    nxext.prepare_feature_optimizations(g)
     networkx.write_gpickle(g, pkl_path_prepared)
+    print 'prepared graph saved as pickle'
 else:
     print 'reading', pkl_path_prepared
     g = networkx.read_gpickle(pkl_path_prepared)
