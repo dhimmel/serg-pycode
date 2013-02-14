@@ -2,11 +2,19 @@ import networkx
 
 
 def create_undirected_schema(edges, kind_to_abbrev):
-    """edges is an iterable of tuples in the following format:
+    """
+    Returns a networkx.MultiGraph graph representing the schema describing a
+    heterogeneous information network. 
+    
+    edges is an iterable of tuples in the following format:
     (node_kind, edge_kind, node_kind)
+    
+    kind_to_abbrev is a dictionary where the keys refer to kinds input in edges
+    and the values refer to the unique one character string abbreviation for
+    that edge.
     """
     schema = networkx.MultiGraph()
-    assert all(len(edge) == 2 for edge in edge_paths)
+    assert all(len(edge) == 3 for edge in edges)
     node_kinds = set()
     for edge in edges:
         node_kinds.add(edge[0])
@@ -16,18 +24,17 @@ def create_undirected_schema(edges, kind_to_abbrev):
         schema.add_edge(edge[0], edge[2], key=edge[1])
     
     check_abbreviations(schema, kind_to_abbrev)
-    schema.graph['paths'] = MetaPaths(self, kind_to_abbrev)
+    schema.graph['paths'] = MetaPaths(schema, kind_to_abbrev)
     
     return schema
-
 
 
 def check_abbreviations(schema, kind_to_abbrev):
     """Check that the kind to abbreviation dictionary is valid."""
     
     # Check that all kinds have an abbreviation
-    kinds_with_abbrev = set(kind_to_abbrev.items())
-    kinds = set(schema.nodes() + schema.edges())
+    kinds_with_abbrev = set(kind_to_abbrev)
+    kinds = set(schema.nodes()) | {key for n1, n2, key in schema.edges(keys=True)}
     assert kinds <= kinds_with_abbrev
     
     # Check that abbreviations are unique strings of length 1
@@ -50,28 +57,28 @@ def extract_metapaths(schema, source, target, max_length,
     assert isinstance(exclude_edges, set)
     assert all(isinstance(exclude_edge, tuple) for exclude_edge in exclude_edges)
     
-    potential_paths = [[source]]
+    paths_obj = schema.graph['paths']
+        
+    potential_paths = [paths_obj.metapath_from_tuple((source, ))]
     paths = list()
     for depth in range(max_length):
         current_depth_paths = list()
         for potential_path in potential_paths:
-            potential_path_end = potential_path[-1]
-            for node, neighbor, key in schema.edges(potential_path_end, keys=True):
+            for node, neighbor, key in schema.edges(potential_path.end(), keys=True):
                 
                 # Exclude paths between source and target nodes
-                if exclude_all_source_target_edges:
-                    if {node, neighbor} == {source, target}:
-                        continue
-
+                if (exclude_all_source_target_edges and
+                    {node, neighbor} == {source, target}):
+                    continue
                 # Exclude specified paths
                 if ((node, key, neighbor) in exclude_edges or
                     (neighbor, key, node) in exclude_edges):
                     continue
                 
-                path = potential_path + [key, neighbor]
+                path = paths_obj.append_to_metapath(potential_path, key, neighbor)
+                
                 current_depth_paths.append(path)
                 if neighbor == target:
-                    path = tuple(path)
                     paths.append(path)
         potential_paths = current_depth_paths
     return paths
@@ -93,8 +100,8 @@ class MetaPaths(object):
         """Return the metapath represented by the supplied abbreviation."""
         metapath = self.abbrev_to_path.get(abbrev)
         if metapath is None:
-            kind_tuple = (abbrev_to_kind[x] for x in abbrev)
-            metapath = MetaPath(kind_tuple)
+            kind_tuple = tuple(self.abbrev_to_kind[x] for x in abbrev)
+            metapath = MetaPath(self, kind_tuple)
         return metapath
     
     def metapath_from_tuple(self, kind_tuple):
@@ -112,8 +119,8 @@ class MetaPaths(object):
         the metapath.
         """
         if not abbreviated:
-            node_kind = self.abbrev_to_kind[node_kind]
-            edge_kind = self.abbrev_to_kind[edge_kind]
+            node_kind = self.kind_to_abbrev[node_kind]
+            edge_kind = self.kind_to_abbrev[edge_kind]
         if prepend:
             abbrev = node_kind + edge_kind + metapath.abbrev
         else:
@@ -128,9 +135,17 @@ class MetaPath(object):
         self.abbrev = ''.join(metapaths.kind_to_abbrev[kind] for kind in kind_tuple)
         assert self.abbrev not in metapaths.abbrev_to_path
         metapaths.abbrev_to_path[self.abbrev] = self
-        
+    
+    def start(self):
+        """Return the node_kind for the start node of the metapath."""
+        return self.tuple_[0]
+
+    def end(self):
+        """Same as start except returns the node_kind for the end node."""
+        return self.tuple_[-1]
+    
     def __len__(self):
-        return len(self.abbrev) / 2
+        return len(self.tuple_) / 2
     
     def __hash__(self):
         return hash(self.abbrev)
@@ -139,22 +154,58 @@ class MetaPath(object):
         return self.abbrev == other.abbrev
     
     def __str__(self):
+        return self.__repr__()
+
+    def __repr__(self):
         return self.abbrev
 
 if __name__ == '__main__':
     
-    """
-    edge_tuples = [('drug', 'gene', 'target'),
-                   ('gene', 'disease', 'risk'),
-                   ('gene', 'gene', 'function')]
-    edge_tuples = [('drug', 'gene', 'target'),
-                   ('gene', 'disease', 'risk'),
-                   ('drug', 'disease', 'indication')]
+    edges = [('drug', 'target', 'gene'),
+             ('gene', 'risk', 'disease'),
+             ('drug', 'indication', 'disease'),
+             ('gene', 'function', 'gene')]
+    
+    kind_to_abbrev = {'drug': 'C', 'disease': 'D', 'gene': 'G',
+                      'risk': 'r', 'indication': 'i', 'target': 't', 'function': 'f'}
+    
+    
+    schema = create_undirected_schema(edges, kind_to_abbrev)
+    
+    print '-----------schema-----------'
+    print 'Nodes:'
+    print schema.nodes()
+    print 'Edges:'
+    print schema.edges(keys=True)
+    
+    source = 'drug'
+    target = 'disease'
+    max_length = 4
+    
+    print 'Metapaths'
+    metapaths = extract_metapaths(schema, source, target, max_length)
+    print metapaths
+    
+    print 'Metapaths Excluding source to target edges'
+    metapaths = extract_metapaths(schema, source, target, max_length, exclude_all_source_target_edges=True)
+    print metapaths
 
+    print 'Metapaths Excluding (gene, function, gene) edges'
+    metapaths = extract_metapaths(schema, source, target, max_length, exclude_edges={('gene', 'function', 'gene')})
+    print metapaths
+
+    print 'Metapaths Excluding (disease, indication, drug) edges'
+    metapaths = extract_metapaths(schema, source, target, max_length, exclude_edges={('disease', 'indication', 'drug')})
+    print metapaths
+   
+    
+    """
     edge_tuples = [('drug', 'gene', 'upregulates'),
                    ('drug', 'gene', 'downregulates'),
                    ('disease', 'gene', 'upregulates'),
                    ('disease', 'gene', 'downregulates'),
                    ('gene', 'gene', 'function')]
     """
+    
+    
     
