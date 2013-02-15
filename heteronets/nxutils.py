@@ -32,7 +32,7 @@ def get_kind_to_edges(g, refresh=False):
         return kind_to_edges
     kind_to_edges = dict()
     for node, neighbor, key in g.edges_iter(keys=True):
-        edge = node, neighbor
+        edge = node, neighbor, key
         kind_to_edges.setdefault(key, set()).add(edge)
     g.graph['kind_to_edges'] = kind_to_edges 
     return kind_to_edges

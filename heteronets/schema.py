@@ -7,7 +7,7 @@ def create_undirected_schema(edges, kind_to_abbrev):
     heterogeneous information network. 
     
     edges is an iterable of tuples in the following format:
-    (node_kind, edge_kind, node_kind)
+    (node_kind, node_kind, edge_kind)
     
     kind_to_abbrev is a dictionary where the keys refer to kinds input in edges
     and the values refer to the unique one character string abbreviation for
@@ -18,10 +18,10 @@ def create_undirected_schema(edges, kind_to_abbrev):
     node_kinds = set()
     for edge in edges:
         node_kinds.add(edge[0])
-        node_kinds.add(edge[2])
+        node_kinds.add(edge[1])
     schema.add_nodes_from(node_kinds)
     for edge in edges:
-        schema.add_edge(edge[0], edge[2], key=edge[1])
+        schema.add_edge(edge[0], edge[1], key=edge[2])
     
     check_abbreviations(schema, kind_to_abbrev)
     schema.graph['paths'] = MetaPaths(schema, kind_to_abbrev)
@@ -49,7 +49,7 @@ def extract_metapaths(schema, source, target, max_length,
     """
     Calculate paths between a source and target node in the schema.
     exclude_edges is a set of tuples where each tuple is an edge formatted like
-    (u, edge, v). Paths that with an edge in exclude_edges are not returned.
+    (u, v, edge). Paths that with an edge in exclude_edges are not returned.
     If exclude_all_source_target_edges is True no paths are returned that
     contain an edge between the source and target nodes.
     """
@@ -71,8 +71,8 @@ def extract_metapaths(schema, source, target, max_length,
                     {node, neighbor} == {source, target}):
                     continue
                 # Exclude specified paths
-                if ((node, key, neighbor) in exclude_edges or
-                    (neighbor, key, node) in exclude_edges):
+                if ((node, neighbor, key) in exclude_edges or
+                    (neighbor, node, key) in exclude_edges):
                     continue
                 
                 path = paths_obj.append_to_metapath(potential_path, key, neighbor)
@@ -82,6 +82,21 @@ def extract_metapaths(schema, source, target, max_length,
                     paths.append(path)
         potential_paths = current_depth_paths
     return paths
+
+def shortcuts_for_metapaths(schema, metapaths, shortcut_length):
+    """Compute desired shortcuts for faster computation of metapaths."""
+    shorcuts = set()
+    for metapath in metapaths:
+        num_nodes = len(metapath)
+        depth = 0
+        while depth + shortcut_length <= num_nodes:
+            start = depth * 2
+            end = start + shortcut_length * 2 + 1
+            shortcut = metapath.tuple_[start:end]
+            shortcut = schema.graph['paths'].metapath_from_tuple(shortcut)
+            shorcuts.add(shortcut)
+            depth += shortcut_length
+    return shorcuts
 
 
 class MetaPaths(object):
@@ -131,6 +146,7 @@ class MetaPaths(object):
 class MetaPath(object):
     
     def __init__(self, metapaths, kind_tuple):
+        self.metapaths = metapaths
         self.tuple_ = kind_tuple
         self.abbrev = ''.join(metapaths.kind_to_abbrev[kind] for kind in kind_tuple)
         assert self.abbrev not in metapaths.abbrev_to_path
@@ -143,6 +159,9 @@ class MetaPath(object):
     def end(self):
         """Same as start except returns the node_kind for the end node."""
         return self.tuple_[-1]
+    
+    def __reversed__(self):
+        return self.metapaths.metapath_from_tuple(reversed(self.tuple_))
     
     def __len__(self):
         return len(self.tuple_) / 2
@@ -161,13 +180,14 @@ class MetaPath(object):
 
 if __name__ == '__main__':
     
-    edges = [('drug', 'target', 'gene'),
-             ('gene', 'risk', 'disease'),
-             ('drug', 'indication', 'disease'),
-             ('gene', 'function', 'gene')]
+    edges = [('drug', 'gene', 'target'),
+             ('gene', 'disease', 'risk'),
+             ('drug', 'disease', 'indication'),
+             ('drug', 'disease', 'increases'),
+             ('gene', 'gene', 'function')]
     
     kind_to_abbrev = {'drug': 'C', 'disease': 'D', 'gene': 'G',
-                      'risk': 'r', 'indication': 'i', 'target': 't', 'function': 'f'}
+                      'risk': 'r', 'indication': 'i', 'target': 't', 'function': 'f', 'increases': '^'}
     
     
     schema = create_undirected_schema(edges, kind_to_abbrev)
@@ -180,22 +200,25 @@ if __name__ == '__main__':
     
     source = 'drug'
     target = 'disease'
-    max_length = 4
+    max_length = 2
     
     print 'Metapaths'
     metapaths = extract_metapaths(schema, source, target, max_length)
+    shortcuts = shortcuts_for_metapaths(schema, metapaths, 2)
     print metapaths
+    print 'Shortcuts'
+    print shortcuts
     
     print 'Metapaths Excluding source to target edges'
     metapaths = extract_metapaths(schema, source, target, max_length, exclude_all_source_target_edges=True)
     print metapaths
 
     print 'Metapaths Excluding (gene, function, gene) edges'
-    metapaths = extract_metapaths(schema, source, target, max_length, exclude_edges={('gene', 'function', 'gene')})
+    metapaths = extract_metapaths(schema, source, target, max_length, exclude_edges={('gene', 'gene', 'function')})
     print metapaths
 
     print 'Metapaths Excluding (disease, indication, drug) edges'
-    metapaths = extract_metapaths(schema, source, target, max_length, exclude_edges={('disease', 'indication', 'drug')})
+    metapaths = extract_metapaths(schema, source, target, max_length, exclude_edges={('disease', 'drug', 'indication')})
     print metapaths
    
     

@@ -15,40 +15,41 @@ def longest_matching_shortcut(metapath, shortcuts):
     match_len = 0
     for shortcut in shortcuts:
         shortcut_len = len(shortcut)
-        if (shortcut_len <= metapath_len
-            and all(shortcut[i] == metapath[i] for i in xrange(shortcut_len))
-            and match_len < shortcut_len):
+        if (match_len < shortcut_len and shortcut_len <= metapath_len and
+            metapath.abbrev.startswith(shortcut.abbrev)):
             match = shortcut
             match_len = shortcut_len
     return match
 
 def source_to_target_node_count(g, metapath, source):
-    """Returns a counter with nodes as keys and number of paths of type metatype
+    """Returns a counter with nodes as keys and number of paths of type metapath
     reaching node as the count. Use path_to_nodes dictionary to enable speedup."""
-    if g.node[source]['kind'] != metapath[0]:
+    if g.node[source]['kind'] != metapath.start():
         return None
-    
+
+    metapaths_obj = g.graph['schema'].graph['paths']
     shortcuts = g.graph.get('shortcuts')
     
     metapath_position = 0
     counter = collections.Counter()
     counter[source] = 1
     
-    while metapath_position < len(metapath) - 1:
-        remaining_path = metapath[metapath_position: ]
+    while metapath_position < len(metapath.tuple_) - 1:
+        remaining_path = metapath.tuple_[metapath_position: ]
+        remaining_path = metapaths_obj.metapath_from_tuple(remaining_path)
         node_counter_temp = collections.Counter()        
         
-        if len(remaining_path) > 3 and shortcuts:
+        if len(remaining_path.tuple_) > 3 and shortcuts:
             shortcut = longest_matching_shortcut(remaining_path, shortcuts)
             for node, count in counter.items():
                 nodes_counter = g.node[node]['path_to_nodes_counter'][shortcut]
                 for destination, destination_count in nodes_counter.iteritems():
                     node_counter_temp[destination] += destination_count * count
-            metapath_position += len(shortcut) - 1
+            metapath_position += len(shortcut.tuple_) - 1
         
         else:
-            node_kind = remaining_path[2]            
-            edge_key = remaining_path[1]
+            node_kind = remaining_path.tuple_[2]            
+            edge_key = remaining_path.tuple_[1]
             for node, count in counter.iteritems():
                 for node, neighbor, key in g.edges(node, keys=True):
                     neighbor_kind = g.node[neighbor]['kind']
@@ -90,7 +91,7 @@ def normalized_path_counter(g, metapaths, source):
         all_paths_target = g.node[target]['all_paths']
         denomenator = collections.Counter()
         for metapath in metapaths:
-            reversed_metapath = tuple(reversed(metapath))
+            reversed_metapath = reversed(metapath)
             denomenator[metapath] = source_denomenator[metapath] + all_paths_target[reversed_metapath]    
 
         metapath_to_npc = dict()
@@ -103,7 +104,7 @@ def normalized_path_counter(g, metapaths, source):
     return target_to_metapath_to_npc
 
 
-def learning_edge_subset(g, num_pos, num_neg):
+def learning_edge_subset(g, num_pos, num_neg, remove_positives=False):
     """
     Returns a tuple of (num_pos positives edges, num_neg negative edges). 
     Selected edges are of kind g.graph['edge_kind'], start at the node kind
@@ -124,7 +125,7 @@ def learning_edge_subset(g, num_pos, num_neg):
     edge_kind = g.graph['edge_kind']
     sources = kind_to_nodes[source_kind]
     targets = kind_to_nodes[target_kind]
-    edge_order_key = lambda edge: edge if edge[0] in sources else (edge[1], edge[0])
+    edge_order_key = lambda edge: edge if edge[0] in sources else (edge[1], edge[0], edge[2])
     edges = list(kind_to_edges[edge_kind])
     edges = map(edge_order_key, edges)
     # Randomly select negatices to mirror positive node degree
@@ -132,12 +133,13 @@ def learning_edge_subset(g, num_pos, num_neg):
     while len(negatives) < num_neg:
         source = random.choice(edges)[0]
         target = random.choice(edges)[1]
-        if not g.has_edge(source, target):
-            edge = source, target
+        if not g.has_edge(source, target, edge_kind):
+            edge = source, target, edge_kind
             negatives.append(edge)
     # Randomly select positives
     positives = random.sample(edges, num_pos)
-    g.remove_edges_from(positives)    
+    if remove_positvies:
+        g.remove_edges_from(positives)    
     return positives, negatives
 
 def prepare_feature_computation(g, max_path_length, edge_kind_tuple,
@@ -154,7 +156,7 @@ def prepare_feature_computation(g, max_path_length, edge_kind_tuple,
     
     g.graph['max_path_length'] = max_path_length
     
-    metapaths = g.graph['schema'].metapaths(source_kind, target_kind, max_path_length)
+    metapaths = schema.extract_metapaths(source_kind, target_kind, max_path_length)
     prediction_kind = (source_kind, edge_kind, target_kind)
     metapaths.remove(prediction_kind)
     g.graph['metapaths'] = metapaths
@@ -170,20 +172,6 @@ def prepare_feature_optimizations(g):
     g.graph['prepared'] = True
 
     
-def shortcuts_for_metapaths(metapaths, shortcut_length):
-    """Compute desired shortcuts for faster computation of metapaths."""
-    shorcuts = set()
-    for metapath in metapaths:
-        num_nodes = len(metapath) / 2
-        depth = 0
-        while depth + shortcut_length <= num_nodes:
-            start = depth * 2
-            end = start + shortcut_length * 2 + 1
-            shortcut = metapath[start:end]
-            shortcut = tuple(shortcut)
-            shorcuts.add(shortcut)
-            depth += shortcut_length
-    return shorcuts
 
 def compute_shortcuts(g, shortcuts):
     """Annotate each node in the graph with a dictionary named
@@ -206,50 +194,36 @@ def total_path_counts(g):
     'ending_paths' and 'starting_paths'. Computation is dynamic to improve
     efficiency.
     """
+    metapaths_obj = g.graph['schema'].graph['paths']
+    
     depth = g.graph['max_path_length']
     for node, data in g.nodes_iter(data=True):
-        kind = data['kind']
-        paths = collections.Counter([(kind, )])
-        #data['ending_paths'] = paths
+        node_kind = data['kind']
+        node_as_path = metapaths_obj.metapath_from_tuple((node_kind, ))
+        paths = collections.Counter([node_as_path, ])
         data['all_paths'] = paths
-        #data['temp_ending_paths'] = collections.Counter()
         data['temp_starting_paths'] = collections.Counter()
     
     for i in range(depth):
         
         for node, data in g.nodes_iter(data=True):
-            kind = data['kind']
-            neighbors = g.neighbors_iter(node)
+            node_kind = data['kind']
             for node, neighbor, key in g.edges(node, keys=True):
                 neighbor_data = g.node[neighbor]
-                
-                """
-                # Ending Paths
-                neighbor_ending_paths = neighbor_data['ending_paths']
-                for neighbor_path, count in neighbor_ending_paths.iteritems():
-                    path = list(neighbor_path)
-                    path.append(key)
-                    path.append(kind)
-                    path = tuple(path)
-                    data['temp_ending_paths'][path] += count
-                """
-                
+                                
                 # Starting Paths            
                 neighbor_starting_paths = neighbor_data['all_paths']
                 for neighbor_path, count in neighbor_starting_paths.iteritems():
-                    path = [kind, key] + list(neighbor_path)
-                    path = tuple(path)
+                    path = metapaths_obj.append_to_metapath(neighbor_path, key,
+                        node_kind, prepend = True)
                     data['temp_starting_paths'][path] += count
         
         for node, data in g.nodes_iter(data=True):
-            #data['ending_paths'] += data['temp_ending_paths']
-            #data['temp_ending_paths'] = collections.Counter()
             data['all_paths'] += data['temp_starting_paths']
             data['temp_starting_paths'] = collections.Counter()
     
     # Delete temporary attibutes
     for node, data in g.nodes_iter(data=True):
-        #del data['temp_ending_paths']
         del data['temp_starting_paths']
 
 
@@ -260,16 +234,16 @@ def get_paths(g, metapath, source, target=None):
     a source or target is specified which does not match the source or target
     node kind in the metapath, None is returned.
     """
-    if g.node[source]['kind'] != metapath[0]:
+    if g.node[source]['kind'] != metapath.start():
         return None
-    if target and g.node[target]['kind'] != metapath[-1]:
+    if target and g.node[target]['kind'] != metapath.end():
         return None
-    metapath = collections.deque(metapath)
-    metapath.popleft()
+    metapath_deque = collections.deque(metapath.tuple_)
+    metapath_deque.popleft()
     paths = [[source]]
     while metapath:
-        edge_key = metapath.popleft()
-        node_kind = metapath.popleft()
+        edge_key = metapath_deque.popleft()
+        node_kind = metapath_deque.popleft()
         current_depth_paths = list()
         while paths:
             preceeding_path = paths.pop()
@@ -290,7 +264,7 @@ def get_metapath_to_paths(g, source, target=None, metapaths=[], cutoff=None):
     nodes. Cutoff removes metapaths exceeding the specified length.
     """
     if cutoff is not None:
-        metapaths = filter(lambda x: (len(x) / 2) <= cutoff, metapaths)
+        metapaths = filter(lambda x: len(x) <= cutoff, metapaths)
     metapath_to_paths = dict()
     for metapath in metapaths:
         paths = get_paths(g, metapath, source, target)
@@ -308,7 +282,7 @@ def all_simple_paths(g, source, target, metapaths, cutoff=None):
     """
     assert metapaths is not None or cutoff is not None
     if cutoff is None:
-        cutoff = max(len(metapath) / 2 for metapath in metapaths)
+        cutoff = max(len(metapath) for metapath in metapaths)
     all_paths = networkx.all_simple_paths(g, source, target, cutoff)
     #print all_paths
     return all_paths

@@ -24,13 +24,13 @@ def edge_status(g, source, target):
     2 - Non existent network edge
     3 - Existent network edge
     """
-    edge = source, target
+    edge = source, target, g.graph['edge_kind']
     if edge in g.graph['negatives']:
         status = 0
     elif edge in g.graph['positives']:
         status = 1
     else: 
-        status = int(g.has_edge(source, target, g.graph['edge_kind'])) + 2
+        status = int(g.has_edge(edge)) + 2
     return status
 
 def feature_generator(g):
