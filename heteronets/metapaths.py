@@ -5,6 +5,7 @@ import os
 import networkx
 
 import nxutils
+import schema
 
 def longest_matching_shortcut(metapath, shortcuts):
     """Returns the longest shortcut in shortcuts which left aligns to match
@@ -138,40 +139,19 @@ def learning_edge_subset(g, num_pos, num_neg, remove_positives=False):
             negatives.append(edge)
     # Randomly select positives
     positives = random.sample(edges, num_pos)
-    if remove_positvies:
+    if remove_positives:
         g.remove_edges_from(positives)    
     return positives, negatives
-
-def prepare_feature_computation(g, max_path_length, edge_kind_tuple,
-                                    num_pos, num_neg):
-    """
-    Compute metapaths, shortcuts, positives edges, and negative edges. Modify
-    network by removing positive edges. Annotate nodes with computed shortcuts
-    and path count counters.
-    """
-    source_kind, edge_kind, target_kind = edge_kind_tuple
-    g.graph['source_kind'] = source_kind
-    g.graph['target_kind'] = target_kind
-    g.graph['edge_kind'] = edge_kind
-    
-    g.graph['max_path_length'] = max_path_length
-    
-    metapaths = schema.extract_metapaths(source_kind, target_kind, max_path_length)
-    prediction_kind = (source_kind, edge_kind, target_kind)
-    metapaths.remove(prediction_kind)
-    g.graph['metapaths'] = metapaths
-    g.graph['positives'], g.graph['negatives'] = learning_edge_subset(g, num_pos, num_neg)
 
 def prepare_feature_optimizations(g):
     """Adds storage intensive attributes to the graph."""
     print 'computing shortcuts'
-    shortcuts = shortcuts_for_metapaths(g.graph['metapaths'], 2)
+    shortcuts = schema.shortcuts_for_metapaths(g.graph['schema'],
+                                               g.graph['metapaths'], 2)
     compute_shortcuts(g, shortcuts)
     print 'computing total path counts'
     total_path_counts(g)
     g.graph['prepared'] = True
-
-    
 
 def compute_shortcuts(g, shortcuts):
     """Annotate each node in the graph with a dictionary named

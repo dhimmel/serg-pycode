@@ -1,23 +1,25 @@
+import argparse
 import collections
 import os
 import random
+import shutil
 
 import networkx
 #import sklearn.linear_model
 
 import bioparser.data
-import networks.schema
+import heteronets.nxutils
 
 
 #gml_path = os.path.join(ipanet_dir, 'ipanet.gml')
 
-def read_diseases_to_remove():
+def read_diseases_to_remove(network_dir):
     path = os.path.join(network_dir, 'manually-removed-diseases.txt')
     with open(path) as f:
         diseases = {line.strip() for line in f}
     return diseases
 
-def disease_function_subset(ipa, printing=False):
+def disease_function_subset(ipa, network_dir, printing=False):
     """
     Returns a disease subset of functions. A function is considered a
     disease if its lowercase name is the same as its class and its name is
@@ -27,7 +29,7 @@ def disease_function_subset(ipa, printing=False):
     for function in ipa.functions:
         if function.name.lower() == function.function_class.lower():
             disease_names.add(function.name)
-    diseases_to_remove = read_diseases_to_remove()
+    diseases_to_remove = read_diseases_to_remove(network_dir)
     disease_names -= diseases_to_remove
     
     
@@ -43,7 +45,7 @@ def disease_function_subset(ipa, printing=False):
     return disease_functions
 
 
-def build_networkx():
+def build_networkx(network_id, network_dir):
     """
     """
     ipa = bioparser.data.Data().ipa
@@ -52,8 +54,20 @@ def build_networkx():
     hgnc = bioparser.data.Data().hgnc
     entrez_to_hgnc = hgnc.get_entrez_to_gene()
     symbol_to_hgnc = hgnc.get_symbol_to_gene()
-            
-    g = networkx.MultiGraph(name='ipanet')
+        
+    # Define schema for network
+    edge_tuples = [('drug', 'gene', 'target'),
+                   ('gene', 'disease', 'risk'),
+                   ('drug', 'disease', 'indication'),
+                   ('drug', 'disease', 'increase'),
+                   ('drug', 'disease', 'effect')]
+    kind_to_abbrev = {'drug': 'C', 'disease': 'D', 'gene': 'G',
+                      'risk': 'r', 'indication': 'i', 'target': 't',
+                      'increase': 'u', 'effect': 'e'}
+    
+    g = heteronets.nxutils.create_undirected_network(edge_tuples, kind_to_abbrev,
+        name='ipanet', prepared=False, network_id=network_id)
+
     ################################################################################
     ################################# Create Nodes #################################
     
@@ -64,7 +78,7 @@ def build_networkx():
         targets |= set(drug.targets)
     
     # Create disease nodes
-    disease_functions = disease_function_subset(ipa, printing=False)
+    disease_functions = disease_function_subset(ipa, network_dir)
     for disease in disease_functions:
         g.add_node(disease.name, kind='disease')
     
@@ -118,29 +132,11 @@ def build_networkx():
                     g.add_edge(disease.name, molecule, effect=effect, key=kind)
     
     
-    # Define schema for network
-    node_kinds = {'drug', 'disease', 'gene'}
-    edge_tuples = [('drug', 'gene', 'target'),
-                   ('gene', 'disease', 'risk'),
-                   ('drug', 'disease', 'indication')]
-    kind_to_abbrev = {'drug': 'C', 'disease': 'D', 'gene': 'G',
-                      'risk': 'r', 'indication': 'i', 'target': 't'}
-    
-    schema = networks.schema.UndirectedSchema(node_kinds, edge_tuples, kind_to_abbrev)
-    g.graph['schema'] = schema
-    g.graph['prepared'] = False
     return g
 
 
-def purify(g):
-    """Keep only edges of specified kinds and then remove unconnected nodes."""
-    # Remove improper edge kinds
-    valid_edge_kinds = {'target', 'risk', 'indication', 'increase', 'effect'}
-    for node, neighbor, key in g.edges_iter(keys=True):
-        if key not in valid_edge_kinds:
-            g.remove_edge(node, neighbor, key)
-    
-    # Remove unconnected nodes
+def remove_unconnected_nodes(g):
+    """Remove unconnected nodes"""
     unconnected_nodes = (node for node, degree in g.degree_iter() if not degree)
     g.remove_nodes_from(unconnected_nodes)        
 
@@ -152,7 +148,7 @@ def node_degree_list(g, printing=False):
             print degree_list[i]
     return degree_list
 
-def save_as_pickle(g):
+def save_as_pickle(g, network_dir):
     graph_dir = os.path.join(network_dir, 'graphs')
     if not os.path.exists(graph_dir):
         os.makedirs(graph_dir)
@@ -161,14 +157,33 @@ def save_as_pickle(g):
     print 'IPA network saved to', pkl_path
     
 
-if __name__ == '__main__':
-    ipanet_dir = '/home/dhimmels/Documents/serg/ipanet/'
-    network_id = '130116-1'
-    network_dir = os.path.join(ipanet_dir, 'networks', network_id)
 
-    g = build_networkx()
-    purify(g)
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--ipadir', type=os.path.expanduser, default=
+        '~/Documents/serg/ipanet/')
+    parser.add_argument('--network-id', required=True)
+    parser.add_argument('--remove-list', default='global',
+                        choices={'global', 'specific'},
+                        help='''whether to use manually-removed-diseases.txt
+                        from ipadir (global) or to look for a network_id
+                        specific file in network_dir (specific)''')
+    args = parser.parse_args()
+
+    network_dir = os.path.join(args.ipadir, 'networks', args.network_id)
+    
+    if not os.path.isdir(network_dir):
+        os.mkdir(network_dir)
+
+    if args.remove_list == 'global':
+        global_remove_path = os.path.join(args.ipadir, 'manually-removed-diseases.txt')
+        specific_remove_path = os.path.join(network_dir, 'manually-removed-diseases.txt')
+        shutil.copyfile(global_remove_path, specific_remove_path)
+    
+    g = build_networkx(args.network_id, network_dir)
+    remove_unconnected_nodes(g)
+    save_as_pickle(g, network_dir)    
     print networkx.info(g)
-    save_as_pickle(g)
 
 

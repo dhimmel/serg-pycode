@@ -8,7 +8,8 @@ import sys
 
 import networkx
 
-import networkx_extensions
+import metapaths
+import nxutils
 
 
 valid_file_chars = set("-_.()[]{}&#@!~+= %s%s" % (string.ascii_letters, string.digits))
@@ -30,7 +31,7 @@ def edge_status(g, source, target):
     elif edge in g.graph['positives']:
         status = 1
     else: 
-        status = int(g.has_edge(edge)) + 2
+        status = int(g.has_edge(*edge)) + 2
     return status
 
 def feature_generator(g):
@@ -38,17 +39,16 @@ def feature_generator(g):
     Generates features (only NPC for now) based on the graph specifications.
     """
     schema = g.graph['schema']
-    metapaths = g.graph['metapaths']
-    metapath_abbrevs = [schema.path_as_abbrev_str(metapath) for metapath in metapaths]
-    kind_to_nodes = networkx_extensions.get_kind_to_nodes(g)
+    feature_paths = g.graph['metapaths']
+    kind_to_nodes = nxutils.get_kind_to_nodes(g)
     sources = kind_to_nodes[g.graph['source_kind']]
     for source in sources:
         print source
-        target_to_metapath_to_npc = networkx_extensions.normalized_path_counter(g, metapaths, source)
+        target_to_metapath_to_npc = metapaths.normalized_path_counter(g, feature_paths, source)
         for target, metapath_to_npc in target_to_metapath_to_npc.iteritems():
-            metapath_to_npc = {schema.path_as_abbrev_str(key): value for key, value in metapath_to_npc.items()}
-            feature_dict = dict.fromkeys(metapath_abbrevs, None)
+            feature_dict = dict.fromkeys(feature_paths, None)
             feature_dict.update(metapath_to_npc)
+            feature_dict = {str(key): value for key, value in feature_dict.items()}
             feature_dict['source'] = source
             feature_dict['target'] = target
             status = edge_status(g, source, target)
@@ -61,9 +61,9 @@ def write_features(g, path, status_subset = None):
     If status_subset is None all edges are written despite status.
     """
     schema = g.graph['schema']
-    metapaths = g.graph['metapaths']
+    feature_paths = g.graph['metapaths']
     feature_file = open(feature_file_path, 'w')
-    fieldnames = ['source', 'target', 'status'] + [schema.path_as_abbrev_str(metapath) for metapath in metapaths]
+    fieldnames = ['source', 'target', 'status'] + map(str, feature_paths)
     dict_writer = csv.DictWriter(feature_file, fieldnames=fieldnames, delimiter='\t')
     dict_writer.writeheader()
 
@@ -92,8 +92,8 @@ def write_partitioned_features(g, feature_dir):
             os.mkdir(dir_path)
     
     schema = g.graph['schema']
-    metapaths = g.graph['metapaths']
-    fieldnames = ['source', 'target', 'status'] + [schema.path_as_abbrev_str(metapath) for metapath in metapaths]
+    feature_paths = g.graph['metapaths']
+    fieldnames = ['source', 'target', 'status'] + map(str, feature_paths)
 
     learning_path = os.path.join(feature_dir, 'learning-features.txt')
     learning_file = open(learning_path, 'w')
