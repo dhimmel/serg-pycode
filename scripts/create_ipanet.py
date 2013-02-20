@@ -60,10 +60,11 @@ def build_networkx(network_id, network_dir):
                    ('gene', 'disease', 'risk'),
                    ('drug', 'disease', 'indication'),
                    ('drug', 'disease', 'increase'),
-                   ('drug', 'disease', 'effect')]
+                   ('drug', 'disease', 'effect'),
+                   ('gene', 'gene', 'function')]
     kind_to_abbrev = {'drug': 'C', 'disease': 'D', 'gene': 'G',
                       'risk': 'r', 'indication': 'i', 'target': 't',
-                      'increase': 'u', 'effect': 'e'}
+                      'increase': 'u', 'effect': 'e', 'function': 'f'}
     
     g = heteronets.nxutils.create_undirected_network(edge_tuples, kind_to_abbrev,
         name='ipanet', prepared=False, network_id=network_id)
@@ -108,8 +109,27 @@ def build_networkx(network_id, network_dir):
             #raise Exception('pre-existing ipa symbol matching gene name')
         g.add_node(hgnc_gene.symbol, hugu_symbol=hgnc_gene.symbol, kind='gene')
     
+    hugu_to_name = dict()
+    for node_name, data in g.nodes_iter(data=True):
+        if data['kind'] != 'gene':
+            continue
+        hugu_symbol = data['hugu_symbol']
+        if hugu_symbol:
+            hugu_to_name[hugu_symbol] = node_name
+    
     ################################################################################
     ################################# Create Edges #################################
+    # Create gene-gene functional relationship edges from imp
+    gene_pairs = bioparser.data.Data().frimp.read(0.5, symbol=True)
+
+    for gene_0, gene_1, prob in gene_pairs:
+        gene_0 = hugu_to_name[gene_0]
+        gene_1 = hugu_to_name[gene_1]
+        if gene_0 and gene_1 and gene_0 in g and gene_1 in g:
+            g.add_edge(gene_0, gene_1, key='function')
+        else:
+            print 'gene pair not found in IPA', gene_0, gene_1
+    
     # Create drug-gene links from drug target annotations.
     for drug in ipa.drugs:
         for target in drug.targets:
@@ -183,7 +203,9 @@ if __name__ == '__main__':
     
     g = build_networkx(args.network_id, network_dir)
     remove_unconnected_nodes(g)
-    save_as_pickle(g, network_dir)    
+    save_as_pickle(g, network_dir)
+     
     print networkx.info(g)
-
+    heteronets.nxutils.print_node_kind_counts(g)
+    heteronets.nxutils.print_edge_kind_counts(g)
 

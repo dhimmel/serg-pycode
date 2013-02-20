@@ -31,8 +31,6 @@ parser.add_argument('--exclude-edges', type=set, help='set of tuples indicating\
     edges to omit from feature computation.', default=set())
 parser.add_argument('--exclude-all-source-target-edges', action='store_true')
 parser.add_argument('--reprepare', action='store_true')
-
-
 args = parser.parse_args()
 
 

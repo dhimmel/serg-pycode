@@ -1,7 +1,27 @@
+import argparse
+import os
+
+import numpy
 import sklearn.linear_model
 
 
+parser = argparse.ArgumentParser()
+parser.add_argument('--ipadir', type=os.path.expanduser, default=
+    '~/Documents/serg/ipanet/')
+parser.add_argument('--network-id', default='130218-2')
+args = parser.parse_args()
 
+
+
+network_dir = os.path.join(args.ipadir, 'networks', args.network_id)
+feature_dir = os.path.join(network_dir, 'features')
+
+fname = os.path.join(feature_dir, 'learning-features.txt')
+feature_array = numpy.genfromtxt(fname, delimiter='\t', names=True)
+# should be using features.read_features 
+print feature_array
+
+"""
 source = 'interferon beta-1a'
 target = 'Multiple Sclerosis'
 
@@ -11,7 +31,7 @@ metapath_to_paths = get_metapath_to_paths(g, source, target=None, metapaths, cut
 print metapath_to_paths
 
 reversed_metapaths = tuple(reversed(metapath) for metapath in metapaths)
-
+"""
 """
 pkl_path = '/home/dhimmels/Documents/serg/ipanet/ipanet.pkl'
 g = networkx.read_gpickle(pkl_path)

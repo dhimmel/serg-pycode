@@ -138,8 +138,9 @@ def write_partitioned_features(g, feature_dir):
 
 
 def read_features(path):
+    """INCOMPLETE. No type conversion"""
     with open(path) as feature_file:
-        dict_reader = csv.DictReader(feature_file)
+        dict_reader = csv.DictReader(feature_file, delimiter='\t')
         for feature_dict in dict_reader:
             yield feature_dict
 

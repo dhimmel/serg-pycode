@@ -1,23 +1,20 @@
 import os
 import csv
 import gzip
-import zipfile
 
-import matplotlib.pyplot as plt
+import data
 
 class IMP(object):
     
-    def __init__(self, imp_dir):
+    def __init__(self, imp_dir=None):
+        if imp_dir is None:
+            imp_dir = data.current_path('imp')
+
         self.imp_dir = imp_dir
         
-    def read(self, prob_cutoff = 0.0):
-        #self.dat_path = os.path.join(self.imp_dir, 'human_global.zip')
-        #zip = zipfile.ZipFile(self.dat_path)
-        #dat_file = zip.open('global_average_prior.dat')
-        #reader = csv.reader(dat_file, delimiter='\t')
         
-        self.prob_cutoff = prob_cutoff
-        
+    def read(self, prob_cutoff = 0.0, symbol=False):
+        self.entrez_to_hgnc = data.Data().hgnc.get_entrez_to_gene()  
         self.dat_path = os.path.join(self.imp_dir, 'global_average_prior.dat.gz')
         dat_file = gzip.open(self.dat_path)
         reader = csv.reader(dat_file, delimiter='\t')
@@ -25,11 +22,22 @@ class IMP(object):
             prob = float(prob)
             if prob < prob_cutoff:
                 continue
+            if symbol:
+                gene_0 = self.entrez_to_hgnc.get(gene_0)
+                gene_1 = self.entrez_to_hgnc.get(gene_1)
+                if gene_0 is None or gene_1 is None:
+                    print 'no symbol for entrez'
+                    continue
+                gene_0 = gene_0.symbol
+                gene_1 = gene_1.symbol
+            
             yield gene_0, gene_1, prob
-
+        
+   
 if __name__ == '__main__':
-    imp = IMP('/home/dhimmels/Documents/serg/omicnet/input-datasets/imp/082812/')
-    imp_gen = imp.read(0.8)
+    
+    imp = IMP()
+    imp_gen = imp.read(0.8, True)
     for row in imp_gen:
         print row
     

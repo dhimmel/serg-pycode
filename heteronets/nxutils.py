@@ -58,3 +58,40 @@ def create_undirected_network(edge_metapaths, kind_to_abbrev, **kwargs):
     g.graph.update(kwargs)
     g.graph['schema'] = schema.create_undirected_schema(edge_metapaths, kind_to_abbrev)
     return g
+
+
+def filter_nodes_by_edge_kind(g, edge_kinds):
+    """Remove nodes without a single edge of a specified kind.
+    In the future should make method taking a node and returning a counter of
+    edge kind to number
+    """
+    edge_kinds = set(edge_kinds)
+    edge_kinds |= {(edge_kind[1], edge_kind[0], edge_kind[2])
+                           for edge_kind in edge_kinds}
+    nodes_to_remove = set()
+    for node in g.nodes_iter():
+        remove = True
+        for u, v, key in g.edges(node, keys=True):
+            edge_kind = g.node[u]['kind'], g.node[v]['kind'], key
+            if edge in edge_kinds:
+                remove = False
+        if remove:
+            nodes_to_remove.add(node)
+    
+    g.remove_nodes_from(nodes_to_remove)
+
+def filter_edges_by_edge_kind(g, edges_to_keep):
+    """Keep only edges of specified kinds and then remove unconnected nodes.
+    UNTESTED
+    """
+    edges_to_keep = set(edges_to_keep)
+    for node, neighbor, key in g.edges_iter(keys=True):
+        edge_set = {(node, neighbor, key), (neighbor, node, key)}
+        if not edge_set & edges_to_keep:
+            g.remove_edge(node, neighbor, key)
+    remove_unconnected_nodes(g)
+    
+def remove_unconnected_nodes(g):
+    """Remove unconnected nodes"""
+    unconnected_nodes = (node for node, degree in g.degree_iter() if not degree)
+    g.remove_nodes_from(unconnected_nodes)        

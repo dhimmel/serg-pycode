@@ -98,6 +98,12 @@ def shortcuts_for_metapaths(schema, metapaths, shortcut_length):
             depth += shortcut_length
     return shorcuts
 
+def edges_in_metapaths(metapaths):
+    """Returns a set of edges appearing in any of the metapaths"""
+    edges = set()
+    for metapath in metapaths:
+        edges.add(metapath.get_edges())
+    return edges
 
 class MetaPaths(object):
     
@@ -160,6 +166,20 @@ class MetaPath(object):
         """Same as start except returns the node_kind for the end node."""
         return self.tuple_[-1]
     
+    def get_edges(self):
+        """Return a the set of edges composing the metapath."""
+        if hasattr(self, 'edges'):
+            return self.edges
+        
+        edges = set()
+        for depth in xrange(len(self)):
+            edge = self.tuple_[depth * 2 : depth * 2 + 3]
+            edge = edge[0], edge[2], edge[1]
+            edges.add(edge)
+        
+        self.edges = edges
+        return self.edges
+    
     def __reversed__(self):
         return self.metapaths.metapath_from_tuple(reversed(self.tuple_))
     
@@ -200,7 +220,7 @@ if __name__ == '__main__':
     
     source = 'drug'
     target = 'disease'
-    max_length = 2
+    max_length = 3
     
     print 'Metapaths'
     metapaths = extract_metapaths(schema, source, target, max_length)
@@ -220,7 +240,9 @@ if __name__ == '__main__':
     print 'Metapaths Excluding (disease, indication, drug) edges'
     metapaths = extract_metapaths(schema, source, target, max_length, exclude_edges={('disease', 'drug', 'indication')})
     print metapaths
-   
+    
+    
+    print metapaths[2].get_edges()
     
     """
     edge_tuples = [('drug', 'gene', 'upregulates'),
