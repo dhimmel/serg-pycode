@@ -28,6 +28,23 @@ def create_undirected_schema(edges, kind_to_abbrev):
     
     return schema
 
+def print_schema(schema):
+    """Print schema information to console."""
+    
+    print 'Schema Nodes:'
+    for node in schema.nodes():
+        print node
+
+    print 'Schema Edges'
+    edges = schema.edges(keys=True)
+    edges.sort()
+    for edge in edges:
+        print edge
+    
+    print 'Kind Abbreviations'
+    kind_to_abbrev = schema.graph['paths'].kind_to_abbrev
+    for kind, abbrev in kind_to_abbrev.items():
+        print kind + ': ' + abbrev
 
 def check_abbreviations(schema, kind_to_abbrev):
     """Check that the kind to abbreviation dictionary is valid."""
@@ -102,7 +119,7 @@ def edges_in_metapaths(metapaths):
     """Returns a set of edges appearing in any of the metapaths"""
     edges = set()
     for metapath in metapaths:
-        edges.add(metapath.get_edges())
+        edges |= metapath.get_edges()
     return edges
 
 class MetaPaths(object):
@@ -212,11 +229,7 @@ if __name__ == '__main__':
     
     schema = create_undirected_schema(edges, kind_to_abbrev)
     
-    print '-----------schema-----------'
-    print 'Nodes:'
-    print schema.nodes()
-    print 'Edges:'
-    print schema.edges(keys=True)
+    print_schema(schema)
     
     source = 'drug'
     target = 'disease'

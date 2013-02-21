@@ -105,10 +105,10 @@ def normalized_path_counter(g, metapaths, source):
     return target_to_metapath_to_npc
 
 
-def learning_edge_subset(g, num_pos, num_neg, remove_positives=False):
+def learning_edge_subset(g, num_pos, num_neg, remove_positives=False, seed=None):
     """
     Returns a tuple of (num_pos positives edges, num_neg negative edges). 
-    Selected edges are of kind g.graph['edge_kind'], start at the node kind
+    Selected edges are of kind g.graph['edge_key'], start at the node kind
     specified by g.graph['source_kind'], and end at the node kind specified by
     g.graph['target_kind']. Negatives are randomly selected to reflect the 
     degree distribution of positives. Positives are randomly selected from all
@@ -117,13 +117,18 @@ def learning_edge_subset(g, num_pos, num_neg, remove_positives=False):
     """
     assert g.graph['source_kind']
     assert g.graph['target_kind']
-    assert g.graph['edge_kind']
+    assert g.graph['edge_key']
+    
+    random.seed(seed)
     
     kind_to_nodes = nxutils.get_kind_to_nodes(g)
     kind_to_edges = nxutils.get_kind_to_edges(g)
     source_kind = g.graph['source_kind']
     target_kind = g.graph['target_kind']
-    edge_kind = g.graph['edge_kind']
+    edge_key = g.graph['edge_key']
+    
+    edge_kind = source_kind, target_kind, edge_key
+    
     sources = kind_to_nodes[source_kind]
     targets = kind_to_nodes[target_kind]
     edge_order_key = lambda edge: edge if edge[0] in sources else (edge[1], edge[0], edge[2])
@@ -134,8 +139,8 @@ def learning_edge_subset(g, num_pos, num_neg, remove_positives=False):
     while len(negatives) < num_neg:
         source = random.choice(edges)[0]
         target = random.choice(edges)[1]
-        if not g.has_edge(source, target, edge_kind):
-            edge = source, target, edge_kind
+        if not g.has_edge(source, target, edge_key):
+            edge = source, target, edge_key
             negatives.append(edge)
     # Randomly select positives
     positives = random.sample(edges, num_pos)
@@ -143,14 +148,46 @@ def learning_edge_subset(g, num_pos, num_neg, remove_positives=False):
         g.remove_edges_from(positives)    
     return positives, negatives
 
+def filter_nodes_by_metapaths(g):
+    print 'Edge and Node Counts before filtering'
+    nxutils.print_node_kind_counts(g)
+    nxutils.print_edge_kind_counts(g)
+
+    print 'Filtering nodes by incident edge_kinds'
+    metapaths = g.graph['metapaths']
+    edges_in_metapaths = schema.edges_in_metapaths(metapaths)
+    nxutils.filter_nodes_by_edge_kind(g, edges_in_metapaths)
+    nxutils.print_node_kind_counts(g)
+    nxutils.print_edge_kind_counts(g)
+
+    print 'Filtering nodes by occurrence in metapath'
+    total_path_counts(g)
+    metapaths = set(metapaths)
+    reversed_metapaths = set(map(reversed, metapaths))
+    nodes_to_remove = set()
+    for node_key, metapaths in [('source_kind', metapaths),
+                                ('target_kind', reversed_metapaths)]:
+        node_kind = g.graph[node_key]
+        nodes = nxutils.get_kind_to_nodes(g)[node_kind]
+        for node in nodes:
+            starts_paths = set(g.node[node]['all_paths'])
+            if not starts_paths & metapaths:
+                nodes_to_remove.add(node)
+    g.remove_nodes_from(nodes_to_remove)
+    nxutils.print_node_kind_counts(g)
+    nxutils.print_edge_kind_counts(g)
+
+        
+
 def prepare_feature_optimizations(g):
     """Adds storage intensive attributes to the graph."""
+    print 'computing total path counts'
+    total_path_counts(g)
+    
     print 'computing shortcuts'
     shortcuts = schema.shortcuts_for_metapaths(g.graph['schema'],
                                                g.graph['metapaths'], 2)
     compute_shortcuts(g, shortcuts)
-    print 'computing total path counts'
-    total_path_counts(g)
     g.graph['prepared'] = True
 
 def compute_shortcuts(g, shortcuts):
@@ -169,10 +206,9 @@ def compute_shortcuts(g, shortcuts):
 
 
 def total_path_counts(g):
-    """Computes the total path counts ending and starting with each node. Saves
-    the results in the data dictionary for the node under the keys:
-    'ending_paths' and 'starting_paths'. Computation is dynamic to improve
-    efficiency.
+    """Computes the total path counts starting with each node. Stores the
+    resulting collection for each node as a node attribute named 'all_paths'. 
+    Dynamic computation boosts efficiency.
     """
     metapaths_obj = g.graph['schema'].graph['paths']
     

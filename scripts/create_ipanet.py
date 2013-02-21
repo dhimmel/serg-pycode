@@ -9,9 +9,8 @@ import networkx
 
 import bioparser.data
 import heteronets.nxutils
+import heteronets.schema
 
-
-#gml_path = os.path.join(ipanet_dir, 'ipanet.gml')
 
 def read_diseases_to_remove(network_dir):
     path = os.path.join(network_dir, 'manually-removed-diseases.txt')
@@ -204,7 +203,9 @@ if __name__ == '__main__':
     g = build_networkx(args.network_id, network_dir)
     remove_unconnected_nodes(g)
     save_as_pickle(g, network_dir)
-     
+    
+    heteronets.schema.print_schema(g.graph['schema'])
+    
     print networkx.info(g)
     heteronets.nxutils.print_node_kind_counts(g)
     heteronets.nxutils.print_edge_kind_counts(g)

@@ -25,7 +25,7 @@ def edge_status(g, source, target):
     2 - Non existent network edge
     3 - Existent network edge
     """
-    edge = source, target, g.graph['edge_kind']
+    edge = source, target, g.graph['edge_key']
     if edge in g.graph['negatives']:
         status = 0
     elif edge in g.graph['positives']:

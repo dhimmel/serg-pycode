@@ -12,6 +12,7 @@ import networkx
 import heteronets.features
 import heteronets.metapaths
 import heteronets.schema
+import heteronets.nxutils
 
 ################################################################################
 ################# Execution
@@ -26,7 +27,7 @@ parser.add_argument('--num-pos', type=int, default=2000)
 parser.add_argument('--num-neg', type=int, default=2000)
 parser.add_argument('--source-kind', required=True)
 parser.add_argument('--target-kind', required=True)
-parser.add_argument('--edge-kind', required=True)
+parser.add_argument('--edge-key', required=True)
 parser.add_argument('--exclude-edges', type=set, help='set of tuples indicating\
     edges to omit from feature computation.', default=set())
 parser.add_argument('--exclude-all-source-target-edges', action='store_true')
@@ -46,7 +47,7 @@ if not os.path.exists(pkl_path_prepared) or args.reprepare:
     
     g.graph['source_kind'] = args.source_kind
     g.graph['target_kind'] = args.target_kind
-    g.graph['edge_kind'] = args.edge_kind
+    g.graph['edge_key'] = args.edge_key
     g.graph['max_path_length'] = args.max_path_length
     
     metapaths = heteronets.schema.extract_metapaths(
@@ -55,10 +56,12 @@ if not os.path.exists(pkl_path_prepared) or args.reprepare:
         args.exclude_all_source_target_edges, args.exclude_edges)
     g.graph['metapaths'] = metapaths
     
-    positives, negatives = heteronets.metapaths.learning_edge_subset(g, args.num_pos, args.num_neg)
+    heteronets.metapaths.filter_nodes_by_metapaths(g)
+    
+    positives, negatives = heteronets.metapaths.learning_edge_subset(
+        g, args.num_pos, args.num_neg, seed=0)
     g.graph['positives'] = positives
     g.graph['negatives'] = negatives
-    
     
     pkl_path_learning = os.path.join(graph_dir, 'learning-graph.pkl')
     networkx.write_gpickle(g, pkl_path_learning)
