@@ -148,36 +148,24 @@ def learning_edge_subset(g, num_pos, num_neg, remove_positives=False, seed=None)
         g.remove_edges_from(positives)    
     return positives, negatives
 
-def filter_nodes_by_metapaths(g):
-    print 'Edge and Node Counts before filtering'
-    nxutils.print_node_kind_counts(g)
-    nxutils.print_edge_kind_counts(g)
 
-    print 'Filtering nodes by incident edge_kinds'
+def nodes_outside_metapaths(g):
+    """Return the set of nodes that do not participate in any paths of a kind
+    in g.graph['metapaths'].
+    """
     metapaths = g.graph['metapaths']
-    edges_in_metapaths = schema.edges_in_metapaths(metapaths)
-    nxutils.filter_nodes_by_edge_kind(g, edges_in_metapaths)
-    nxutils.print_node_kind_counts(g)
-    nxutils.print_edge_kind_counts(g)
-
-    print 'Filtering nodes by occurrence in metapath'
-    total_path_counts(g)
-    metapaths = set(metapaths)
-    reversed_metapaths = set(map(reversed, metapaths))
-    nodes_to_remove = set()
-    for node_key, metapaths in [('source_kind', metapaths),
-                                ('target_kind', reversed_metapaths)]:
-        node_kind = g.graph[node_key]
-        nodes = nxutils.get_kind_to_nodes(g)[node_kind]
-        for node in nodes:
-            starts_paths = set(g.node[node]['all_paths'])
-            if not starts_paths & metapaths:
-                nodes_to_remove.add(node)
-    g.remove_nodes_from(nodes_to_remove)
-    nxutils.print_node_kind_counts(g)
-    nxutils.print_edge_kind_counts(g)
-
-        
+    submetapath_tuples = set()
+    for metapath in metapaths:
+        for i in range(len(metapath)):
+            for metapath in metapath, reversed(metapath):
+                submetapath_tuples.add(metapath.split_by_index(i, reverse_head=True))
+    
+    outside_nodes = set()
+    for node in g.nodes_iter():
+        metapaths_started = set(g.node[node]['all_paths'])
+        if not any(set(t) <= metapaths_started for t in submetapath_tuples):
+            outside_nodes.add(node)
+    return outside_nodes     
 
 def prepare_feature_optimizations(g):
     """Adds storage intensive attributes to the graph."""

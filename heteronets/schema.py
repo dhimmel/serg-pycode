@@ -197,6 +197,25 @@ class MetaPath(object):
         self.edges = edges
         return self.edges
     
+    def split_by_index(self, index, reverse_head = False):
+        """Split the metapath into two metapaths. Index is included as the 
+        end node kind of head and the start node kind of tail.
+        """
+        head = self.metapaths.metapath_from_tuple(self.tuple_[: index * 2 + 1])
+        tail = self.metapaths.metapath_from_tuple(self.tuple_[index * 2: ])
+        if reverse_head:
+            head = reversed(head)
+        return head, tail
+    
+    def split_by_kind(self, kind, reverse_head = False):
+        """Return a list of (head, tail) tuples where the tuples are self split
+        at each occurance of node kind.
+        """
+        nodes = self.tuple_[::2]
+        split_tuples = [self.split_by_index(i, reverse_head)
+                for i in range(len(nodes)) if nodes[i] == kind]
+        return split_tuples
+    
     def __reversed__(self):
         return self.metapaths.metapath_from_tuple(reversed(self.tuple_))
     
@@ -233,7 +252,7 @@ if __name__ == '__main__':
     
     source = 'drug'
     target = 'disease'
-    max_length = 3
+    max_length = 5
     
     print 'Metapaths'
     metapaths = extract_metapaths(schema, source, target, max_length)
@@ -256,6 +275,8 @@ if __name__ == '__main__':
     
     
     print metapaths[2].get_edges()
+    print metapaths[2].split(0)
+    print metapaths[2].split(1)
     
     """
     edge_tuples = [('drug', 'gene', 'upregulates'),

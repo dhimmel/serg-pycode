@@ -56,8 +56,20 @@ if not os.path.exists(pkl_path_prepared) or args.reprepare:
         args.exclude_all_source_target_edges, args.exclude_edges)
     g.graph['metapaths'] = metapaths
     
-    heteronets.metapaths.filter_nodes_by_metapaths(g)
-    
+    # Filter nodes
+    print 'Before filtering'
+    heteronets.nxutils.print_node_kind_counts(g)
+    heteronets.nxutils.print_edge_kind_counts(g)
+    heteronets.metapaths.total_path_counts(g)
+    nodes_to_remove = heteronets.metapaths.nodes_outside_metapaths(g)
+    print len(nodes_to_remove)
+    g.remove_nodes_from(nodes_to_remove)
+    print 'After filtering'
+    heteronets.metapaths.total_path_counts(g)
+    heteronets.nxutils.print_node_kind_counts(g)
+    heteronets.nxutils.print_edge_kind_counts(g)
+
+
     positives, negatives = heteronets.metapaths.learning_edge_subset(
         g, args.num_pos, args.num_neg, seed=0)
     g.graph['positives'] = positives
