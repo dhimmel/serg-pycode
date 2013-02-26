@@ -62,7 +62,6 @@ if not os.path.exists(pkl_path_prepared) or args.reprepare:
     heteronets.nxutils.print_edge_kind_counts(g)
     heteronets.metapaths.total_path_counts(g)
     nodes_to_remove = heteronets.metapaths.nodes_outside_metapaths(g)
-    print len(nodes_to_remove)
     g.remove_nodes_from(nodes_to_remove)
     print 'After filtering'
     heteronets.metapaths.total_path_counts(g)
@@ -74,6 +73,10 @@ if not os.path.exists(pkl_path_prepared) or args.reprepare:
         g, args.num_pos, args.num_neg, seed=0)
     g.graph['positives'] = positives
     g.graph['negatives'] = negatives
+    required_source_to_targets = dict()
+    for source, target, edge_kind in positives + negatives:
+        required_source_to_targets.setdefault(source, set()).add(target)
+    g.graph['required_source_to_targets'] = required_source_to_targets
     
     pkl_path_learning = os.path.join(graph_dir, 'learning-graph.pkl')
     networkx.write_gpickle(g, pkl_path_learning)

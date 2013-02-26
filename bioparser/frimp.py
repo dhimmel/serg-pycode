@@ -32,8 +32,16 @@ class IMP(object):
                 gene_1 = gene_1.symbol
             
             yield gene_0, gene_1, prob
+    
+    def save_subset(self, prob_cutoff):
+        path = os.path.join(self.imp_dir, 'global_average_prior_' + str(prob_cutoff) + '.dat')
+        subset_file = open(path, 'w')
+        writer = csv.writer(path, delimiter='\t')
         
-   
+        for gene_0, gene_1, prob in self.read(prob_cutoff):
+            writer.writerow([gene_0, gene_1, prob])
+        subset_file.close()
+        
 if __name__ == '__main__':
     
     imp = IMP()

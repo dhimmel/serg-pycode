@@ -59,7 +59,13 @@ def source_to_target_node_count(g, metapath, source):
             metapath_position += 2
             
         counter = node_counter_temp
-        
+    
+    if 'required_source_to_targets' in g.graph:
+        targets = g.graph['required_source_to_targets'].get(source, set())
+        omitted_targets = targets - set(counter)
+        for target in omitted_targets:
+            counter[target] = 0
+    
     return counter
 
 
@@ -135,13 +141,14 @@ def learning_edge_subset(g, num_pos, num_neg, remove_positives=False, seed=None)
     edges = list(kind_to_edges[edge_kind])
     edges = map(edge_order_key, edges)
     # Randomly select negatices to mirror positive node degree
-    negatives = list()
+    negatives = set()
     while len(negatives) < num_neg:
         source = random.choice(edges)[0]
         target = random.choice(edges)[1]
-        if not g.has_edge(source, target, edge_key):
-            edge = source, target, edge_key
-            negatives.append(edge)
+        edge = source, target, edge_key
+        if not g.has_edge(*edge):
+            negatives.add(edge)
+    negatives = list(negatives)
     # Randomly select positives
     positives = random.sample(edges, num_pos)
     if remove_positives:
@@ -165,7 +172,7 @@ def nodes_outside_metapaths(g):
         metapaths_started = set(g.node[node]['all_paths'])
         if not any(set(t) <= metapaths_started for t in submetapath_tuples):
             outside_nodes.add(node)
-    return outside_nodes     
+    return outside_nodes
 
 def prepare_feature_optimizations(g):
     """Adds storage intensive attributes to the graph."""
