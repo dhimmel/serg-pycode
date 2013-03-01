@@ -74,7 +74,7 @@ class HGNC(object):
             yield gene
     
     def get_genes(self):
-        """Return a list of genes. Each gene is a dictionary describing the gene."""
+        """Return a list of genes."""
         if self.genes is None:
             gene_generator = self.gene_generator()
             self.genes = list(gene_generator)

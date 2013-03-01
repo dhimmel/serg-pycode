@@ -4,8 +4,9 @@ import collections
 
 import utilities.omictools
 import bioparser.data
+import bioparser.shelved
 
-class SIDER(utilities.omictools.Shelved):
+class SIDER(bioparser.shelved.Shelved):
     
     def __init__(self, sider_dir=None):
         """

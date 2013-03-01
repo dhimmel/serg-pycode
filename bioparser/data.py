@@ -4,6 +4,7 @@ import utilities.omictools
 
 import ctd
 import drugbank
+import dvd
 import frimp
 import gwas_catalog
 import hgnc
@@ -67,6 +68,8 @@ def preceding_path(source, **kwargs):
     path = source_data_dir(source)
     return sorted_dir_content(path, n=1, **kwargs)
 
+
+
 @utilities.omictools.singleton
 class Data:
     
@@ -74,6 +77,7 @@ class Data:
         #print 'initializing DataObjects'
         self.ctd = ctd.CTD(current_path('ctd'))
         self.drugbank = drugbank.DrugBank(current_path('drugbank'))
+        self.dvd = dvd.DvD()
         self.frimp = frimp.IMP(current_path('imp'))
         self.gwas_catalog = gwas_catalog.GwasCatalog(current_path('gwas-catalog'))
         self.hgnc = hgnc.HGNC(current_path('hgnc'))

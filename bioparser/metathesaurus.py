@@ -3,7 +3,9 @@ import csv
 import os
 
 import utilities.omictools
-import bioparser.data
+import data
+import utilities.shelved
+
 
 class Concept(object):
 
@@ -35,15 +37,14 @@ class Concept(object):
                 s += '\n    %s: %s' % (key, value)
         return s
 
-
-class Metathesaurus(utilities.omictools.Shelved):
+class Metathesaurus(utilities.shelved.Shelved):
 
     def __init__(self, umls_dir=None):
         """
         Sources: http://www.nlm.nih.gov/research/umls/sourcereleasedocs/index.html#
         """
         if not umls_dir:
-            umls_dir = os.path.join(bioparser.data.data_dir, 'umls', '2012AA')
+            umls_dir = os.path.join(data.data_dir, 'umls', '2012AA')
         self.umls_dir = umls_dir
         self.meta_dir = os.path.join(self.umls_dir, 'META')
         
@@ -169,11 +170,17 @@ class Metathesaurus(utilities.omictools.Shelved):
             for row in reader:
                 yield row
     
-    
+    def get_source_code_to_concept_id(self, source):
+        """ """
+        with self:
+            id_to_concept = self.shelves['concepts']
+            concept_ids = self.shelves['sources'][source]
+            source_code_to_concept_id = {id_to_concept[cid].source_to_code[source]: cid for cid in concept_ids}
+        return source_code_to_concept_id
+
+
 if __name__ == '__main__':
     meta = Metathesaurus()
-    #meta.extract_source_vocabs = {'MSH', 'NCI', 'OMIM'}
-    #meta.build()
     with meta:
         concepts = meta.shelves['concepts']
         print concepts['C0155555']

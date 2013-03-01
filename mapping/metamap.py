@@ -56,6 +56,9 @@ class MetaMap(object):
 
         removed -- cumulative mappings that have been manually removed
         added -- cumulative mappings that have been manually added
+        
+        Semantic Type Abbreviations
+        http://mmtx.nlm.nih.gov/semanticTypes.shtml
         """
         
         self.metamap_program_dir = os.path.expanduser(metamap_program_dir)
@@ -225,13 +228,15 @@ class MetaMap(object):
     @staticmethod
     def read_mapping_file(path):
         mappings = set()
-        rows = omictools.read_tdt(path)
-        for row in rows:
+        f = open(path)
+        reader = csv.DictReader(f, delimiter='\t')
+        for row in reader:
             for key, value in row.items():
                 if value is '':
                     row[key] = None
             mapping = Mapping(**row)
             mappings.add(mapping)
+        f.close()
         mappings = MetaMap.excluding_unmapped(mappings)
         return mappings
     

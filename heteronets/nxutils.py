@@ -5,6 +5,18 @@ import networkx
 import schema
 
 """
+Making a networkx graph that conforms to the standards used in heteronets:
+The function create_undirected_network creates a networkx MultiGraph instance.
+To create a graph, first call this function and then add nodes and edges to
+the returned graph. Each node must be given a node kind which is stored under
+the the 'kind' key of that nodes data dictionary. Node kind is accessible for a
+single node using g.node[node_id]['kind']. Each edge must have a kind which is
+stored under the 'key' attribute of that edge. Edges are represented as tuples
+formatted as (source_node_id, target_node_id, edge_kind). An edge describing
+an edge kind is formatted as (source_kind, target_kind, edge_kind). All longer
+metapaths are formatted exclusively as metapath objects.
+
+
 Graph Attributes
 
 schema
