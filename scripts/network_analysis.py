@@ -19,8 +19,8 @@ import heteronets.nxutils
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--ipadir', type=os.path.expanduser, default=
-    '~/Documents/serg/ipanet/')
+parser.add_argument('--networks-dir', type=os.path.expanduser, default=
+    '~/Documents/serg/networks/')
 parser.add_argument('--network-id', required=True)
 parser.add_argument('--max-path-length', type=int, required=True)
 parser.add_argument('--num-pos', type=int, default=2000)
@@ -35,7 +35,7 @@ parser.add_argument('--reprepare', action='store_true')
 args = parser.parse_args()
 
 
-network_dir = os.path.join(args.ipadir, 'networks', args.network_id)
+network_dir = os.path.join(args.networks_dir, args.network_id)
 graph_dir = os.path.join(network_dir, 'graphs')
 
 

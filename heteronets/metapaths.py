@@ -140,6 +140,13 @@ def learning_edge_subset(g, num_pos, num_neg, remove_positives=False, seed=None)
     edge_order_key = lambda edge: edge if edge[0] in sources else (edge[1], edge[0], edge[2])
     edges = list(kind_to_edges[edge_kind])
     edges = map(edge_order_key, edges)
+    
+    # Check if more positives are specified than exist
+    if num_pos > len(edges):
+        print 'Limiting number of positive learning edges to', len(edges)
+        num_pos = len(edges)
+        num_neg = len(edges)
+    
     # Randomly select negatices to mirror positive node degree
     negatives = set()
     while len(negatives) < num_neg:

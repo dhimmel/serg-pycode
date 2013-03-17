@@ -127,3 +127,19 @@ def remove_unconnected_nodes(g):
     """Remove unconnected nodes"""
     unconnected_nodes = (node for node, degree in g.degree_iter() if not degree)
     g.remove_nodes_from(unconnected_nodes)        
+
+def export_as_gml(g, path):
+    """save g as a .gml file after modifications."""
+    g = g.copy()
+    for key in g.graph.keys():
+        del g.graph[key]
+    for node, data in g.nodes_iter(data=True):
+        for key in data.keys():
+            if key != 'kind':
+                del data[key]
+        
+    for node, neighbor, key in g.edges(keys=True):
+        g.edge[node][neighbor][key]['kind'] = key
+    networkx.write_gml(g, path)
+    
+    

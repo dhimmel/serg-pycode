@@ -137,12 +137,33 @@ def write_partitioned_features(g, feature_dir):
     features_file.close()
 
 
-def read_features(path):
-    """INCOMPLETE. No type conversion"""
+def read_features_dict(path):
+    """Return a generator of dictionaries representing rows of a feature file."""
+    # type_dict specifies the type conversion to be applied. Each key denotes
+    # a column name and the value is the conversion. Columns not included are
+    # converted to floats.
+    type_dict = {'source': str, 'target': str, 'status': int}
     with open(path) as feature_file:
-        dict_reader = csv.DictReader(feature_file, delimiter='\t')
-        for feature_dict in dict_reader:
-            yield feature_dict
+        reader = csv.DictReader(feature_file, delimiter='\t')
+        for row in reader:
+            yield {key: type_dict.get(key, float)(value) for key, value in row.items()}
+                
+
+def read_features_list(path):
+    """ """
+    # type_dict specifies the type conversion to be applied. Each key denotes
+    # a column name and the value is the conversion. Columns not included are
+    # converted to floats.
+    type_dict = {'source': str, 'target': str, 'status': int}
+    with open(path) as feature_file:
+        reader = csv.reader(feature_file, delimiter='\t')
+        fieldnames = reader.next()
+        conversions = tuple(type_dict.get(field, float) for field in fieldnames)
+        
+        for row in reader:
+            yield map(lambda conv, elem: conv(elem), conversions, row)
+            
+
 
 def subset_feature_file(name, subset_name, filter_function):
     """ """

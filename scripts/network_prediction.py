@@ -1,20 +1,32 @@
 import argparse
+import csv
 import os
 
 import numpy
 import sklearn.linear_model
 
+import heteronets.features
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--ipadir', type=os.path.expanduser, default=
-    '~/Documents/serg/ipanet/')
+parser.add_argument('--networks-dir', type=os.path.expanduser, default=
+    '~/Documents/serg/networks/')
 parser.add_argument('--network-id', default='130218-2')
 args = parser.parse_args()
 
 
-
-network_dir = os.path.join(args.ipadir, 'networks', args.network_id)
+network_dir = os.path.join(args.networks-dir, args.network_id)
 feature_dir = os.path.join(network_dir, 'features')
+leaning_features_path = os.path.join(network_dir, 'features', 'learning-features.txt')
+
+feature_generator = heteronets.features.read_features(leaning_features_path)
+
+def numpy_read_features(path):
+    feature_file = open(path)
+    reader = csv.reader(feature_file, delimiter='\t')
+    fieldnames = reader.next()
+    
+    for row in reader
+    
 
 fname = os.path.join(feature_dir, 'learning-features.txt')
 feature_array = numpy.genfromtxt(fname, delimiter='\t', names=True)
