@@ -67,14 +67,23 @@ def source_to_target_node_count(g, metapath, source, use_shortcuts=True):
 
 
 
-def path_counter(g, metapaths, source):
+def path_counter(g, metapaths, source, requirements=True):
     """Count the number of paths for a target starting at source which follow
     each metapath.
     """
+    requirement_dict = g.graph.get('required_source_to_targets')
+    if not requirement_dict:
+        requirements = False
+    
     target_to_metapath_to_count = dict()
     for metapath in metapaths:
         target_to_count = source_to_target_node_count(g, metapath, source)
-        for target, count in target_to_count.iteritems():
+        
+        if requirements:
+            for target in requirement_dict.get(source, set()):
+                target_to_count[target] += 0
+        
+        for target, count in target_to_count.iteritems():            
             counter = target_to_metapath_to_count.setdefault(target, collections.Counter())
             counter[metapath] = count
     return target_to_metapath_to_count

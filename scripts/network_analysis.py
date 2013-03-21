@@ -29,13 +29,12 @@ parser.add_argument('--num-neg', type=int, default=2000)
 parser.add_argument('--source-kind', required=True)
 parser.add_argument('--target-kind', required=True)
 parser.add_argument('--edge-key', required=True)
-parser.add_argument('--exclude-edges', default='[]', help='set of tuples indicating\
-    edges to omit from feature computation.')
+parser.add_argument('--exclude-edges', default='[]',
+    help='list of tuples indicating edges to omit from feature computation.')
 parser.add_argument('--exclude-all-source-target-edges', action='store_true')
 parser.add_argument('--reprepare', action='store_true')
 args = parser.parse_args()
 args.exclude_edges = set(ast.literal_eval(args.exclude_edges))
-print args.exclude_edges
 
 network_dir = os.path.join(args.networks_dir, args.network_id)
 graph_dir = os.path.join(network_dir, 'graphs')
@@ -76,17 +75,16 @@ if not os.path.exists(pkl_path_prepared) or args.reprepare:
         g, args.num_pos, args.num_neg, seed=0)
     g.graph['positives'] = positives
     g.graph['negatives'] = negatives
-    """
+
     required_source_to_targets = dict()
     for source, target, edge_kind in positives + negatives:
         required_source_to_targets.setdefault(source, set()).add(target)
     g.graph['required_source_to_targets'] = required_source_to_targets
-    """
+
     
     pkl_path_learning = os.path.join(graph_dir, 'learning-graph.pkl')
     networkx.write_gpickle(g, pkl_path_learning)
     heteronets.metapaths.prepare_feature_optimizations(g)
-    print 'shortcuts', g.graph['shortcuts']
     networkx.write_gpickle(g, pkl_path_prepared)
     print 'prepared graph saved as pickle'
 else:
