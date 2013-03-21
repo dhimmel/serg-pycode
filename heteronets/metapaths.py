@@ -22,7 +22,7 @@ def longest_matching_shortcut(metapath, shortcuts):
             match_len = shortcut_len
     return match
 
-def source_to_target_node_count(g, metapath, source):
+def source_to_target_node_count(g, metapath, source, use_shortcuts=True):
     """Returns a counter with nodes as keys and number of paths of type metapath
     reaching node as the count. Use path_to_nodes dictionary to enable speedup."""
     if g.node[source]['kind'] != metapath.start():
@@ -40,14 +40,18 @@ def source_to_target_node_count(g, metapath, source):
         remaining_path = metapaths_obj.metapath_from_tuple(remaining_path)
         node_counter_temp = collections.Counter()        
         
-        if len(remaining_path.tuple_) > 3 and shortcuts:
+        if use_shortcuts and shortcuts and len(remaining_path) > 1:
             shortcut = longest_matching_shortcut(remaining_path, shortcuts)
-            for node, count in counter.items():
-                nodes_counter = g.node[node]['path_to_nodes_counter'][shortcut]
+            for node, count in counter.items(): 
+                if shortcut not in g.node[node]['path_to_nodes_counter']: # ADDED MUST DIAGNOSE
+                    print 'Error', node, remaining_path, shortcut, g.node[node]['path_to_nodes_counter'].keys()
+                    raise Exception
+                    continue
+                nodes_counter = g.node[node]['path_to_nodes_counter'][shortcut]                    
                 for destination, destination_count in nodes_counter.iteritems():
                     node_counter_temp[destination] += destination_count * count
             metapath_position += len(shortcut.tuple_) - 1
-        
+
         else:
             node_kind = remaining_path.tuple_[2]            
             edge_key = remaining_path.tuple_[1]
@@ -57,22 +61,15 @@ def source_to_target_node_count(g, metapath, source):
                     if key == edge_key and neighbor_kind == node_kind:
                         node_counter_temp[neighbor] += count   
             metapath_position += 2
-            
+        
         counter = node_counter_temp
-    
-    if 'required_source_to_targets' in g.graph:
-        targets = g.graph['required_source_to_targets'].get(source, set())
-        omitted_targets = targets - set(counter)
-        for target in omitted_targets:
-            counter[target] = 0
-    
     return counter
 
 
 
 def path_counter(g, metapaths, source):
-    """Count the number of paths between source and target for desired
-    metapaths.
+    """Count the number of paths for a target starting at source which follow
+    each metapath.
     """
     target_to_metapath_to_count = dict()
     for metapath in metapaths:
@@ -197,10 +194,12 @@ def compute_shortcuts(g, shortcuts):
     path_to_nodes_counter. Dictionary keys are relevant shortcut metapaths.
     The value corresponding to a shortcut metapath key is a counter with target
     nodes as keys and number of paths following the metapath as counts."""
+    print 'shortcuts passed to metapaths.compute_shortcuts', shortcuts
     for source_node in g.nodes_iter():
         path_to_nodes_counter = dict()
         for path in shortcuts:
-            counter = source_to_target_node_count(g, path, source_node)
+            counter = source_to_target_node_count(g, path, source_node, use_shortcuts=False)
+            # counter is None if the source_node's kind does not match the path
             if counter is not None:
                 path_to_nodes_counter[path] = counter
         g.node[source_node]['path_to_nodes_counter'] = path_to_nodes_counter
