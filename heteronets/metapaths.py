@@ -17,7 +17,7 @@ def longest_matching_shortcut(metapath, shortcuts):
     for shortcut in shortcuts:
         shortcut_len = len(shortcut)
         if (match_len < shortcut_len and shortcut_len <= metapath_len and
-            metapath.abbrev.startswith(shortcut.abbrev)):
+            metapath.startswith(shortcut)):
             match = shortcut
             match_len = shortcut_len
     return match
@@ -28,7 +28,6 @@ def source_to_target_node_count(g, metapath, source, use_shortcuts=True):
     if g.node[source]['kind'] != metapath.start():
         return None
 
-    metapaths_obj = g.graph['schema'].graph['paths']
     shortcuts = g.graph.get('shortcuts')
     
     metapath_position = 0
@@ -36,8 +35,8 @@ def source_to_target_node_count(g, metapath, source, use_shortcuts=True):
     counter[source] = 1
     
     while metapath_position < len(metapath.tuple_) - 1:
-        remaining_path = metapath.tuple_[metapath_position: ]
-        remaining_path = metapaths_obj.metapath_from_tuple(remaining_path)
+        remaining_path = metapath[metapath_position: ]
+        remaining_path = schema.MetaPath(remaining_path)
         node_counter_temp = collections.Counter()        
         
         if use_shortcuts and shortcuts and len(remaining_path) > 1:
@@ -53,8 +52,8 @@ def source_to_target_node_count(g, metapath, source, use_shortcuts=True):
             metapath_position += len(shortcut.tuple_) - 1
 
         else:
-            node_kind = remaining_path.tuple_[2]            
-            edge_key = remaining_path.tuple_[1]
+            node_kind = remaining_path[2]            
+            edge_key = remaining_path[1]
             for node, count in counter.iteritems():
                 for node, neighbor, key in g.edges(node, keys=True):
                     neighbor_kind = g.node[neighbor]['kind']
@@ -104,7 +103,7 @@ def normalized_path_counter(g, metapaths, source):
         all_paths_target = g.node[target]['all_paths']
         denomenator = collections.Counter()
         for metapath in metapaths:
-            reversed_metapath = reversed(metapath)
+            reversed_metapath = metapath.reverse()
             denomenator[metapath] = source_denomenator[metapath] + all_paths_target[reversed_metapath]    
 
         metapath_to_npc = dict()
@@ -177,7 +176,7 @@ def nodes_outside_metapaths(g):
     submetapath_tuples = set()
     for metapath in metapaths:
         for i in range(len(metapath)):
-            for metapath in metapath, reversed(metapath):
+            for metapath in metapath, metapath.reverse():
                 submetapath_tuples.add(metapath.split_by_index(i, reverse_head=True))
     
     outside_nodes = set()
@@ -220,12 +219,11 @@ def total_path_counts(g):
     resulting collection for each node as a node attribute named 'all_paths'. 
     Dynamic computation boosts efficiency.
     """
-    metapaths_obj = g.graph['schema'].graph['paths']
     
     depth = g.graph['max_path_length']
     for node, data in g.nodes_iter(data=True):
         node_kind = data['kind']
-        node_as_path = metapaths_obj.metapath_from_tuple((node_kind, ))
+        node_as_path = schema.MetaPath((node_kind, ))
         paths = collections.Counter([node_as_path, ])
         data['all_paths'] = paths
         data['temp_starting_paths'] = collections.Counter()
@@ -240,8 +238,7 @@ def total_path_counts(g):
                 # Starting Paths            
                 neighbor_starting_paths = neighbor_data['all_paths']
                 for neighbor_path, count in neighbor_starting_paths.iteritems():
-                    path = metapaths_obj.append_to_metapath(neighbor_path, key,
-                        node_kind, prepend = True)
+                    path = neighbor_path.append(key, node_kind, prepend = True)
                     data['temp_starting_paths'][path] += count
         
         for node, data in g.nodes_iter(data=True):

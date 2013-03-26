@@ -1,7 +1,7 @@
 import networkx
 
 
-def create_undirected_schema(edges, kind_to_abbrev):
+def create_undirected_schema(edges, kind_to_abbrev=None):
     """
     Returns a networkx.MultiGraph graph representing the schema describing a
     heterogeneous information network. 
@@ -23,10 +23,59 @@ def create_undirected_schema(edges, kind_to_abbrev):
     for edge in edges:
         schema.add_edge(edge[0], edge[1], key=edge[2])
     
-    check_abbreviations(schema, kind_to_abbrev)
+    if not kind_to_abbrev:
+        kind_to_abbrev = create_abbreviations(node_kinds, edges)
+    else:
+        check_abbreviations(schema, kind_to_abbrev)
     MetaPath.kind_to_abbrev = kind_to_abbrev
     
     return schema
+
+def get_duplicates(iterable):
+    """Return a set of the elements which appear multiple times in iterable."""
+    seen, duplicates = set(), set()
+    for elem in iterable:
+        if elem in seen:
+            duplicates.add(elem)
+        else:
+            seen.add(elem)
+    return duplicates
+
+def find_abbrevs(kinds):
+    """For a list of strings (kinds), find the shortest unique abbreviation."""
+    kind_to_abbrev = {kind: kind[0] for kind in kinds}
+    duplicates = get_duplicates(kind_to_abbrev.values())
+    while duplicates:
+        for kind, abbrev in kind_to_abbrev.items():
+            if abbrev in duplicates:
+                abbrev += kind[len(abbrev)]
+                kind_to_abbrev[kind] = abbrev
+        duplicates = get_duplicates(kind_to_abbrev.values())
+    return kind_to_abbrev
+    
+def create_abbreviations(node_kinds, edge_kinds):
+    """Creates abbreviations for node and edge kinds."""
+    kind_to_abbrev = find_abbrevs(node_kinds)
+    kind_to_abbrev = {kind: abbrev.upper()
+                      for kind, abbrev in kind_to_abbrev.items()}
+    
+    edge_set_to_keys = dict()
+    for edge in edge_kinds:
+        key = frozenset(map(str.lower, edge[:2]))
+        value = edge[2]
+        edge_set_to_keys.setdefault(key, list()).append(value)
+    
+    for edge_set, keys in edge_set_to_keys.items():
+        key_to_abbrev = find_abbrevs(keys)
+        for key, abbrev in key_to_abbrev.items():
+            previous_abbrev = kind_to_abbrev.get(key)
+            if previous_abbrev and len(abbrev) <= len(previous_abbrev):
+                continue
+            kind_to_abbrev[key] = abbrev
+    
+    return kind_to_abbrev
+
+    
 
 def print_schema(schema):
     """Print schema information to console."""
@@ -54,11 +103,9 @@ def check_abbreviations(schema, kind_to_abbrev):
     kinds = set(schema.nodes()) | {key for n1, n2, key in schema.edges(keys=True)}
     assert kinds <= kinds_with_abbrev
     
-    # Check that abbreviations are unique strings of length 1
+    # Check that abbreviations are strings
     abbrevs = kind_to_abbrev.values()
     assert all(isinstance(abbrev, str) for abbrev in abbrevs)
-    assert all(len(abbrev) == 1 for abbrev in abbrevs)
-    assert len(abbrevs) == len(set(abbrevs))
 
 def extract_metapaths(schema, source, target, max_length,
               exclude_all_source_target_edges = False,
@@ -170,6 +217,12 @@ class MetaPath(object):
             self.abbrev = str.join('', abbrev_generator)
         return self.abbrev
     
+    def startswith(self, other):
+        return self[: len(other.tuple_)] == other
+
+    def endswith(self, other):
+        return self[-len(other.tuple_): ] == other
+    
     def start(self):
         """Return the node_kind for the start node of the metapath."""
         return self[0]
@@ -209,8 +262,11 @@ class MetaPath(object):
                 for i in range(len(nodes)) if nodes[i] == kind]
         return split_tuples
     
+    def reverse(self):
+        return MetaPath(tuple(reversed(self.tuple_)))
+    
     def __reversed__(self):
-        return MetaPath(reversed(self))
+        raise Exception
     
     def __getitem__(self, index):
         return self.tuple_[index]
@@ -235,6 +291,7 @@ class MetaPath(object):
 
 if __name__ == '__main__':
     
+    
     edges = [('drug', 'gene', 'target'),
              ('gene', 'disease', 'risk'),
              ('drug', 'disease', 'indication'),
@@ -245,7 +302,7 @@ if __name__ == '__main__':
                       'risk': 'r', 'indication': 'i', 'target': 't', 'function': 'f', 'increases': '^'}
     
     
-    schema = create_undirected_schema(edges, kind_to_abbrev)
+    schema = create_undirected_schema(edges)
     
     print_schema(schema)
     
@@ -273,6 +330,7 @@ if __name__ == '__main__':
     metapaths = extract_metapaths(schema, source, target, max_length, exclude_edges={('disease', 'drug', 'indication')})
     print metapaths
     
+    print metapaths[2], reversed(metapaths[2])
     
     print metapaths[2].get_edges()
     print metapaths[2].split_by_index(0)

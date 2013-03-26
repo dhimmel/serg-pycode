@@ -3,6 +3,7 @@ import itertools
 import nxutils
 import schema
 import metapaths
+import features
 
 """
 Module to test performance of heteronets modules with smallscale known examples.
@@ -11,9 +12,9 @@ Module to test performance of heteronets modules with smallscale known examples.
 edge_metapaths = [('compound', 'gene', 'target'),
                   ('compound', 'disease', 'indication'),
                   ('disease', 'gene', 'risk')]
-kind_to_abbrev = {'compound': 'C', 'disease': 'D', 'gene': 'G',
-                  'risk': 'r', 'indication':'i', 'target': 't'}
-g = nxutils.create_undirected_network(edge_metapaths, kind_to_abbrev)
+#kind_to_abbrev = {'compound': 'C', 'disease': 'D', 'gene': 'G',
+#                  'risk': 'r', 'indication':'i', 'target': 't'}
+g = nxutils.create_undirected_network(edge_metapaths)
 
 nodes = [('clomipramine', 'compound'),
          ('duloxetine', 'compound'),
@@ -46,15 +47,17 @@ for name, kind in nodes:
 for node, neighbor, key in edges:
     g.add_edge(node, neighbor, key=key)
 
-nxutils.print_node_kind_counts(g)
-nxutils.print_edge_kind_counts(g)
+#nxutils.print_node_kind_counts(g)
+#nxutils.print_edge_kind_counts(g)
 
 
 g.graph['source_kind'] = 'compound'
 g.graph['target_kind'] = 'disease'
 g.graph['edge_key'] = 'indication'
 g.graph['max_path_length'] = 2
-    
+g.graph['negatives'] = []
+g.graph['positives'] = []
+
 g.graph['metapaths'] = schema.extract_metapaths(
     g.graph['schema'], g.graph['source_kind'],
     g.graph['target_kind'], g.graph['max_path_length'],
@@ -73,7 +76,13 @@ if True:
         required_source_to_targets.setdefault(source, set()).add(target)
     g.graph['required_source_to_targets'] = required_source_to_targets
 
-
+#mpaths = g.graph['metapaths']
+"""
 # compute and print normalized path counts
 for compound in kind_to_nodes['compound']:
     print compound, metapaths.normalized_path_counter(g, g.graph['metapaths'], compound)
+"""
+
+# compute and print features
+for feature_dict in features.feature_generator(g):
+    print feature_dict

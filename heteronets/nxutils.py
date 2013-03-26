@@ -77,7 +77,7 @@ def print_edge_kind_counts(g):
             printed_edge_kinds.add(edge_set_kind)
             print edge_kind, len(edges)
 
-def create_undirected_network(edge_metapaths, kind_to_abbrev, **kwargs):
+def create_undirected_network(edge_metapaths, kind_to_abbrev=None, **kwargs):
     """Create an undirected heterogeneous network encoded as a networkx
     MultiGraph. The graph schema is defined using edge_metapaths and
     kind_to_abbrev.
