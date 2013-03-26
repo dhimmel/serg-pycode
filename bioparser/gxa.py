@@ -7,7 +7,9 @@ import os
 import math
 import omicnet
 
-class ExpirimentalFactorOntology(AcyclicDirectedGraph):
+import networks.ontologies
+
+class ExpirimentalFactorOntology(networks.ontologies.AcyclicDirectedGraph):
 
     def __init__(self):
         super(ExpirimentalFactorOntology, self).__init__()
@@ -49,7 +51,7 @@ class ExpirimentalFactorOntology(AcyclicDirectedGraph):
                     node.parents.add(parent)
                     parent.children.add(node)
 
-class ExpirimentalFactorOntologyNode(AcyclicDirectedGraphNode):
+class ExpirimentalFactorOntologyNode(networks.ontologies.AcyclicDirectedGraphNode):
     
     def __init__(self, id, name, parents):
         super(ExpirimentalFactorOntologyNode, self).__init__()

@@ -163,6 +163,19 @@ def read_features_list(path):
         for row in reader:
             yield map(lambda conv, elem: conv(elem), conversions, row)
             
+def numpy_read_features(path):
+    """Return a tuple of (source, target, status, features)."""
+    import numpy
+    # read table as a structured array (each row is a tuple)
+    feature_array = numpy.genfromtxt(path, delimiter='\t', names=True, dtype=None)
+    source = feature_array['source']
+    target = feature_array['target']
+    status = feature_array['status']
+    feature_names = list(feature_array.dtype.names[3: ])
+    features = feature_array[feature_names]
+    # convert from structured array to normal ndarray
+    features = features.view((numpy.float, len(features.dtype.names)))
+    return source, target, status, features, feature_names
 
 
 def subset_feature_file(name, subset_name, filter_function):
