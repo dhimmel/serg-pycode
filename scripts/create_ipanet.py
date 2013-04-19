@@ -61,11 +61,12 @@ def build_networkx(network_id, network_dir):
                    ('drug', 'disease', 'increase'),
                    ('drug', 'disease', 'effect'),
                    ('gene', 'gene', 'function')]
+    """
     kind_to_abbrev = {'drug': 'C', 'disease': 'D', 'gene': 'G',
                       'risk': 'r', 'indication': 'i', 'target': 't',
                       'increase': 'u', 'effect': 'e', 'function': 'f'}
-    
-    g = heteronets.nxutils.create_undirected_network(edge_tuples, kind_to_abbrev,
+    """
+    g = heteronets.nxutils.create_undirected_network(edge_tuples,
         name='ipanet', prepared=False, network_id=network_id)
 
     ################################################################################
@@ -172,7 +173,7 @@ def save_as_pickle(g, network_dir):
     if not os.path.exists(graph_dir):
         os.makedirs(graph_dir)
     pkl_path = os.path.join(graph_dir, 'graph.pkl')
-    networkx.write_gpickle(g, pkl_path)
+    heteronets.nxutils.write_gpickle(g, pkl_path)
     print 'IPA network saved to', pkl_path
     
 
@@ -180,9 +181,12 @@ def save_as_pickle(g, network_dir):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('--networks-dir', type=os.path.expanduser, default=
+        '~/Documents/serg/networks/')
     parser.add_argument('--ipadir', type=os.path.expanduser, default=
         '~/Documents/serg/ipanet/')
     parser.add_argument('--network-id', required=True)
+    parser.add_argument('--description', required=True)
     parser.add_argument('--remove-list', default='global',
                         choices={'global', 'specific'},
                         help='''whether to use manually-removed-diseases.txt
@@ -190,7 +194,7 @@ if __name__ == '__main__':
                         specific file in network_dir (specific)''')
     args = parser.parse_args()
 
-    network_dir = os.path.join(args.ipadir, 'networks', args.network_id)
+    network_dir = os.path.join(args.networks_dir, args.network_id)
     
     if not os.path.isdir(network_dir):
         os.mkdir(network_dir)
@@ -201,6 +205,7 @@ if __name__ == '__main__':
         shutil.copyfile(global_remove_path, specific_remove_path)
     
     g = build_networkx(args.network_id, network_dir)
+    g.graph['description'] = args.description
     remove_unconnected_nodes(g)
     save_as_pickle(g, network_dir)
     

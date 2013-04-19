@@ -156,7 +156,8 @@ class MetaPath(object):
         If a MetaPath object representing kin_tuple exists, return that
         object. Otherwise create and return a new MetaPath object.
         """
-
+        assert isinstance(kind_tuple, tuple)
+        
         if kind_tuple in MetaPath.tuple_to_metapath:
             return MetaPath.tuple_to_metapath[kind_tuple]
 
@@ -167,6 +168,10 @@ class MetaPath(object):
         MetaPath.tuple_to_metapath[kind_tuple] = new
         return new
 
+    def __getnewargs__(self):
+        """Needed for pickling."""
+        return (self.tuple_, )
+        
     @staticmethod
     def edges_in_metapaths(metapaths):
         """Returns a set of edges appearing in any of the metapaths"""
@@ -184,6 +189,7 @@ class MetaPath(object):
         return shortcuts
 
     def shortcuts(self, length):
+        """Get shortcuts for self"""
         shorcuts = set()
         num_nodes = len(self)
         depth = 0
@@ -218,10 +224,10 @@ class MetaPath(object):
         return self.abbrev
     
     def startswith(self, other):
-        return self[: len(other.tuple_)] == other
+        return self[: len(other.tuple_)] == other.tuple_
 
     def endswith(self, other):
-        return self[-len(other.tuple_): ] == other
+        return self[-len(other.tuple_): ] == other.tuple_
     
     def start(self):
         """Return the node_kind for the start node of the metapath."""
@@ -250,7 +256,7 @@ class MetaPath(object):
         head = MetaPath(self[: index * 2 + 1])
         tail = MetaPath(self[index * 2: ])
         if reverse_head:
-            head = reversed(head)
+            head = head.reverse()
         return head, tail
     
     def split_by_kind(self, kind, reverse_head = False):
@@ -266,6 +272,9 @@ class MetaPath(object):
         return MetaPath(tuple(reversed(self.tuple_)))
     
     def __reversed__(self):
+        """For creating a reversed MetaPath object use MetaPath.reverse().
+        Iterators don't provide a meaningful representation.
+        """
         raise Exception
     
     def __getitem__(self, index):
@@ -330,7 +339,7 @@ if __name__ == '__main__':
     metapaths = extract_metapaths(schema, source, target, max_length, exclude_edges={('disease', 'drug', 'indication')})
     print metapaths
     
-    print metapaths[2], reversed(metapaths[2])
+    print metapaths[2], metapaths[2].reverse()
     
     print metapaths[2].get_edges()
     print metapaths[2].split_by_index(0)

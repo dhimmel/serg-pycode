@@ -10,7 +10,7 @@ import heteronets.features
 parser = argparse.ArgumentParser()
 parser.add_argument('--networks-dir', type=os.path.expanduser, default=
     '~/Documents/serg/networks/')
-parser.add_argument('--network-id', default='130225-1')
+parser.add_argument('--network-id', default='130403-1')
 args = parser.parse_args()
 
 

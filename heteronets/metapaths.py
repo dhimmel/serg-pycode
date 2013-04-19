@@ -192,8 +192,7 @@ def prepare_feature_optimizations(g):
     total_path_counts(g)
     
     print 'computing shortcuts'
-    shortcuts = schema.shortcuts_for_metapaths(g.graph['schema'],
-                                               g.graph['metapaths'], 2)
+    shortcuts = schema.MetaPath.shortcuts_for_metapaths(g.graph['metapaths'], 2)
     compute_shortcuts(g, shortcuts)
     g.graph['prepared'] = True
 
@@ -264,7 +263,7 @@ def get_paths(g, metapath, source, target=None):
     metapath_deque = collections.deque(metapath.tuple_)
     metapath_deque.popleft()
     paths = [[source]]
-    while metapath:
+    while metapath_deque:
         edge_key = metapath_deque.popleft()
         node_kind = metapath_deque.popleft()
         current_depth_paths = list()

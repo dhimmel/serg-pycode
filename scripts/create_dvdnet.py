@@ -90,8 +90,8 @@ def save_as_pickle(g, network_dir):
     if not os.path.exists(graph_dir):
         os.makedirs(graph_dir)
     pkl_path = os.path.join(graph_dir, 'graph.pkl')
-    networkx.write_gpickle(g, pkl_path)
-    print 'IPA network saved to', pkl_path
+    heteronets.nxutils.write_gpickle(g, pkl_path)
+    print 'dvd network saved to', pkl_path
 
 def print_indications(g):
     kind_to_edges = heteronets.nxutils.get_kind_to_edges(g)

@@ -44,7 +44,7 @@ pkl_path_prepared = os.path.join(graph_dir, 'prepared-graph.pkl')
 if not os.path.exists(pkl_path_prepared) or args.reprepare:
     print 'preparing network for feature computation.'
     pkl_path = os.path.join(graph_dir, 'graph.pkl')
-    g = networkx.read_gpickle(pkl_path)
+    g = heteronets.nxutils.read_gpickle(pkl_path)
     
     g.graph['source_kind'] = args.source_kind
     g.graph['target_kind'] = args.target_kind
@@ -89,10 +89,10 @@ if not os.path.exists(pkl_path_prepared) or args.reprepare:
     print 'prepared graph saved as pickle'
 else:
     print 'reading', pkl_path_prepared
-    g = networkx.read_gpickle(pkl_path_prepared)
+    g = heteronets.nxutils.read_gpickle(pkl_path_prepared)
 
-feature_dir = os.path.join(network_dir, 'features')
-heteronets.features.write_partitioned_features(g, feature_dir)
+#feature_dir = os.path.join(network_dir, 'features')
+#heteronets.features.write_partitioned_features(g, feature_dir)
 
 """
 # Create a subset with learning 

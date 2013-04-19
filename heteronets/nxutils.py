@@ -142,4 +142,14 @@ def export_as_gml(g, path):
         g.edge[node][neighbor][key]['kind'] = key
     networkx.write_gml(g, path)
     
+def write_gpickle(g, path):
+    kind_to_abbrev = schema.MetaPath.kind_to_abbrev
+    g.graph['kind_to_abbrev'] = kind_to_abbrev
+    networkx.write_gpickle(g, path)
+    
+def read_gpickle(path):
+    g = networkx.read_gpickle(path)
+    kind_to_abbrev = g.graph['kind_to_abbrev']
+    schema.MetaPath.kind_to_abbrev = kind_to_abbrev
+    return g
     

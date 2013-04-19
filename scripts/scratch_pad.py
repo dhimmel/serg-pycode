@@ -10,6 +10,11 @@ g = new Neo4jGraph('/scratch/omicnet.db')
 g.saveGML('/home/dhimmels/Documents/serg/omicnet/omicnet.gml')
 g.shutdown()
 """
+
+
+all_simple_paths
+
+
 import omicnet
 import omictools
 
