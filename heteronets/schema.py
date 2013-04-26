@@ -310,46 +310,51 @@ if __name__ == '__main__':
     kind_to_abbrev = {'drug': 'C', 'disease': 'D', 'gene': 'G',
                       'risk': 'r', 'indication': 'i', 'target': 't', 'function': 'f', 'increases': '^'}
     
+    edges = [('compound', 'gene', 'up'),
+             ('compound', 'gene', 'down'),
+             ('disease', 'gene', 'up'),
+             ('disease', 'gene', 'down'),
+             ('disease', 'gene', 'regulates'),
+             ('compound', 'gene', 'regulates'),
+             ('gene', 'gene', 'interacts'),
+             ('gene', 'tissue', 'in'),
+             ('compound', 'side effect', 'causes'),
+             ('disease', 'disease', 'comorbid'),
+             ('compound', 'compound', 'structure'),
+             ('compound', 'compound', 'interact'),
+             ('disease', 'gene', 'risk'),
+             ('disease', 'compound', 'indicates'),
+             ]
     
     schema = create_undirected_schema(edges)
     
     print_schema(schema)
     
-    source = 'drug'
+    source = 'compound'
     target = 'disease'
     max_length = 3
     
     print 'Metapaths'
-    metapaths = extract_metapaths(schema, source, target, max_length)
-    print metapaths
+    metapaths = extract_metapaths(schema, source, target, 2,
+        exclude_edges={('disease', 'gene', 'interact'), ('compound', 'gene', 'interact')})
+    print metapaths    
+    metapaths = extract_metapaths(schema, source, target, 3,
+        exclude_edges={('disease', 'gene', 'up'), ('disease', 'gene', 'down'),
+                       ('compound', 'gene', 'up'), ('compound', 'gene', 'down')})
+    print metapaths    
 
     print 'Shortcuts'
     shortcuts = MetaPath.shortcuts_for_metapaths(metapaths, 2)
     print shortcuts
     
-    print 'Metapaths Excluding source to target edges'
-    metapaths = extract_metapaths(schema, source, target, max_length, exclude_all_source_target_edges=True)
-    print metapaths
+    #print 'Metapaths Excluding source to target edges'
+    #metapaths = extract_metapaths(schema, source, target, max_length, exclude_all_source_target_edges=True)
+    #print metapaths
 
-    print 'Metapaths Excluding (gene, function, gene) edges'
-    metapaths = extract_metapaths(schema, source, target, max_length, exclude_edges={('gene', 'gene', 'function')})
-    print metapaths
+    #print 'Metapaths Excluding (gene, function, gene) edges'
+    #metapaths = extract_metapaths(schema, source, target, max_length, exclude_edges={('gene', 'gene', 'function')})
+    #print metapaths
 
-    print 'Metapaths Excluding (disease, indication, drug) edges'
-    metapaths = extract_metapaths(schema, source, target, max_length, exclude_edges={('disease', 'drug', 'indication')})
-    print metapaths
-    
-    print metapaths[2], metapaths[2].reverse()
-    
-    print metapaths[2].get_edges()
-    print metapaths[2].split_by_index(0)
-    print metapaths[2].split_by_index(1)
-    
-    """
-    edge_tuples = [('drug', 'gene', 'upregulates'),
-                   ('drug', 'gene', 'downregulates'),
-                   ('disease', 'gene', 'upregulates'),
-                   ('disease', 'gene', 'downregulates'),
-                   ('gene', 'gene', 'function')]
-    """
+    #print 'Metapaths Excluding (disease, indication, drug) edges'
+    #metapaths = extract_metapaths(schema, source, target, max_length, exclude_edges={('disease', 'drug', 'indication')})
     
