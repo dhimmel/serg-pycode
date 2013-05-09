@@ -321,7 +321,6 @@ if __name__ == '__main__':
              ('compound', 'side effect', 'causes'),
              ('disease', 'disease', 'comorbid'),
              ('compound', 'compound', 'structure'),
-             ('compound', 'compound', 'interact'),
              ('disease', 'gene', 'risk'),
              ('disease', 'compound', 'indicates'),
              ]
@@ -336,7 +335,7 @@ if __name__ == '__main__':
     
     print 'Metapaths'
     metapaths = extract_metapaths(schema, source, target, 2,
-        exclude_edges={('disease', 'gene', 'interact'), ('compound', 'gene', 'interact')})
+        exclude_edges={('disease', 'gene', 'regulates'), ('compound', 'gene', 'regulates')})
     print metapaths    
     metapaths = extract_metapaths(schema, source, target, 3,
         exclude_edges={('disease', 'gene', 'up'), ('disease', 'gene', 'down'),

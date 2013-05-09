@@ -1,0 +1,148 @@
+import csv
+import json
+import os
+import urllib
+import urllib2
+
+
+
+class Querier(object):
+    
+    def __init__(self, gxa_dir): #, gxa_dir, ontology):
+        #self.gxa_dir = gxa_dir
+        #self.ontology = None
+        self.gxa_dir = gxa_dir
+        self.atlas_address = 'www.ebi.ac.uk/gxa/api/v1'
+    
+    def create_dirs(self):
+        if not os.path.isdir(gxa_dir):
+            os.mkdir(gxa_dir)
+        for directory in 'queries', 'processed':
+            path = os.path.join(self.gxa_dir, directory)
+            if not os.path.isdir(path):
+                os.mkdir(path)
+    
+    def api_query(self, query_dict):
+        """Query the GXA API for a parsed json formatted output."""
+        for key, value in query_dict.items():
+            #query_dict[key] = value.replace(' ', '+')
+            query_dict[key] = urllib.quote_plus(value)
+        query = '&'.join('='.join(pair) for pair in query_dict.items())
+        query = 'http://' + self.atlas_address + '?' + query + '&format=json'
+        results = list()
+        
+        starting_row = 0
+        nrows = 200
+        incomplete = True
+        while incomplete:
+            data = self.api_segment_query(query, starting_row, nrows)
+            results.extend(data['results'])
+            
+            starting_row += nrows
+            if starting_row >= data['totalResults']:
+                incomplete = False
+        return results
+    
+    def api_segment_query(self, query, starting_row=0, nrows=200):
+        """Query GXA API with row subsets."""
+        url = query + '&start=' + str(starting_row) + '&rows=' + str(nrows)
+        while True:
+            try:
+                usock = urllib2.urlopen(url)
+                data = json.load(usock)
+                usock.close()
+                return data
+            except urllib2.HTTPError:
+                print 'urllib2.HTTPError'
+    
+    def parse_results(self, results):
+        """
+        Indented JSON for viewing:
+        http://www.ebi.ac.uk/gxa/api/v1?updownInEfo=EFO_0003885&species=Homo+Sapiens&format=json&start=0&rows=200&indent
+        """
+        result_dict = dict()
+        for results_by_gene in results:
+            results_by_gene['gene']['id']
+            results_by_gene['gene']['ensemblGeneId'] 
+            gene_name = results_by_gene['gene']['name']
+            
+            for results_by_factor in results_by_gene['expressions']:
+                efo_id = results_by_factor['efoId']
+                pval_dict = dict()
+                for results_by_experiment in results_by_factor['experiments']:
+                    pvalue = results_by_experiment['pvalue']
+                    direction = results_by_experiment['updn']
+                    pval_dict.setdefault(direction, list()).append(pvalue)
+                #pval_dict = self.min_p(pval_dict)
+                result_dict.setdefault(efo_id, dict())[gene_name] = pval_dict
+        return result_dict
+    
+    def sidak(self, p, n):
+        """Minimum p-value with a Sidak adjustment."""
+        return 1 - (1.0 - p) ** n
+
+    def min_p(self, pval_dict, round_digits=None):
+        """Minimum p-value with a Sidak adjustment."""
+        n = sum(map(len, pval_dict.values()))
+        out_dict = dict()
+        for direction in 'UP', 'DOWN':
+            try:
+                p = min(pval_dict[direction])
+                p = self.sidak(p, n)
+                if round_digits is not None:
+                    p = round(p, round_digits)
+                out_dict[direction] = p
+            except KeyError:
+                out_dict[direction] = 1.0
+        return out_dict
+
+    def process_result_dict(self, result_dict):
+        processed_dict = dict()
+        for efo_id, results_by_factor in result_dict.items():
+            processed_dict[efo_id] = dict()
+            for gene, pval_dict in results_by_factor.items():
+                processed_dict[efo_id][gene] = self.min_p(pval_dict, round_digits=5)
+        return processed_dict
+    
+    def query_factors(self, efo_ids):
+        self.create_dirs()
+        for efo_query_id in efo_ids:
+            print 'Querying ', efo_query_id
+            query_dict = {'anyInEfo': efo_query_id, 'species': 'Homo Sapiens'}
+            results = self.api_query(query_dict)
+            
+            # Save unprocessed but still json queries
+            path = os.path.join(gxa_dir, 'queries', efo_query_id + '.json')
+            with open(path, 'w') as json_file:
+                json.dump(results, json_file)
+            
+            # Save processed files
+            result_dict = self.parse_results(results)
+            fieldnames = 'gene', 'pval_down', 'pval_up'
+            processed_result_dict = self.process_result_dict(result_dict)
+            for efo_id, gene_dict in processed_result_dict.iteritems():
+                path = os.path.join(gxa_dir, 'processed', efo_id + '.txt')
+                f = open(path, 'w')
+                writer = csv.writer(f, delimiter='\t')
+                writer.writerow(fieldnames)
+                for gene, pval_dict in gene_dict.iteritems():
+                    row = gene, pval_dict['DOWN'], pval_dict['UP']
+                    writer.writerow(row)
+                f.close()
+        print 'GXA queries complete. Results saved to file.'
+
+        
+if __name__ =='__main__':
+    gxa_dir = '/home/dhimmels/Documents/serg/data-sources/gxa/130508'
+    qq = Querier(gxa_dir)
+    efo_ids = ['EFO_0000400', # diabetes
+               'EFO_0003885', # multiple sclerosis
+               ]
+    qq.query_factors(efo_ids)
+    #query_dict = {'updownInEfo': 'EFO_0000280', 'species': 'Homo Sapiens'}
+    #query_dict = {'anyInEfo': 'EFO_0003885', 'species': 'Homo Sapiens'}
+    #query_dict = {'anyInEfo': 'EFO_0000400', 'species': 'Homo Sapiens'} # diabetes mellitus
+    #results = qq.api_query(query_dict)
+    #result_dict = qq.parse_results(results)
+    
+    #merged_results = data['results'] for data in merged_data

@@ -467,6 +467,8 @@ class OBOOntology(object):
             elif event == "START_STANZA":
                 current = OBOObject(value)
             elif event == "CLOSE_STANZA":
+                if current is None:
+                    print current, event, value
                 self.add_object(current)
                 current = None
             elif event == "HEADER_TAG":
@@ -742,8 +744,39 @@ class OBOOntology(object):
                     
         return graph
     
-    def to_directed_networkx(self):
-        """Daniel Himmelstein """
+    def to_directed_networkx(self, terms=None):
+        """Daniel Himmelstein
+        Edges start at parent and point to child.
+        """
+        import networkx
+        graph = networkx.MultiDiGraph()
+        
+        edge_types = self.edge_types()
+                
+        if terms is None:
+            terms = self.terms()
+        else:
+            terms = [self.term(term) for term in terms]
+            super_terms = [self.super_terms(term) for term in terms]
+            terms = reduce(set.union, super_terms, set(terms))
+            
+        for term in terms:
+            graph.add_node(term.id, name=term.name)
+            
+        for term in terms:
+            # parents of term
+            for rel_type, rel_term in self.parent_edges(term):
+                rel_term = self.term(rel_term)
+                if rel_term in terms:
+                    graph.add_edge(rel_term.id, term.id, key=rel_type)
+            # children of term
+            for rel_type, rel_term in self.child_edges(term):
+                rel_term = self.term(rel_term)
+                if rel_term in terms:
+                    graph.add_edge(term.id, rel_term.id, key=rel_type)
+        
+        assert networkx.is_directed_acyclic_graph(g)
+        return graph
         
     def to_graphviz(self, terms=None):
         """ Return an pygraphviz.AGraph representation of the ontology in.
