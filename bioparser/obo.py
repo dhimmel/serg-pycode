@@ -396,19 +396,24 @@ class OBOParser(object):
         endswith = str.endswith
         parse_tag_value = OBOObject.parse_tag_value
         
+        in_stanza = False # Included to fix multiple blank line bug
         for line in body.splitlines():
 #            line = line.strip()
+#            print line # debugging
             if startswith(line, "[") and endswith(line, "]"):
+                in_stanza = True
                 yield "START_STANZA", line.strip("[]")
                 current = line
             elif startswith(line, "!"):
                 yield "COMMENT", line[1:]
             elif line:
                 yield "TAG_VALUE", parse_tag_value(line)
-            else: #  empty line is the end of a term
-                yield "CLOSE_STANZA", None
-                current = None
-        if current is not None:
+            else:
+                if in_stanza:
+                    in_stanza = False
+                    yield "CLOSE_STANZA", None
+        if current is not None and in_stanza:
+            in_stanza = False
             yield "CLOSE_STANZA", None
     
     def __iter__(self):
@@ -467,8 +472,7 @@ class OBOOntology(object):
             elif event == "START_STANZA":
                 current = OBOObject(value)
             elif event == "CLOSE_STANZA":
-                if current is None:
-                    print current, event, value
+                # an error occurs when multiple newlines seprate terms.
                 self.add_object(current)
                 current = None
             elif event == "HEADER_TAG":
@@ -666,56 +670,7 @@ class OBOOntology(object):
     
     def has_key(self, key):
         return self.id2tem.has_key(key)
-    
-    def to_network(self, terms=None):
-        """ Return an Orange.network.Network instance constructed from
-        this ontology.
         
-        """
-        edge_types = self.edge_types()
-        terms = self.terms()
-        import orngNetwork, orange
-        
-        network = orngNetwork.Network(len(terms), True, len(edge_types))
-        network.objects = dict([(term.id, i) for i, term in enumerate(terms)])
-        
-        edges = defaultdict(set)
-        for term in self.terms():
-            related = self.related_terms(term)
-            for relType, relTerm in related:
-                edges[(term.id, relTerm)].add(relType)
-                
-        edgeitems = edges.items()
-        for (src, dst), eTypes in edgeitems:
-            network[src, dst] = [1 if e in eTypes else 0 for e in edge_types]
-            
-        domain = orange.Domain([orange.StringVariable("id"),
-                                orange.StringVariable("name"),
-                                orange.StringVariable("def"),
-                                ], False)
-        
-        items = orange.ExampleTable(domain)
-        for term in terms:
-            ex = orange.Example(domain, [term.id, term.name, term.values.get("def", [""])[0]])
-            items.append(ex)
-        
-        relationships = set([", ".join(sorted(eTypes)) for (_, _), eTypes in edgeitems])
-        domain = orange.Domain([orange.FloatVariable("u"),
-                                orange.FloatVariable("v"),
-                                orange.EnumVariable("relationship", values=list(edge_types))
-                                ], False)
-        
-        id2index = dict([(term.id, i + 1) for i, term in enumerate(terms)])
-        links = orange.ExampleTable(domain)
-        for (src, dst), eTypes in edgeitems:
-            ex = orange.Example(domain, [id2index[src], id2index[dst], eTypes.pop()])
-            links.append(ex)
-            
-        network.items = items
-        network.links = links
-        network.optimization = None
-        return network
-    
     def to_networkx(self, terms=None):
         """ Return a NetworkX graph of this ontology
         """
@@ -775,7 +730,7 @@ class OBOOntology(object):
                 if rel_term in terms:
                     graph.add_edge(term.id, rel_term.id, key=rel_type)
         
-        assert networkx.is_directed_acyclic_graph(g)
+        assert networkx.is_directed_acyclic_graph(graph)
         return graph
         
     def to_graphviz(self, terms=None):

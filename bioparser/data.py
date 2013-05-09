@@ -5,6 +5,7 @@ import utilities.omictools
 import ctd
 import drugbank
 import dvd
+import efo
 import frimp
 import gwas_catalog
 import hgnc
@@ -78,6 +79,7 @@ class Data:
         self.ctd = ctd.CTD(current_path('ctd'))
         self.drugbank = drugbank.DrugBank(current_path('drugbank'))
         self.dvd = dvd.DvD()
+        self.efo = efo.EFO()
         self.frimp = frimp.IMP(current_path('imp'))
         self.gwas_catalog = gwas_catalog.GwasCatalog(current_path('gwas-catalog'))
         self.hgnc = hgnc.HGNC(current_path('hgnc'))

@@ -4,7 +4,7 @@ import os
 import urllib
 import urllib2
 
-
+import data
 
 class Querier(object):
     
@@ -135,10 +135,13 @@ class Querier(object):
 if __name__ =='__main__':
     gxa_dir = '/home/dhimmels/Documents/serg/data-sources/gxa/130508'
     qq = Querier(gxa_dir)
-    efo_ids = ['EFO_0000400', # diabetes
-               'EFO_0003885', # multiple sclerosis
-               ]
-    qq.query_factors(efo_ids)
+
+    compounds = data.Data().efo.gxa_query_compounds()
+    diseases = data.Data().efo.gxa_query_diseases()
+
+    qq.query_factors(compounds)
+    qq.query_factors(diseases)
+    
     #query_dict = {'updownInEfo': 'EFO_0000280', 'species': 'Homo Sapiens'}
     #query_dict = {'anyInEfo': 'EFO_0003885', 'species': 'Homo Sapiens'}
     #query_dict = {'anyInEfo': 'EFO_0000400', 'species': 'Homo Sapiens'} # diabetes mellitus
