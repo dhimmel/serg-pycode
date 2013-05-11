@@ -1,12 +1,13 @@
 import os
 import csv
+import json
 
 import networkx
+import networkx.readwrite.json_graph
 
 import data
 import obo
 
-replace_colon = lambda s: s.replace(':', '_')
 
 class EFO(object):
     
@@ -15,43 +16,68 @@ class EFO(object):
             efo_dir = data.current_path('efo')
         self.efo_dir = efo_dir
         self.obo_path = os.path.join(efo_dir, 'efo.obo.txt')
+        self.graph_json_path = os.path.join(efo_dir, 'efo.networkx.json')
+        self.graph_pkl_path = os.path.join(efo_dir, 'efo.networkx.pkl')
+        
 
-    def read(self):
+    def get_graph_from_obo(self):
         """
         Store a parsed EFO obo file in self.ontology and a directed 
         networkx multigraph representation in self.graph.
+        Colons are replaced with underscores node ids.
         """
-        self.ontology = obo.OBOOntology(self.obo_path)
-        self.graph = self.ontology.to_directed_networkx()
+        ontology = obo.OBOOntology(self.obo_path)
+        graph = ontology.to_directed_networkx()
+        replace_colon = lambda s: s.replace(':', '_')
+        mapping = {node: replace_colon(node) for node in graph.nodes()}
+        networkx.relabel_nodes(graph, mapping, copy=False)
+        return graph
 
-    def gxa_query_compounds(self, root='CHEBI:37577'):
+    def get_graph(self):
+        """Returns the networkx graph representation of the EFO."""
+        if not hasattr(self, 'graph'):
+            if os.path.exists(self.graph_pkl_path):
+                # Read networkx graph from json file
+                with open(self.graph_json_path) as json_file:
+                    serialized = json.load(json_file)
+                # Networkx versions before 1.8 do not save edge keys in json serializations
+                #self.graph = networkx.readwrite.json_graph.node_link_graph(serialized, True, True) 
+                self.graph = networkx.read_gpickle(self.graph_pkl_path)
+
+            else:
+                # Write networkx graph to json file
+                self.graph = self.get_graph_from_obo()
+                serialized = networkx.readwrite.json_graph.node_link_data(self.graph)
+                with open(self.graph_json_path, 'w') as json_file:
+                    json.dump(serialized, json_file, indent=4)
+                networkx.write_gpickle(self.graph, self.graph_pkl_path)
+
+        return self.graph
+    
+    def gxa_query_compounds(self, root='CHEBI_37577'):
         """
         Finds all leaf nodes which are descendents of root.
         Colons are replaced with underscores in the returned output.
         Writes 'gxa_query_compounds.txt' showing term id and names.
         The default root is CHEBI_37577 for 'chemical compound'.
         """
-        if not hasattr(self, 'graph'):
-            self.read()
-        
+        self.get_graph()        
         chemical_compounds = list(networkx.dfs_postorder_nodes(self.graph, source=root)) 
         query_compounds = filter(lambda x: self.graph.out_degree(x) == 0, chemical_compounds)
         self.write_terms(query_compounds, 'gxa_query_compounds.txt')
-        query_compounds = map(replace_colon, query_compounds)
+        #query_compounds = map(replace_colon, query_compounds)
         return query_compounds
-
-    def gxa_query_diseases(self, root='EFO:0000408'):
+    
+    def gxa_query_diseases(self, root='EFO_0000408'):
         """
         The sef of leaf nodes which are descendents of root is computed.
         The predecessors of the leaf nodes are then computed. Nodes which have 
         more than five total descedents are excluded. Nodes that are descendents
         of included nodes are excluded.
-        Colons are replaced with underscores in the returned output.
         Writes 'gxa_query_diseases.txt' showing term id and names.
         The default root is EFO_0000408 for 'disease'.
         """
-        if not hasattr(self, 'graph'):
-            self.read()
+        self.get_graph()
         diseases = list(networkx.dfs_postorder_nodes(self.graph, source=root))
         leaf_diseases = filter(lambda x: self.graph.out_degree(x) == 0, diseases)
         query_diseases = set(leaf_diseases)
@@ -69,7 +95,7 @@ class EFO(object):
             query_diseases -= descendents
         
         self.write_terms(query_diseases, 'gxa_query_diseases.txt')
-        query_diseases = map(replace_colon, query_diseases)
+        #query_diseases = map(replace_colon, query_diseases)
         return query_diseases
 
     def write_terms(self, terms, file_name):
@@ -77,7 +103,7 @@ class EFO(object):
         f = open(path, 'w')
         writer = csv.writer(f, delimiter='\t')
         for term in terms:
-            writer.writerow([replace_colon(term), self.graph.node[term]['name']])
+            writer.writerow([term, self.graph.node[term]['name']])
         f.close()
 
 

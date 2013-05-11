@@ -1,44 +1,69 @@
 import os
+import csv
+import collections
 
-import mapping.metamap
+import data
 
 class GwasCatalog(object):
     
-    def __init__(self, current_dir, previous_dir=None):
-        self.current_dir = current_dir
-        self.previous_dir = previous_dir
+    def __init__(self, gwas_dir=None):
+        if gwas_dir is None:
+            gwas_dir = data.current_path('gwas-catalog')
+        self.gwas_dir = gwas_dir
         
-        
-    def read(self):
-        """
-        Path is the lacation of a gwascatalog.txt file.
-        Website: http://www.genome.gov/gwastudies/
-        Direct download link: http://www.genome.gov/admin/gwascatalog.txt
-        """
-        print 'initiating reading of the gwas catalog'
-        mm = metamap.MetaMap(self.current_dir, self.previous_dir)
-
-        disease_to_genes = dict()
-        concept_id_to_genes = dict()
+    def row_generator(self, path=None):
+        """ """
         invalid_genes = set(['Intergenic', 'NR'])
-        self.catalog_path = os.path.join(self.current_dir, 'gwascatalog.txt')
-        for line_dict in metamap.read_tdt(self.catalog_path):
-            disease = line_dict['Disease/Trait']
-            genes = set(gene.strip() for gene in
-                        line_dict['Reported Gene(s)'].split(','))
-            genes -= invalid_genes
-            disease_to_genes.setdefault(disease, set()).update(genes)
-        diseases = disease_to_genes.keys()
+        if not path:
+            path = os.path.join(self.gwas_dir, 'gwascatalog.txt')
+        with open(path) as f:
+            reader = csv.DictReader(f, delimiter='\t')
+            for row in reader:
+                genes = row['Reported Gene(s)'].split(',')
+                genes = set(gene.strip() for gene in genes)
+                genes -= invalid_genes
+                row['genes'] = genes
+                yield row
+    
+    def get_phenotypes(self):
+        """Returns the set of Disease/Trait terms."""
+        return {row['Disease/Trait'] for row in self.row_generator()}
+    
+    def efo_map(self):
+        gwas_terms = self.get_phenotypes()
+    
+    def read_ebi_mappings(self, path):
+        """
+        Read the mapping file available at the EBI's GWAS Diagram Browser:
+        http://www.ebi.ac.uk/fgpt/gwas/#downloadstab
+        Returns a dictionary of GWAS Catalog term to EFO ID.
+        """
+        efo_graph = data.Data().efo.get_graph()
 
-        if not mm.maps['current']['redacted']:
-            mm.map_terms(diseases)
-            mm.pause_before_reading_mappings()
+        catalog_term_to_efo_id = dict()
+        with open(path) as f:
+            reader = csv.DictReader(f, delimiter='\t')
+            for row in reader:
+                catalog_term = row['DISEASETRAIT']
+                efo_id = row['EFOURI']
+                efo_id = efo_id.rsplit('/', 1)[-1]
+                efo_id = efo_id.replace('rdfns#', 'ORP_')
+                efo_id = efo_id.replace('CL#', '')
+                if efo_id not in efo_graph.node:
+                    print efo_id, 'from ebi gwas catalog to EFO mappings not found in EFO.'
+                    raise KeyError # Exception can be commented out 
+                    continue
+                previous_id = catalog_term_to_efo_id.get(catalog_term)
+                if previous_id and previous_id != efo_id:
+                    print catalog_term
+                    print previous_id, '|', efo_id
+                    print efo_graph.node[previous_id]['name'], '|', efo_graph.node[efo_id]['name']
+                    print '----------'
+                catalog_term_to_efo_id[catalog_term] = efo_id
+        return catalog_term_to_efo_id
         
-        disease_to_concept_id = mm.get_mapping_dict()
-        for disease, genes in disease_to_genes.items():
-            if disease in disease_to_concept_id:
-                concept_id = disease_to_concept_id[disease]
-                concept_id_to_genes.setdefault(concept_id, set()).update(genes)
 
-        self.concept_id_to_genes = concept_id_to_genes
-        return concept_id_to_genes
+if __name__ =='__main__':
+    gcat = GwasCatalog()
+    path = '/home/dhimmels/Documents/serg/data-sources/gwas-catalog/GWAS-EFO-Mappings092012.txt'
+    gcat.read_ebi_mappings(path)

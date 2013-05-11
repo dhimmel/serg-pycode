@@ -62,8 +62,8 @@ class Querier(object):
         """
         result_dict = dict()
         for results_by_gene in results:
-            results_by_gene['gene']['id']
-            results_by_gene['gene']['ensemblGeneId'] 
+            #results_by_gene['gene']['id']
+            #results_by_gene['gene']['ensemblGeneId'] # KeyError: 'ensemblGeneId' for EFO_0000536 
             gene_name = results_by_gene['gene']['name']
             
             for results_by_factor in results_by_gene['expressions']:
@@ -114,7 +114,7 @@ class Querier(object):
             # Save unprocessed but still json queries
             path = os.path.join(gxa_dir, 'queries', efo_query_id + '.json')
             with open(path, 'w') as json_file:
-                json.dump(results, json_file)
+                json.dump(results, json_file, indent=2)
             
             # Save processed files
             result_dict = self.parse_results(results)
@@ -133,12 +133,19 @@ class Querier(object):
 
         
 if __name__ =='__main__':
-    gxa_dir = '/home/dhimmels/Documents/serg/data-sources/gxa/130508'
+    gxa_dir = '/home/dhimmels/Documents/serg/data-sources/gxa/130510'
     qq = Querier(gxa_dir)
 
-    compounds = data.Data().efo.gxa_query_compounds()
-    diseases = data.Data().efo.gxa_query_diseases()
+    compounds = set(data.Data().efo.gxa_query_compounds())
+    diseases = set(data.Data().efo.gxa_query_diseases())
 
+    # Remove already queried
+    qq.create_dirs()
+    path = os.path.join(gxa_dir, 'queries')
+    queried = {name.split('.json')[0] for name in os.listdir(path)}    
+    for term_set in compounds, diseases:
+        term_set -= queried
+    
     qq.query_factors(compounds)
     qq.query_factors(diseases)
     

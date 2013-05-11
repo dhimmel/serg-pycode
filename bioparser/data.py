@@ -81,7 +81,7 @@ class Data:
         self.dvd = dvd.DvD()
         self.efo = efo.EFO()
         self.frimp = frimp.IMP(current_path('imp'))
-        self.gwas_catalog = gwas_catalog.GwasCatalog(current_path('gwas-catalog'))
+        self.gwas_catalog = gwas_catalog.GwasCatalog()
         self.hgnc = hgnc.HGNC(current_path('hgnc'))
         self.ipa = ipa.IPA()
         self.meddra = meddra.MedDRA(current_path('meddra'))

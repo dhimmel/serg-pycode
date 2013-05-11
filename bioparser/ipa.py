@@ -231,8 +231,8 @@ class IPA(object):
         With all results from functions query selected, click "Annotations". 
         A new window appears titled "Molecule Annotations". Click on 
         "Customize Table" and select all checkboxes to include "Synonym(s)".
-        Click checkbox to select all annotations. Then click the export icon
-        and save file in tab delimited format as molecules.txt. Close window.
+        Click the export icon and save file in tab delimited format
+        as molecules.txt. Close window.
         """
         assert self.drugs
         
@@ -286,8 +286,7 @@ class IPA(object):
         display mode is set to show categories (default) as opposed to a simple
         list of functions. If a "Show categories" button is visible, it must
         be clicked. The query matches 9805 functions and diseases. 
-        Check "Matching Functions & Diseases" to select all. Click export
-        and save file in tab delimited format as drugs.txt.
+        Click export and save file in tab delimited format as functions.txt.
         """
         path = os.path.join(self.ipa_dir, file_name)
         fieldnames = ['category','function_class', 'function_annotation', 'molecules',
