@@ -36,11 +36,12 @@ class GwasCatalog(object):
         """
         Read the mapping file available at the EBI's GWAS Diagram Browser:
         http://www.ebi.ac.uk/fgpt/gwas/#downloadstab
-        Returns a dictionary of GWAS Catalog term to EFO ID.
+        Returns a dictionary of GWAS Catalog term to EFO IDs (set).
         """
         efo_graph = data.Data().efo.get_graph()
 
-        catalog_term_to_efo_id = dict()
+        catalog_term_to_efo_ids = dict()
+        mapped_pmids = set()
         with open(path) as f:
             reader = csv.DictReader(f, delimiter='\t')
             for row in reader:
@@ -53,17 +54,15 @@ class GwasCatalog(object):
                     print efo_id, 'from ebi gwas catalog to EFO mappings not found in EFO.'
                     raise KeyError # Exception can be commented out 
                     continue
-                previous_id = catalog_term_to_efo_id.get(catalog_term)
-                if previous_id and previous_id != efo_id:
-                    print catalog_term
-                    print previous_id, '|', efo_id
-                    print efo_graph.node[previous_id]['name'], '|', efo_graph.node[efo_id]['name']
-                    print '----------'
-                catalog_term_to_efo_id[catalog_term] = efo_id
-        return catalog_term_to_efo_id
+                catalog_term_to_efo_ids.setdefault(catalog_term, set()).add(efo_id)
+                mapped_pmids.add(row['PUBMEDID'])
+        print 'Distribution of number of EFO terms mapping to unique catalog terms in EBI mappings:'
+        map_counter = collections.Counter(len(id_set) for id_set in catalog_term_to_efo_ids.values())
+        print map_counter
+        return catalog_term_to_efo_ids, mapped_pmids
         
 
 if __name__ =='__main__':
     gcat = GwasCatalog()
     path = '/home/dhimmels/Documents/serg/data-sources/gwas-catalog/GWAS-EFO-Mappings092012.txt'
-    gcat.read_ebi_mappings(path)
+    catalog_term_to_efo_ids, mapped_pmids = gcat.read_ebi_mappings(path)
