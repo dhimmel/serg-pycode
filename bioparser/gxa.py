@@ -106,8 +106,9 @@ class Querier(object):
     
     def query_factors(self, efo_ids):
         self.create_dirs()
+        efo_graph = data.Data().efo.get_graph()
         for efo_query_id in efo_ids:
-            print 'Querying ', efo_query_id
+            print 'Querying ', efo_query_id, '-', efo_graph.node[query]['name']
             query_dict = {'anyInEfo': efo_query_id, 'species': 'Homo Sapiens'}
             results = self.api_query(query_dict)
             
@@ -130,7 +131,6 @@ class Querier(object):
                     writer.writerow(row)
                 f.close()
         print 'GXA queries complete. Results saved to file.'
-
         
 if __name__ =='__main__':
     gxa_dir = '/home/dhimmels/Documents/serg/data-sources/gxa/130510'
@@ -142,17 +142,22 @@ if __name__ =='__main__':
     # Remove already queried
     qq.create_dirs()
     path = os.path.join(gxa_dir, 'queries')
-    queried = {name.split('.json')[0] for name in os.listdir(path)}    
+    queried = {name.split('.json')[0] for name in os.listdir(path)}
     for term_set in compounds, diseases:
         term_set -= queried
     
     qq.query_factors(compounds)
     qq.query_factors(diseases)
     
-    #query_dict = {'updownInEfo': 'EFO_0000280', 'species': 'Homo Sapiens'}
-    #query_dict = {'anyInEfo': 'EFO_0003885', 'species': 'Homo Sapiens'}
-    #query_dict = {'anyInEfo': 'EFO_0000400', 'species': 'Homo Sapiens'} # diabetes mellitus
-    #results = qq.api_query(query_dict)
-    #result_dict = qq.parse_results(results)
+    # Save file with names of efo_terms that had differential expression data
+    path = os.path.join(gxa_dir, 'processed')
+    terms_with_data = {name.split('.txt')[0] for name in os.listdir(path)}
+    write_efo_terms = data.Data().efo.write_terms
+    compounds = set(data.Data().efo.gxa_query_compounds())
+    diseases = set(data.Data().efo.gxa_query_diseases())
+    write_efo_terms(terms_with_data & compounds, os.path.join(gxa_dir, 'compounds-with-expression.txt'))
+    write_efo_terms(terms_with_data & diseases, os.path.join(gxa_dir, 'diseases-with-expression.txt'))
     
-    #merged_results = data['results'] for data in merged_data
+    # See line numbers for processed files in unix from the processed direcetory
+    # find . -type f | xargs wc -l
+    

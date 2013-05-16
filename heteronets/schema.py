@@ -357,3 +357,23 @@ if __name__ == '__main__':
     #print 'Metapaths Excluding (disease, indication, drug) edges'
     #metapaths = extract_metapaths(schema, source, target, max_length, exclude_edges={('disease', 'drug', 'indication')})
     
+    
+    # ASHG Network
+    edges = [('disease', 'gene', 'up-regulation'),
+             ('disease', 'gene', 'down-regulation'),
+             ('disease', 'gene', 'association'),
+             ('disease', 'disease', 'comorbidity'),
+             ('gene', 'gene', 'interaction')
+             ]
+
+    edges = [('disease', 'gene', 'regulation'),
+             ('disease', 'gene', 'association'),
+             ('disease', 'disease', 'comorbidity'),
+             ('gene', 'gene', 'interaction')
+             ]
+    
+    schema = create_undirected_schema(edges)
+    metapaths = extract_metapaths(schema, 'disease', 'gene', 3)
+    print_schema(schema)
+    print metapaths
+    
