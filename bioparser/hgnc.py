@@ -99,7 +99,7 @@ class HGNC(object):
         self.entrez_to_gene = {gene.entrez_id_ncbi_mapped: gene for gene in genes}
         self.entrez_to_gene.update({gene.entrez_id: gene for gene in genes})
         return self.entrez_to_gene        
-        
+
 if __name__ == '__main__':
     hugu = HGNC()
     gene_number = len(hugu.get_genes())

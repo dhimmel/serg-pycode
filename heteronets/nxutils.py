@@ -122,7 +122,7 @@ def filter_edges_by_edge_kind(g, edges_to_keep):
         if not edge_set & edges_to_keep:
             g.remove_edge(node, neighbor, key)
     remove_unconnected_nodes(g)
-    
+
 def remove_unconnected_nodes(g):
     """Remove unconnected nodes"""
     unconnected_nodes = (node for node, degree in g.degree_iter() if not degree)
@@ -152,4 +152,4 @@ def read_gpickle(path):
     kind_to_abbrev = g.graph['kind_to_abbrev']
     schema.MetaPath.kind_to_abbrev = kind_to_abbrev
     return g
-    
+

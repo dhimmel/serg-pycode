@@ -8,9 +8,9 @@ import data
 
 class Querier(object):
     
-    def __init__(self, gxa_dir): #, gxa_dir, ontology):
-        #self.gxa_dir = gxa_dir
-        #self.ontology = None
+    def __init__(self, gxa_dir=None):
+        if gxa_dir is None:
+            gxa_dir = data.current_path('gxa')
         self.gxa_dir = gxa_dir
         self.atlas_address = 'www.ebi.ac.uk/gxa/api/v1'
     
@@ -131,30 +131,72 @@ class Querier(object):
                     writer.writerow(row)
                 f.close()
         print 'GXA queries complete. Results saved to file.'
+
+class Reader(object):
+    
+    def __init__(self, gxa_dir=None):
+        if gxa_dir is None:
+            gxa_dir = data.current_path('gxa')
+        self.gxa_dir = gxa_dir
+        self.processed_dir = os.path.join(self.gxa_dir, 'processed')
+
+
+    def get_processed_terms(self):
+        path = self.processed_dir
+        terms_with_data = {name.split('.txt')[0] for name in os.listdir(path)}
+        return terms_with_data
+
+    def read_processed_file(self, efo_id):
+        path = os.path.join(self.processed_dir, efo_id + '.txt')
+        if not os.path.exists(path):
+            return None
+        rows = list()
+        with open(path) as f:
+            dict_reader = csv.DictReader(f, delimiter='\t')
+            for row in dict_reader:
+                row['pval_down'] = float(row['pval_down'])
+                row['pval_up'] = float(row['pval_up'])
+                rows.append(row)
+        return rows
+    
+    def get_genes(self, efo_id, p_cutoff):
+        """Return a tuple of a down-regulated gene set and an up-regulated
+        gene set.
+        """
+        down_genes, up_genes = set(), set()
+        gene_dicts = self.read_processed_file(efo_id)
+        if gene_dicts is None:
+            return None
+        for gene_dict in gene_dicts:
+            if gene_dict['pval_down'] <= p_cutoff:
+                down_genes.add(gene_dict['gene'])
+            if gene_dict['pval_up'] <= p_cutoff:
+                up_genes.add(gene_dict['gene'])
+        return down_genes, up_genes
         
-if __name__ =='__main__':
+if __name__ == '__main__':
     gxa_dir = '/home/dhimmels/Documents/serg/data-sources/gxa/130510'
-    qq = Querier(gxa_dir)
+    querier = Querier(gxa_dir)
 
     compounds = set(data.Data().efo.gxa_query_compounds())
     diseases = set(data.Data().efo.gxa_query_diseases())
 
     # Remove already queried
-    qq.create_dirs()
+    querier.create_dirs()
     path = os.path.join(gxa_dir, 'queries')
     queried = {name.split('.json')[0] for name in os.listdir(path)}
     for term_set in compounds, diseases:
         term_set -= queried
     
-    qq.query_factors(compounds)
-    qq.query_factors(diseases)
+    querier.query_factors(compounds)
+    querier.query_factors(diseases)
     
+    reader = Reader(gxa_dir)    
     # Save file with names of efo_terms that had differential expression data
-    path = os.path.join(gxa_dir, 'processed')
-    terms_with_data = {name.split('.txt')[0] for name in os.listdir(path)}
-    write_efo_terms = data.Data().efo.write_terms
+    terms_with_data = reader.get_processed_terms()
     compounds = set(data.Data().efo.gxa_query_compounds())
     diseases = set(data.Data().efo.gxa_query_diseases())
+    write_efo_terms = data.Data().efo.write_terms
     write_efo_terms(terms_with_data & compounds, os.path.join(gxa_dir, 'compounds-with-expression.txt'))
     write_efo_terms(terms_with_data & diseases, os.path.join(gxa_dir, 'diseases-with-expression.txt'))
     

@@ -134,15 +134,14 @@ class GwasCatalog(object):
         """
         if path is None:
             file_names = os.listdir(self.gwas_dir)
-            file_names = filter(lambda s: re.match(r"GWAS-EFO-Mappings[0-9\-]*\.txt", s), file_names)
+            file_names = filter(lambda s: re.match(r"GWAS-EFO-Mappings[0-9\-]*\.txt$", s), file_names)
             file_names.sort()
             file_name = file_names[-1]
             path = os.path.join(self.gwas_dir, file_name)
 
         efo_graph = data.Data().efo.get_graph()
-        trait_tuple_to_rows = self.get_trait_tuple_to_rows()
-        catalog_term_to_efo_ids = dict()
-        mapped_pmids = set()
+        trait_tuple_to_efo_ids = dict()
+
         with open(path) as f:
             reader = csv.DictReader(f, delimiter='\t')
             for row in reader:
@@ -156,19 +155,18 @@ class GwasCatalog(object):
                     raise KeyError # Exception can be commented out 
                     continue
                 trait_tuple = row['PUBMEDID'], catalog_term
-                gcat_rows = trait_tuple_to_rows.get(trait_tuple, list())
-                for gcat_row in gcat_rows:
-                    gcat_row['efo_id'] = efo_id
-                    gcat_row['efo_trait'] = row['EFOTRAIT']
-                catalog_term_to_efo_ids.setdefault(catalog_term, set()).add(efo_id)
-                mapped_pmids.add(row['PUBMEDID'])
-                
-        print 'Distribution of number of EFO terms mapping to unique catalog terms in EBI mappings:'
-        map_counter = collections.Counter(len(id_set) for id_set in catalog_term_to_efo_ids.values())
-        print map_counter
-        return catalog_term_to_efo_ids, mapped_pmids
+                trait_tuple_to_efo_ids.setdefault(trait_tuple, list()).append(efo_id)
         
-    def get_efo_id_to_genes(self, p_cutoff=None, fdr_cutoff=None):
+        trait_tuple_to_rows = self.get_trait_tuple_to_rows()
+        for trait_tuple, efo_ids in trait_tuple_to_efo_ids.iteritems():
+            gcat_rows = trait_tuple_to_rows.get(trait_tuple, list())
+            for gcat_row in gcat_rows:
+                gcat_row['efo_ids'] = efo_ids
+                if len(efo_ids) == 1:
+                    gcat_row['efo_id'] = efo_ids[0]
+                
+        
+    def get_efo_id_to_genes(self, p_cutoff=None, fdr_cutoff=None, mapped_term_cutoff=None):
         """ """
         self.read_ebi_mappings()
         if fdr_cutoff is not None:
@@ -181,9 +179,14 @@ class GwasCatalog(object):
             fdr = row['FDR p-Value']
             if fdr_cutoff is not None and (fdr is None or fdr > fdr_cutoff):
                 continue
-            if not 'efo_id' in row:
+            # exclude GWAS diseases or traits that do not map to a single EFO term.
+            if not 'efo_ids' in row:
                 continue
-            efo_id_to_genes.setdefault(row['efo_id'], set()).update(row['genes'])
+            efo_ids = row['efo_ids']
+            if mapped_term_cutoff is not None and len(efo_ids) > mapped_term_cutoff:
+                continue
+            for efo_id in efo_ids:
+                efo_id_to_genes.setdefault(efo_id, set()).update(row['genes'])
         return efo_id_to_genes
 
 if __name__ =='__main__':
@@ -200,8 +203,8 @@ if __name__ =='__main__':
     print 'SNPs passing 0.05 FDR P-value and reporting genes -', sum(row['FDR p-Value'] <= 0.05 and bool(row['genes']) for row in rows if row['FDR p-Value'])
     print 'SNPs passing 0.05 FDR P-value and reporting genes and mapping to EFO -', sum(row['FDR p-Value'] <= 0.05 and bool(row['genes']) and 'efo_id' in row for row in rows if row['FDR p-Value'])
     
-    efo_id_to_genes = gcat.get_efo_id_to_genes(fdr_cutoff=0.05)
-    print efo_id_to_genes
+    efo_id_to_genes = gcat.get_efo_id_to_genes(fdr_cutoff=0.05, mapped_term_cutoff=1)
+    #print efo_id_to_genes
     print len(efo_id_to_genes), 'mapped efo IDs with genes passing FDR'
     print 'Genes per EFO term counter:'
     print collections.Counter(map(len, efo_id_to_genes.values()))

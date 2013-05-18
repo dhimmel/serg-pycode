@@ -10,12 +10,14 @@ import frimp
 import gwas_catalog
 import hgnc
 import ipa
+import iref
 import meddra
 import metathesaurus
 import nature_predict
 import nci_thesaurus
 import omim
 import sider
+import pdn
 
 
 
@@ -82,7 +84,8 @@ class Data:
         self.efo = efo.EFO()
         self.frimp = frimp.IMP(current_path('imp'))
         self.gwas_catalog = gwas_catalog.GwasCatalog()
-        self.hgnc = hgnc.HGNC(current_path('hgnc'))
+        self.hgnc = hgnc.HGNC()
+        self.iref = iref.iRefIndex()
         self.ipa = ipa.IPA()
         self.meddra = meddra.MedDRA(current_path('meddra'))
         self.metathesaurus = metathesaurus.Metathesaurus()
@@ -90,4 +93,5 @@ class Data:
         self.nature_predict = nature_predict.NaturePredict(source_data_dir('nature-predict'))
         self.nci = nci_thesaurus.NCIOntology(current_path('nci', path_type='files'))
         self.sider = sider.SIDER(current_path('sider'))
+        self.pdn = pdn.PDN()
 

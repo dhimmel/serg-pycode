@@ -54,6 +54,13 @@ class EFO(object):
 
         return self.graph
     
+    def get_id_to_name(self):
+        graph = self.get_graph()
+        id_to_name = dict()
+        for node, data in graph.nodes_iter(data=True):
+            id_to_name[node] = data['name']
+        return id_to_name
+    
     def gxa_query_compounds(self, root='CHEBI_37577'):
         """
         Finds all leaf nodes which are descendents of root.
