@@ -186,34 +186,7 @@ def nodes_outside_metapaths(g):
             outside_nodes.add(node)
     return outside_nodes
 
-def prepare_feature_optimizations(g):
-    """Adds storage intensive attributes to the graph."""
-    print 'computing total path counts'
-    total_path_counts(g)
-    
-    print 'computing shortcuts'
-    shortcuts = schema.MetaPath.shortcuts_for_metapaths(g.graph['metapaths'], 2)
-    compute_shortcuts(g, shortcuts)
-    g.graph['prepared'] = True
-
-def compute_shortcuts(g, shortcuts):
-    """Annotate each node in the graph with a dictionary named
-    path_to_nodes_counter. Dictionary keys are relevant shortcut metapaths.
-    The value corresponding to a shortcut metapath key is a counter with target
-    nodes as keys and number of paths following the metapath as counts."""
-    print 'shortcuts passed to metapaths.compute_shortcuts', shortcuts
-    for source_node in g.nodes_iter():
-        path_to_nodes_counter = dict()
-        for path in shortcuts:
-            counter = source_to_target_node_count(g, path, source_node, use_shortcuts=False)
-            # counter is None if the source_node's kind does not match the path
-            if counter is not None:
-                path_to_nodes_counter[path] = counter
-        g.node[source_node]['path_to_nodes_counter'] = path_to_nodes_counter
-    g.graph['shortcuts'] = shortcuts
-
-
-def total_path_counts(g):
+def compute_pathcount_upper_bounds(g):
     """Computes the total path counts starting with each node. Stores the
     resulting collection for each node as a node attribute named 'all_paths'. 
     Dynamic computation boosts efficiency.
@@ -224,8 +197,8 @@ def total_path_counts(g):
         node_kind = data['kind']
         node_as_path = schema.MetaPath((node_kind, ))
         paths = collections.Counter([node_as_path, ])
-        data['all_paths'] = paths
-        data['temp_starting_paths'] = collections.Counter()
+        data['PC_upper_bounds'] = paths
+        data['PC_upper_bounds_temp'] = collections.Counter()
     
     for i in range(depth):
         
@@ -235,79 +208,87 @@ def total_path_counts(g):
                 neighbor_data = g.node[neighbor]
                                 
                 # Starting Paths            
-                neighbor_starting_paths = neighbor_data['all_paths']
+                neighbor_starting_paths = neighbor_data['PC_upper_bounds']
                 for neighbor_path, count in neighbor_starting_paths.iteritems():
                     path = neighbor_path.append(key, node_kind, prepend = True)
-                    data['temp_starting_paths'][path] += count
+                    data['PC_upper_bounds_temp'][path] += count
         
         for node, data in g.nodes_iter(data=True):
-            data['all_paths'] += data['temp_starting_paths']
-            data['temp_starting_paths'] = collections.Counter()
+            data['PC_upper_bounds'] += data['PC_upper_bounds_temp']
+            data['PC_upper_bounds_temp'] = collections.Counter()
     
     # Delete temporary attibutes
     for node, data in g.nodes_iter(data=True):
-        del data['temp_starting_paths']
+        del data['PC_upper_bounds_temp']
 
-
-def get_paths(g, metapath, source, target=None):
-    """
-    Get paths of kind metapath from the source to the target. If target is
-    not specified, all paths from source of kind metpath are returned. If
-    a source or target is specified which does not match the source or target
-    node kind in the metapath, None is returned.
-    """
-    if g.node[source]['kind'] != metapath.start():
+def paths_from_source(g, source, metapath, excluded_edges=set()):
+    """Returns a list of paths starting at source of kind metapath. Duplicate
+    nodes and edges in excluded_edges are excluded. A path is a series of
+    nodes separated by edge keys."""
+    if g.node[source]['kind'] != metapath[0]:
         return None
-    if target and g.node[target]['kind'] != metapath.end():
-        return None
-    metapath_deque = collections.deque(metapath.tuple_)
-    metapath_deque.popleft()
     paths = [[source]]
-    while metapath_deque:
-        edge_key = metapath_deque.popleft()
-        node_kind = metapath_deque.popleft()
-        current_depth_paths = list()
-        while paths:
-            preceeding_path = paths.pop()
-            node = preceeding_path[-1]
-            
+    node_index = 2
+    max_metapath_index = len(metapath) * 2
+    while node_index <= max_metapath_index:
+        metapath_node_kind = metapath[node_index]
+        metapath_edge_key = metapath[node_index - 1]
+        valid_paths = list()
+        for path in paths:
+            node = path[-1]
             for node, neighbor, key in g.edges(node, keys=True):
+                if key != metapath_edge_key:
+                    continue
                 neighbor_kind = g.node[neighbor]['kind']
-                if key == edge_key and neighbor_kind == node_kind:
-                    path = preceeding_path + [edge_key, neighbor]
-                    current_depth_paths.append(path)
-        paths = current_depth_paths
-    if target:
-        paths = filter(lambda path: path[-1] == target, paths)
+                if neighbor_kind != metapath_node_kind:
+                    continue
+                if neighbor in path[::2]:
+                    continue
+                if (node, neighbor, key) in excluded_edges or (neighbor, node, key) in excluded_edges:
+                    continue
+                valid_paths.append(path + [key, neighbor])
+        paths = valid_paths
+        node_index += 2
     return paths
 
-def get_metapath_to_paths(g, source, target=None, metapaths=[], cutoff=None):
-    """Return a dictionary of metapath to paths connecting source and target
-    nodes. Cutoff removes metapaths exceeding the specified length.
-    """
-    if cutoff is not None:
-        metapaths = filter(lambda x: len(x) <= cutoff, metapaths)
-    metapath_to_paths = dict()
+def features_for_metapath(g, source, target, edge_key, metapath):
+    """ """
+    feature_dict = collections.OrderedDict()
+    excluded_edges = {(source, target, edge_key), (target, source, edge_key)}
+    source_paths = paths_from_source(g, source, metapath, excluded_edges)
+    target_paths = paths_from_source(g, target, metapath.reverse(), excluded_edges)
+    PCs = len(source_paths)
+    PCt = len(target_paths)
+
+    paths_st = filter(lambda path: path[-1] == target, source_paths)
+    paths_ts = filter(lambda path: path[-1] == source, target_paths)
+    PCst = len(paths_st)
+    PCts = len(paths_ts)
+    assert PCst == PCts
+    PC = PCst
+    NPC_denominator = PCs + PCt
+    NPC = 2.0 * PC / NPC_denominator if NPC_denominator else None
+    feature_dict['PC'] = PC
+    feature_dict['PCs'] = PCs
+    feature_dict['PCt'] = PCt
+    feature_dict['NPC'] = NPC
+    return feature_dict
+
+def features_for_metapaths(g, source, target, edge_key, metapaths):
+    """ """
+    metapath_to_metric_dict = collections.OrderedDict()
     for metapath in metapaths:
-        paths = get_paths(g, metapath, source, target)
-        metapath_to_paths[metapath] = paths
-    return metapath_to_paths
-    
+        metapath_to_metric_dict[metapath] = features_for_metapath(
+            g, source, target, edge_key, metapath)
+    return metapath_to_metric_dict
 
-
-def all_simple_paths(g, source, target, metapaths, cutoff=None):
-    """Return dictionary of metapath to a list of paths following that metapath
-    between the source and target. Only metapaths in metapaths are returned.
-    If metapaths are provided cutoff is the max metapath length. Otherwise
-    cutoff must be specified and all metapaths found with length less than or
-    equal to cutoff are returned.
-    """
-    assert metapaths is not None or cutoff is not None
-    if cutoff is None:
-        cutoff = max(len(metapath) for metapath in metapaths)
-    all_paths = networkx.all_simple_paths(g, source, target, cutoff)
-    #print all_paths
-    return all_paths
+def flatten_feature_dict(metapath_to_metric_dict):
+    feature_dict = collections.OrderedDict()
+    for metapath, metric_dict in metapath_to_metric_dict.iteritems():
+        for metric, value in metric_dict.iteritems():
+            key = metric + '_' + str(metapath)
+            feature_dict[key] = value
+    return feature_dict
 
 if __name__ =='__main__':
     ipanet_dir = '/home/dhimmels/Documents/serg/ipanet/'

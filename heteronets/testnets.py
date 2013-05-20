@@ -62,8 +62,13 @@ g.graph['metapaths'] = schema.extract_metapaths(
     g.graph['schema'], g.graph['source_kind'],
     g.graph['target_kind'], g.graph['max_path_length'],
     exclude_all_source_target_edges=True)
+mpaths = g.graph['metapaths']
+print mpaths
 
-metapaths.total_path_counts(g)
+
+#metapaths.total_path_counts(g)
+print metapaths.features_for_metapath(g, 'clomipramine', 'multiple sclerosis', 'indication', mpaths[0])
+
 
 kind_to_nodes = nxutils.get_kind_to_nodes(g)
 
@@ -76,13 +81,17 @@ if True:
         required_source_to_targets.setdefault(source, set()).add(target)
     g.graph['required_source_to_targets'] = required_source_to_targets
 
-#mpaths = g.graph['metapaths']
-"""
+for source, target in pairs:
+    pass
+    print source, '---', target
+    metapath_to_metric_dict = metapaths.features_for_metapaths(g, source, target, g.graph['edge_key'], mpaths)
+    print metapaths.flatten_feature_dict(metapath_to_metric_dict)
+
 # compute and print normalized path counts
-for compound in kind_to_nodes['compound']:
-    print compound, metapaths.normalized_path_counter(g, g.graph['metapaths'], compound)
-"""
+#for compound in kind_to_nodes['compound']:
+#    print compound, metapaths.normalized_path_counter(g, g.graph['metapaths'], compound)
+#"""
 
 # compute and print features
-for feature_dict in features.feature_generator(g):
-    print feature_dict
+#for feature_dict in features.feature_generator(g):
+#    print feature_dict

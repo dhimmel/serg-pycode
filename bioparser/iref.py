@@ -24,10 +24,18 @@ class iRefIndex(object):
         reader.next() # skip header
         for row in reader:
             for fieldname, field in row.items():
-                row[fieldname] = field.split('|')
+                if field is '':
+                    row[fieldname] = None
+                else:
+                    row[fieldname] = field.split('|')
             
-            for field in 'altA', 'altB':
-                row[field] = {alt_id.split(':')[0]: alt_id.split(':')[1] for alt_id in row[field]}
+            for fieldname in 'altA', 'altB', 'confidence':
+                field = row[fieldname]
+                if field is None:
+                    row[fieldname] = dict()
+                    continue
+                row[fieldname] = {item_str.split(':')[0]: item_str.split(':')[1]
+                                  for item_str in field}
                 
             yield row
         iref_file.close()
@@ -42,11 +50,15 @@ class iRefIndex(object):
             return None
         return frozenset([entrez_a, entrez_b])
     
-    def all_interactions(self, symbol=True):
+    def get_interactions(self, symbol=True, min_publications=1):
         entrez_to_gene = data.Data().hgnc.get_entrez_to_gene()
         hgnc_entrez_ids = set(entrez_to_gene)
         rows = self.row_generator()
-        all_interactions = {self.row_to_interaction(row) for row in rows}
+        all_interactions = set()
+        for row in rows:
+            if int(row['confidence'].get('np', 0)) < min_publications:
+                continue
+            all_interactions.add(self.row_to_interaction(row))
         all_interactions.remove(None)
         all_interactions = filter(lambda fset: fset <= hgnc_entrez_ids, all_interactions)
         all_interactions = map(tuple, all_interactions)

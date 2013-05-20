@@ -135,7 +135,7 @@ def export_as_gml(g, path):
         del g.graph[key]
     for node, data in g.nodes_iter(data=True):
         for key in data.keys():
-            if key != 'kind':
+            if key not in {'kind', 'name'}:
                 del data[key]
         
     for node, neighbor, key in g.edges(keys=True):
