@@ -2,6 +2,7 @@ import argparse
 import csv
 import os
 import collections
+import itertools
 
 import networkx
 
@@ -213,7 +214,7 @@ if __name__ == '__main__':
 
     # Compute and save multiple sclerosis features
     edge_to_exclusions = dict()
-    genes = heteronets.nxutils.get_kind_to_nodes()['gene']
+    genes = heteronets.nxutils.get_kind_to_nodes(g)['gene']
     pairs = list(itertools.product(genes, ['EFO_0003885']))
     for pair in pairs:
         edge = (pair[0], pair[1], 'association')
