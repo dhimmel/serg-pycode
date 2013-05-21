@@ -167,6 +167,45 @@ def learning_edge_subset(g, num_pos, num_neg, remove_positives=False, seed=None)
         g.remove_edges_from(positives)    
     return positives, negatives
 
+def matched_negatives(positives, source_negatives=1, target_negatives=1, seed=0):
+    
+    random.seed(seed)
+    
+    negative_to_exclusions = dict()
+    positive_to_exclusions = dict()
+    
+    for positive in positives:
+        source, target, edge_key = positive
+        excluded_edges = {positive, (target, source, edge_key)}
+        positive_to_exclusions[positive] = excluded_edges
+        
+        # Generate negatives with the same source as the positive
+        sources_matched = 0
+        while sources_matched < source_negatives:
+            new_target = random.choice(positives)[1]
+            negative = (source, new_target, edge_key)
+            if negative in positives or negative in negative_to_exclusions:
+                continue
+            edges = filter(lambda e: e[1] == new_target and e[2] == edge_key, positives)
+            exclude_edge = random.choice(edges)
+            negative_edge_exlusions = {exclude_edge, (exclude_edge[1], exclude_edge[0], edge_key)}
+            negative_to_exclusions[negative] = excluded_edges | negative_edge_exlusions
+            sources_matched += 1
+
+        # Generate negatives with the same target as the positive
+        targets_matched = 0
+        while targets_matched < target_negatives:
+            new_source = random.choice(positives)[0]
+            negative = (new_source, target, edge_key)
+            if negative in positives:
+                continue
+            edges = filter(lambda e: e[0] == new_source and e[2] == edge_key, positives)
+            exclude_edge = random.choice(edges)
+            negative_edge_exlusions = {exclude_edge, (exclude_edge[1], exclude_edge[0], edge_key)}
+            negative_to_exclusions[negative] = excluded_edges | negative_edge_exlusions
+            targets_matched += 1
+        
+    return positive_to_exclusions, negative_to_exclusions
 
 def nodes_outside_metapaths(g):
     """Return the set of nodes that do not participate in any paths of a kind
@@ -251,10 +290,15 @@ def paths_from_source(g, source, metapath, excluded_edges=set()):
         node_index += 2
     return paths
 
-def features_for_metapath(g, source, target, edge_key, metapath):
-    """ """
-    feature_dict = collections.OrderedDict()
-    excluded_edges = {(source, target, edge_key), (target, source, edge_key)}
+def metrics_for_metapath(g, source, target, edge_key, excluded_edges, metapath):
+    """
+    Returns an OrderedDict with various metrics representing the topology
+    between a source and target node and the corresponding values. Paths are
+    cycle-free (duplicate nodes are excluded) and the edge undergoing feature
+    computation is omitted.
+    """
+    metric_dict = collections.OrderedDict()
+    #excluded_edges = {(source, target, edge_key), (target, source, edge_key)}
     source_paths = paths_from_source(g, source, metapath, excluded_edges)
     target_paths = paths_from_source(g, target, metapath.reverse(), excluded_edges)
     PCs = len(source_paths)
@@ -268,27 +312,37 @@ def features_for_metapath(g, source, target, edge_key, metapath):
     PC = PCst
     NPC_denominator = PCs + PCt
     NPC = 2.0 * PC / NPC_denominator if NPC_denominator else None
-    feature_dict['PC'] = PC
-    feature_dict['PCs'] = PCs
-    feature_dict['PCt'] = PCt
-    feature_dict['NPC'] = NPC
-    return feature_dict
+    metric_dict['PC'] = PC
+    metric_dict['PCs'] = PCs
+    metric_dict['PCt'] = PCt
+    metric_dict['NPC'] = NPC
+    return metric_dict
 
-def features_for_metapaths(g, source, target, edge_key, metapaths):
-    """ """
+def features_for_metapaths(g, source, target, edge_key, excluded_edges, metapaths):
+    """
+    Returns an OrderedDict with metapaths as keys and metric_dicts as values.
+    Calls metrics_for_metapath() for each metapath to generate the corresponding
+    metric_dict.
+    """
     metapath_to_metric_dict = collections.OrderedDict()
     for metapath in metapaths:
-        metapath_to_metric_dict[metapath] = features_for_metapath(
-            g, source, target, edge_key, metapath)
+        metapath_to_metric_dict[metapath] = metrics_for_metapath(
+            g, source, target, edge_key, excluded_edges, metapath)
     return metapath_to_metric_dict
 
 def flatten_feature_dict(metapath_to_metric_dict):
+    """
+    Processed the nested dictionaries returned by features_for_metapaths()
+    into a single dimension dictionary with keys representing metapath and
+    metric combinations.
+    """
     feature_dict = collections.OrderedDict()
     for metapath, metric_dict in metapath_to_metric_dict.iteritems():
         for metric, value in metric_dict.iteritems():
             key = metric + '_' + str(metapath)
             feature_dict[key] = value
     return feature_dict
+
 
 if __name__ =='__main__':
     ipanet_dir = '/home/dhimmels/Documents/serg/ipanet/'

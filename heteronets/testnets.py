@@ -67,22 +67,14 @@ print mpaths
 
 
 #metapaths.total_path_counts(g)
-print metapaths.features_for_metapath(g, 'clomipramine', 'multiple sclerosis', 'indication', mpaths[0])
+#print metapaths.features_for_metapath(g, 'clomipramine', 'multiple sclerosis', 'indication', mpaths[0])
 
 
 kind_to_nodes = nxutils.get_kind_to_nodes(g)
-
-# test g.graph['required_source_to_targets']
-if True:
-    pairs = list(itertools.product(kind_to_nodes[g.graph['source_kind']],
+pairs = list(itertools.product(kind_to_nodes[g.graph['source_kind']],
                                    kind_to_nodes[g.graph['target_kind']]))
-    required_source_to_targets = dict()
-    for source, target in pairs:
-        required_source_to_targets.setdefault(source, set()).add(target)
-    g.graph['required_source_to_targets'] = required_source_to_targets
 
 for source, target in pairs:
-    pass
     print source, '---', target
     metapath_to_metric_dict = metapaths.features_for_metapaths(g, source, target, g.graph['edge_key'], mpaths)
     print metapaths.flatten_feature_dict(metapath_to_metric_dict)

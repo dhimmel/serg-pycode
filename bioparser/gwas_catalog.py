@@ -152,7 +152,7 @@ class GwasCatalog(object):
                 efo_id = efo_id.replace('CL#', '')
                 if efo_id not in efo_graph.node:
                     print efo_id, 'from ebi gwas catalog to EFO mappings not found in EFO.'
-                    raise KeyError # Exception can be commented out 
+                    #raise KeyError # Exception can be commented out 
                     continue
                 trait_tuple = row['PUBMEDID'], catalog_term
                 trait_tuple_to_efo_ids.setdefault(trait_tuple, list()).append(efo_id)

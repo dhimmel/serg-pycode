@@ -34,47 +34,51 @@ def edge_status(g, source, target):
         status = int(g.has_edge(*edge)) + 2
     return status
 
-def feature_generator(g):
+def feature_generator(g, edge_to_exclusions):
     """
     Generates features (only NPC for now) based on the graph specifications.
     """
     schema = g.graph['schema']
     feature_paths = g.graph['metapaths']
     kind_to_nodes = nxutils.get_kind_to_nodes(g)
-    sources = kind_to_nodes[g.graph['source_kind']]
-    for source in sources:
-        print source
-        target_to_metapath_to_npc = metapaths.normalized_path_counter(g, feature_paths, source)
-        for target, metapath_to_npc in target_to_metapath_to_npc.iteritems():
-            feature_dict = dict.fromkeys(feature_paths, None)
-            feature_dict.update(metapath_to_npc)
-            feature_dict = {str(key): value for key, value in feature_dict.items()}
-            feature_dict['source'] = source
-            feature_dict['target'] = target
-            status = edge_status(g, source, target)
-            feature_dict['status'] = status
-            yield feature_dict    
 
+    edge_to_exclusions = collections.OrderedDict(sorted(edge_to_exclusions.items()))
 
-def write_features(g, path, status_subset = None):
+    for edge, exclusions in edge_to_exclusions.iteritems():
+        source, target, edge_key = edge
+        metapath_to_metric_dict = metapaths.features_for_metapaths(
+            g, source, target, edge_key, exclusions, feature_paths)
+        feature_dict = metapaths.flatten_feature_dict(metapath_to_metric_dict)
+        combined_dict = collections.OrderedDict()
+        combined_dict['source'] = source
+        #combined_dict['source_name'] = g.node[source]['name']
+        combined_dict['target'] = target
+        combined_dict['target_name'] = g.node[target]['name']
+        combined_dict['status'] = edge_status(g, source, target)
+        combined_dict.update(feature_dict)
+        yield combined_dict
+
+def write_features(g, edge_to_exclusions, path):
     """
-    If status_subset is None all edges are written despite status.
     """
     schema = g.graph['schema']
     feature_paths = g.graph['metapaths']
-    feature_file = open(feature_file_path, 'w')
-    fieldnames = ['source', 'target', 'status'] + map(str, feature_paths)
-    dict_writer = csv.DictWriter(feature_file, fieldnames=fieldnames, delimiter='\t')
-    dict_writer.writeheader()
-
-    for feature_dict in feature_generator(g):
-        if status_subset is None or feature_dict['status'] in status_subset:
-            dict_writer.writerow(feature_dict)
+    feature_file = open(path, 'w')
+    
+    initialize_writer = True
+    for feature_dict in feature_generator(g, edge_to_exclusions):
+        if initialize_writer:
+            fieldnames = feature_dict.keys()
+            dict_writer = csv.DictWriter(feature_file, fieldnames=fieldnames, delimiter='\t')
+            dict_writer.writeheader()
+            initialize_writer = False
+        dict_writer.writerow(feature_dict)
+        print feature_dict['source'], '\t', feature_dict['target']
     feature_file.close()
 
 def write_partitioned_features(g, feature_dir):
     """
-    If status_subset is None all edges are written despite status.
+    Not UPDATED
     """
     source_kind = g.graph['source_kind']
     target_kind = g.graph['target_kind']

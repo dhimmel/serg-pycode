@@ -9,6 +9,8 @@ import bioparser.gxa
 import bioparser.data
 import heteronets.nxutils
 import heteronets.schema
+import heteronets.metapaths
+import heteronets.features
 
 
 
@@ -133,30 +135,25 @@ def get_parser_args():
     return args
 
 def select_positives(g):
-    source_kind = g.graph['source_kind']
-    target_kind = g.graph['target_kind']
-    edge_key = g.graph['edge_key']
     kind_to_node = heteronets.nxutils.get_kind_to_nodes(g)
-    source_to_degree = dict()
-    target_to_degree = dict()
-    source_nodes = kind_to_node[source_kind]
-    for node in source_nodes:
-        degree_counter = heteronets.nxutils.node_degree_counter(g, node)
-        degree = degree_counter[(source_kind, target_kind, edge_key)]
-        source_to_degree[node] = degree
-    """
-    for node in target_nodes:
-        degree_counter = heteronets.nxutils.node_degree_counter(g, node)
-        degree = degree_counter[(target_kind, source_kind, edge_key)]
-        target_to_degree[node] = degree
-    """
-    print 'Association degree distribution of genes'
-    print collections.Counter(source_to_degree.values())
+
+    # Find all diseases with expression and association edges
+    diseases = kind_to_node['disease']
+    learning_diseases = set()
+    for disease in diseases:
+        degree_counter = heteronets.nxutils.node_degree_counter(g, disease)
+        if ('disease', 'gene', 'association') not in degree_counter:
+            continue
+        if ('disease', 'gene', 'regulation') not in degree_counter:
+            continue
+        learning_diseases.add(disease)
     
-    
-    #positives = set()
-    
-    #g.graph['positives'] = positives
+    # Take all associations edges from those nodes as positives
+    positives = g.edges(learning_diseases, keys=True)
+    positives = filter(lambda e: e[2] == 'association', positives)
+    positives = sorted((e[1], e[0], e[2]) for e in positives)
+    return positives
+
 
 if __name__ == '__main__':
     args = get_parser_args()
@@ -177,9 +174,51 @@ if __name__ == '__main__':
     else:
         g = heteronets.nxutils.read_gpickle(pkl_path)
 
+
+    prepared_pkl_path = os.path.join(network_dir, 'prepared-graph.pkl')    
+    if not os.path.exists(prepared_pkl_path):
+        # Select positives
+        g.graph['source_kind'] = 'gene'
+        g.graph['target_kind'] = 'disease'
+        g.graph['edge_key'] = 'association'
+        positives = select_positives(g)
+        print len(positives), 'positives'
+        
+        positive_to_exclusions, negative_to_exclusions = heteronets.metapaths.matched_negatives(positives)
+        g.graph['positive_to_exclusions'] = positive_to_exclusions
+        g.graph['negative_to_exclusions'] = negative_to_exclusions
+        g.graph['negatives'] = set(negative_to_exclusions)
+        g.graph['positives'] = set(positive_to_exclusions)
+        
+        
+        schema = g.graph['schema']
+        g.graph['metapaths'] = heteronets.schema.extract_metapaths(
+            g.graph['schema'], g.graph['source_kind'], g.graph['target_kind'],
+            max_length = 2, exclude_all_source_target_edges = False)
     
-    # Select positives
-    g.graph['source_kind'] = 'gene'
-    g.graph['target_kind'] = 'disease'
-    g.graph['edge_key'] = 'association'
-    select_positives(g)
+        print 'Writing prepared graph to pkl.'
+        heteronets.nxutils.write_gpickle(g, prepared_pkl_path)
+    else:
+        g = heteronets.nxutils.read_gpickle(prepared_pkl_path)
+    
+
+    # Compute and learning features
+    if False:
+        positive_to_exclusions = g.graph['positive_to_exclusions']
+        negative_to_exclusions = g.graph['negative_to_exclusions']
+        edge_to_exclusions = dict(negative_to_exclusions.items() + positive_to_exclusions.items())
+        path = os.path.join(network_dir, 'learning-features.txt')
+        heteronets.features.write_features(g, edge_to_exclusions, path)
+
+
+    # Compute and save multiple sclerosis features
+    edge_to_exclusions = dict()
+    genes = heteronets.nxutils.get_kind_to_nodes()['gene']
+    pairs = list(itertools.product(genes, ['EFO_0003885']))
+    for pair in pairs:
+        edge = (pair[0], pair[1], 'association')
+        exclusions = {edge, (edge[1], edge[0], edge[2])}
+        edge_to_exclusions[edge] = exclusions    
+    path = os.path.join(network_dir, 'features-multiple-sclerosis.txt')
+    heteronets.features.write_features(g, edge_to_exclusions, path)
+
