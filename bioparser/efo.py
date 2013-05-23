@@ -61,6 +61,20 @@ class EFO(object):
             id_to_name[node] = data['name']
         return id_to_name
     
+    def get_descendents(self, node):
+        return set(networkx.dfs_postorder_nodes(self.graph, source=node))
+    
+    def get_diseases(self):
+        root = 'EFO_0000408' # disease
+        return self.get_descendents(root)
+
+    def get_neoplasms(self):
+        root = 'EFO_0000616' # neoplasm
+        return self.get_descendents(root)
+    
+    def get_non_neoplastic_diseases(self):
+        return self.get_diseases() - self.get_neoplasms()
+    
     def gxa_query_compounds(self, root='CHEBI_37577'):
         """
         Finds all leaf nodes which are descendents of root.
@@ -85,7 +99,7 @@ class EFO(object):
         The default root is EFO_0000408 for 'disease'.
         """
         self.get_graph()
-        diseases = list(networkx.dfs_postorder_nodes(self.graph, source=root))
+        diseases = list(self.get_disease_ids(root))
         leaf_diseases = filter(lambda x: self.graph.out_degree(x) == 0, diseases)
         query_diseases = set(leaf_diseases)
         for leaf_disease in leaf_diseases:

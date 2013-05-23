@@ -176,9 +176,10 @@ class GwasCatalog(object):
             pval = row['p-Value']
             if p_cutoff is not None and (pval is None or pval > p_cutoff):
                 continue
-            fdr = row['FDR p-Value']
-            if fdr_cutoff is not None and (fdr is None or fdr > fdr_cutoff):
-                continue
+            if fdr_cutoff is not None:
+                fdr = row['FDR p-Value']
+                if fdr is None or fdr > fdr_cutoff:
+                    continue
             # exclude GWAS diseases or traits that do not map to a single EFO term.
             if not 'efo_ids' in row:
                 continue
@@ -209,6 +210,12 @@ if __name__ =='__main__':
     print 'Genes per EFO term counter:'
     print collections.Counter(map(len, efo_id_to_genes.values()))
     
+    print 'Top 50 EFO Diseases for the number of associated GWAS genes:'
+    efo_graph = data.Data().efo.get_graph()
+    disease_terms = data.Data().efo.get_diseases() - data.Data().efo.get_neoplasms()
+    efo_id_counter = collections.Counter({efo_graph.node[k]['name']: len(v) for k, v in efo_id_to_genes.iteritems() if k in disease_terms})
+    for name, count in efo_id_counter.most_common(100):
+        print name, '\t', count
 
 
 
