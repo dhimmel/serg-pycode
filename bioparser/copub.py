@@ -1,4 +1,5 @@
 import os
+import itertools
 
 import suds.client
 
@@ -19,20 +20,37 @@ categories = map(str, client.service.get_categories('keyword')[0])
 
 
 def get_top_keyword(query, category):
-    """example category: 'tissue', 'disease', 'pathway'"""
+    """
+    example category: 'tissue', 'disease', 'pathway'
+    Returns (None, None) if no match is found.
+    """
     assert category in categories
     output = client.service.get_keywords(query=query, category=category, max_results=1)
-    top_result = output[0][0]
+    try:
+        top_result = output[0][0]
+    except IndexError:
+        return None, None
     bi_id = int(top_result['bi_id'])
     preferred_name = top_result['preferred_name']
     return bi_id, preferred_name
 
-def get_r(term_a, term_b):
+def term_cooccurrence(term_a, term_b):
     """Get r scaled score between two terms. Terms should be bi_ids."""
-    output = client.service.get_references(bi_id1=term_a, bi_id2=term_b, max_results=1)
-    r_scaled_score = float(output['r_scaled_score'])
+    try:
+        output = client.service.get_references(bi_id1=term_a, bi_id2=term_b, max_results=1)
+        r_scaled_score = float(output['r_scaled_score'])
+    except Exception:
+        r_scaled_score = 0.0
     return r_scaled_score
 
+def term_set_cooccurrences(terms_a, terms_b):
+    pair_generator = itertools.product(terms_a, terms_b)
+    for term_a, term_b in pair_generator:
+        r_scaled_score = term_cooccurrence(term_a, term_b)
+        cooccurance_tuple = term_a, term_b, r_scaled_score
+        yield cooccurance_tuple
+    
+    
 #term_a = get_top_keyword('multiple sclerosis', 'disease')[0]
 #term_b = get_top_keyword('brain', 'tissue')[0]
 #get_r(term_a, term_b)

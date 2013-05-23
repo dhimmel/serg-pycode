@@ -18,6 +18,7 @@ import nci_thesaurus
 import omim
 import sider
 import pdn
+import tiger
 
 
 
@@ -94,4 +95,5 @@ class Data:
         self.nci = nci_thesaurus.NCIOntology(current_path('nci', path_type='files'))
         self.sider = sider.SIDER(current_path('sider'))
         self.pdn = pdn.PDN()
+        self.tiger = tiger.TIGER()
 

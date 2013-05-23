@@ -55,7 +55,8 @@ class TIGER(object):
         return self.gene_to_tissues
 
     
+if __name__ == '__main__':
 
-tiger = TIGER()
-tiger.get_unigene_to_symbol()
-print tiger.get_gene_to_tissues().items()[:40]
+    tiger = TIGER()
+    tiger.get_unigene_to_symbol()
+    print tiger.get_gene_to_tissues().items()[:40]

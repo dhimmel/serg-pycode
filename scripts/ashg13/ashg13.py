@@ -13,6 +13,8 @@ import heteronets.schema
 import heteronets.metapaths
 import heteronets.features
 
+import ashg13_copub
+
 
 
 def create_graph(network_id):
@@ -34,6 +36,10 @@ def create_graph(network_id):
     # Add Gene Nodes
     for gene in data.hgnc.get_genes():
         g.add_node(gene.symbol, name=gene.name, kind='gene')
+
+    # Add TIGER Tissue Nodes
+    for tissue in data.tiger.get_tissues():
+        g.add_node(tissue, kind='tissue')
     
     # Add Disease Nodes
     disease_root = 'EFO_0000408'
@@ -45,8 +51,7 @@ def create_graph(network_id):
         g.add_node(disease_term, name=name, kind='disease')
     
     # Add (disease, gene, association) edges
-    gcat = data.gwas_catalog
-    efo_id_to_genes = gcat.get_efo_id_to_genes(fdr_cutoff=0.05, mapped_term_cutoff=1)
+    efo_id_to_genes = data.gwas_catalog.get_efo_id_to_genes(fdr_cutoff=0.05, mapped_term_cutoff=1)
     for efo_id, gcat_symbols in efo_id_to_genes.iteritems():
         if efo_id not in g:
             continue
@@ -57,6 +62,31 @@ def create_graph(network_id):
             assert gene_symbol in g and g.node[gene_symbol]['kind'] == 'gene'
             g.add_edge(efo_id, gene_symbol, key='association')
     
+    # Add (gene, tissue, specificity) edges
+    gene_to_tissues = data.tiger.get_gene_to_tissues()
+    for symbol, tissues in gene_to_tissues:
+        gene = symbol_to_gene.get(symbol)
+        if gene is None:
+            continue
+        hgnc_symbol = gene.symbol
+        for tissue in tissues:
+            assert tissue in g
+            g.add_edge(hgnc_symbol, tissue, key='specificity')
+
+    # Add (disease, tissue, pathology) edges
+    r_scaled_cutoff = 35.0
+    coocc_gen = ashg13_copub.tiger_efo_cooccurrence_generator()
+    for row in coocc_gen:
+        disease = row['efo_disease_id']
+        tissue = row['tiger_tissue']
+        r_scaled = row['r_scaled']
+        if r_scaled < r_scaled_cutoff:
+            continue
+        assert disease in g
+        assert tissue in g
+        g.add_edge(disease, tissue, key='p')
+        
+        
     """
     # Add (disease, gene, regulation) edges
     # Add (disease, gene, up-regulation) edges
