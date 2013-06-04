@@ -166,13 +166,15 @@ class GwasCatalog(object):
                     gcat_row['efo_id'] = efo_ids[0]
                 
         
-    def get_efo_id_to_genes(self, p_cutoff=None, fdr_cutoff=None, mapped_term_cutoff=None):
+    def get_efo_id_to_genes(self, p_cutoff=None, fdr_cutoff=None, mapped_term_cutoff=None, exclude_pmids=set()):
         """ """
         self.read_ebi_mappings()
         if fdr_cutoff is not None:
             self.apply_fdr()
         efo_id_to_genes = dict()
         for row in self.get_rows():
+            if row['PUBMEDID'] in exclude_pmids:
+                continue
             pval = row['p-Value']
             if p_cutoff is not None and (pval is None or pval > p_cutoff):
                 continue
@@ -198,6 +200,8 @@ if __name__ =='__main__':
     gcat.get_rows()
     gcat.apply_fdr()
     rows = gcat.get_rows()
+    
+    """
     print 'SNPs passing 0.05 P-value -', sum(row['p-Value'] <= 0.05 for row in rows if row['p-Value'])
     print 'SNPs passing 0.05 P-value and reporting genes -', sum(row['p-Value'] <= 0.05 and bool(row['genes']) for row in rows if row['FDR p-Value'])
     print 'SNPs passing 0.05 FDR P-value -', sum(row['FDR p-Value'] <= 0.05 for row in rows if row['FDR p-Value'])
@@ -217,6 +221,13 @@ if __name__ =='__main__':
     for name, count in efo_id_counter.most_common(100):
         print name, '\t', count
 
-
-
+    """
+    for trait_tuple, rows in gcat.get_trait_tuple_to_rows().iteritems():
+        pmid, trait = trait_tuple
+        number_loci = len(rows)
+        date = rows[0]['Date']
+        if number_loci < 10:
+            continue
+        print pmid, trait, date, number_loci
+        
 

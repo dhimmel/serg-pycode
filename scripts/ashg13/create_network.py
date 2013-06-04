@@ -13,7 +13,7 @@ import heteronets.schema
 import heteronets.metapaths
 import heteronets.features
 
-import ashg13_copub
+import copub_analysis
 
 
 
@@ -32,7 +32,7 @@ def create_graph(network_id):
     g = heteronets.nxutils.create_undirected_network(edge_metapaths)
     g.graph['name'] = 'ashg-net'
     g.graph['network_id'] = network_id
-    g.graph['description'] = 'Network designed for predicted disease associated genes.'
+    g.graph['description'] = 'Network designed for predicted disease associated genes. WTCCC2 MS GWAS exluded.'
     #heteronets.schema.print_schema(g.graph['schema'])
     
     # Add Gene Nodes
@@ -47,13 +47,15 @@ def create_graph(network_id):
     disease_root = 'EFO_0000408'
     efo_id_to_name = data.efo.get_id_to_name()
     efo_graph = data.efo.get_graph()
-    disease_terms = list(networkx.dfs_postorder_nodes(efo_graph, source=disease_root))
+    disease_terms = data.efo.get_non_neoplastic_diseases()
     for disease_term in disease_terms:
         name = efo_id_to_name[disease_term]
         g.add_node(disease_term, name=name, kind='disease')
     
     # Add (disease, gene, association) edges
-    efo_id_to_genes = data.gwas_catalog.get_efo_id_to_genes(fdr_cutoff=0.05, mapped_term_cutoff=1)
+    exclude_pmids = {'21833088'}
+    efo_id_to_genes = data.gwas_catalog.get_efo_id_to_genes(fdr_cutoff=0.05,
+        mapped_term_cutoff=1, exclude_pmids=exclude_pmids)
     for efo_id, gcat_symbols in efo_id_to_genes.iteritems():
         if efo_id not in g:
             continue
@@ -76,8 +78,8 @@ def create_graph(network_id):
             g.add_edge(hgnc_symbol, tissue, key='specificity')
 
     # Add (disease, tissue, pathology) edges
-    r_scaled_cutoff = 35.0
-    coocc_gen = ashg13_copub.tiger_efo_cooccurrence_generator()
+    r_scaled_cutoff = 30.0
+    coocc_gen = copub_analysis.tiger_efo_cooccurrence_generator()
     for row in coocc_gen:
         disease = row['efo_disease_id']
         tissue = row['tiger_tissue']
@@ -114,7 +116,7 @@ def create_graph(network_id):
     """
     
     # (gene, gene, interaction) information:
-    for interaction in data.iref.get_interactions(min_publications=1):
+    for interaction in data.iref.get_interactions(min_publications=2):
         symbol_a, symbol_b = interaction
         assert symbol_a in g and g.node[symbol_a]['kind'] == 'gene'
         assert symbol_b in g and g.node[symbol_b]['kind'] == 'gene'

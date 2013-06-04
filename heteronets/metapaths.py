@@ -290,13 +290,20 @@ def paths_from_source(g, source, metapath, excluded_edges=set()):
         node_index += 2
     return paths
 
-def metrics_for_metapath(g, source, target, edge_key, excluded_edges, metapath):
+def paths_between(g, source, target, metapath):
+    source_paths = paths_from_source(g, source, metapath, set())
+    paths_st = filter(lambda path: path[-1] == target, source_paths)
+    return paths_st
+
+def metrics_for_metapath(g, source, target, excluded_edges, metapath):
     """
     Returns an OrderedDict with various metrics representing the topology
     between a source and target node and the corresponding values. Paths are
     cycle-free (duplicate nodes are excluded) and the edge undergoing feature
     computation is omitted.
     """
+    geometric_mean = lambda x: sum(x) ** (1.0 / len(x))
+    
     metric_dict = collections.OrderedDict()
     #excluded_edges = {(source, target, edge_key), (target, source, edge_key)}
     source_paths = paths_from_source(g, source, metapath, excluded_edges)
@@ -311,11 +318,14 @@ def metrics_for_metapath(g, source, target, edge_key, excluded_edges, metapath):
     assert PCst == PCts
     PC = PCst
     NPC_denominator = PCs + PCt
+    GPC_denominator = geometric_mean([PCs, PCt])
     NPC = 2.0 * PC / NPC_denominator if NPC_denominator else None
+    GPC = float(PC) / GPC_denominator if GPC_denominator else None
     metric_dict['PC'] = PC
     metric_dict['PCs'] = PCs
     metric_dict['PCt'] = PCt
     metric_dict['NPC'] = NPC
+    metric_dict['GPC'] = GPC
     return metric_dict
 
 def features_for_metapaths(g, source, target, edge_key, excluded_edges, metapaths):
@@ -327,7 +337,7 @@ def features_for_metapaths(g, source, target, edge_key, excluded_edges, metapath
     metapath_to_metric_dict = collections.OrderedDict()
     for metapath in metapaths:
         metapath_to_metric_dict[metapath] = metrics_for_metapath(
-            g, source, target, edge_key, excluded_edges, metapath)
+            g, source, target, excluded_edges, metapath)
     return metapath_to_metric_dict
 
 def flatten_feature_dict(metapath_to_metric_dict):
