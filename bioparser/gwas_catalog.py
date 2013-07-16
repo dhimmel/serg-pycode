@@ -24,6 +24,7 @@ def fdr_generator(p_values, num_total_tests):
     - 'num_total_tests': the total number of tests (p-values)
 
     """
+    p_values = sorted(p_values)
     prev_bh_value = 0
     for i, p_value in enumerate(p_values):
         bh_value = p_value * num_total_tests / (i + 1)
@@ -222,6 +223,7 @@ if __name__ =='__main__':
         print name, '\t', count
 
     """
+    """
     for trait_tuple, rows in gcat.get_trait_tuple_to_rows().iteritems():
         pmid, trait = trait_tuple
         number_loci = len(rows)
@@ -229,5 +231,11 @@ if __name__ =='__main__':
         if number_loci < 10:
             continue
         print pmid, trait, date, number_loci
-        
-
+    """
+    efo_id_to_genes = gcat.get_efo_id_to_genes()
+    psoriasis = efo_id_to_genes['EFO_0000676'] # psoriasis
+    ms = efo_id_to_genes['EFO_0003885'] # multiple sclerosis
+    print len(ms), 'MS genes'
+    print len(psoriasis), 'psoriasis genes'
+    print psoriasis & ms
+    print ms
