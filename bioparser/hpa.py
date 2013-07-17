@@ -23,20 +23,26 @@ class HPA(object):
             yield row
         csv_file.close()
 
-    def read_normal_tissue(self):
-        ensembl_to_tissues = dict()
+    def read_normal_tissue(self, gene_symbols=True):
+        gene_to_tissues = dict()
         rows = self.get_row_generator('normal_tissue.csv')
         valid_levels = {'Strong', 'Moderate'}
         valid_reliabilities = {'Supportive', 'Uncertain'}
+        if gene_symbols:
+            ensembl_to_gene = data.Data().hgnc.get_ensembl_to_gene()
+            unmapped_ensembl_ids = set()
+
         for row in rows:
-            #row['Gene']
-            #row['Reliability']
-            #row['Level']
-            #row['Tissue']
-            #row['Cell type']
-            
-            ensembl = row['Gene']
+            #cell_type = row['Cell type']            
+            gene = row['Gene']
+            if gene_symbols:
+                gene = ensembl_to_gene.get(gene)
+                if not gene:
+                    unmapped_ensembl_ids.add(row['Gene'])
+                    continue
+                gene = gene.symbol
             tissue = row['Tissue']
+            
             # data includes 'soft tissue 1' and 'soft tissue 2'
             if tissue.startswith('soft tissue'):
                 tissue = 'soft tissue'
@@ -44,14 +50,16 @@ class HPA(object):
                 continue
             if row['Reliability'] not in valid_reliabilities:
                 continue
-            ensembl_to_tissues.setdefault(ensembl, set()).add(tissue)
-        return ensembl_to_tissues
+            gene_to_tissues.setdefault(gene, set()).add(tissue)
+        if gene_symbols:
+            print len(unmapped_ensembl_ids), 'ensembl ids in human protein atlas did not map to HGNC genes.'
+        return gene_to_tissues
         
 if __name__ == '__main__':
     hpa = HPA()
-    ensembl_to_tissues = hpa.read_normal_tissue()
+    gene_to_tissues = hpa.read_normal_tissue()
     tissue_set = set()
-    for set_ in ensembl_to_tissues.values():
+    for set_ in gene_to_tissues.values():
         tissue_set |= set_
     print tissue_set
-    print ensembl_to_tissues['ENSG00000162692'] #CVAM1
+    print gene_to_tissues['HHEX']

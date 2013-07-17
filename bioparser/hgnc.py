@@ -26,10 +26,11 @@ class HGNC(object):
         if hgnc_dir is None:
             hgnc_dir = data.current_path('hgnc')
         self.hgnc_dir = hgnc_dir
-        self.hgnc_path = os.path.join(hgnc_dir, 'hgnc-complete.txt')
+        self.hgnc_path = os.path.join(hgnc_dir, 'hgnc_complete_set.txt')
         self.genes = None
         self.symbol_to_gene = dict()
         self.entrez_to_gene = dict()
+        self.ensembl_to_gene = dict()
         #self.prop_to_dict = dict()
         
     def gene_generator(self):
@@ -52,8 +53,9 @@ class HGNC(object):
                            'Entrez Gene ID': 'entrez_id',
                            'Ensembl Gene ID': 'ensembl_id',
                            'RefSeq IDs': 'refseq_ids',
-                           'Entrez Gene ID (mapped data supplied by NCBI)': 'entrez_id_ncbi_mapped',
-                           'OMIM ID (mapped data supplied by NCBI)': 'omim_id'}
+                           'Entrez Gene ID (supplied by NCBI)': 'entrez_id_ncbi_mapped',
+                           'Ensembl ID (supplied by Ensembl)': 'ensembl_id_ensembl_mapped',
+                           'OMIM ID (supplied by NCBI)': 'omim_id'}
         keys_requiring_splitting = ['previous_symbols', 'synonyms', 'refseq_ids']
         for line_dict in utilities.omictools.read_tdt(self.hgnc_path):
             if line_dict['Status'] != 'Approved':
@@ -81,6 +83,7 @@ class HGNC(object):
         return self.genes
     
     def get_symbol_to_gene(self):
+        """ """
         if self.symbol_to_gene:
             return self.symbol_to_gene
         genes = self.get_genes()
@@ -93,12 +96,23 @@ class HGNC(object):
         return self.symbol_to_gene
 
     def get_entrez_to_gene(self):
+        """ """
         if self.entrez_to_gene:
             return self.entrez_to_gene
         genes = self.get_genes()
-        self.entrez_to_gene = {gene.entrez_id_ncbi_mapped: gene for gene in genes}
-        self.entrez_to_gene.update({gene.entrez_id: gene for gene in genes})
+        self.entrez_to_gene = {gene.entrez_id: gene for gene in genes}
+        self.entrez_to_gene.update({gene.entrez_id_ncbi_mapped: gene for gene in genes})
         return self.entrez_to_gene        
+
+    def get_ensembl_to_gene(self):
+        """ """
+        if self.ensembl_to_gene:
+            return self.ensembl_to_gene
+        genes = self.get_genes()
+        self.ensembl_to_gene = {gene.ensembl_id: gene for gene in genes}
+        self.ensembl_to_gene.update({gene.ensembl_id_ensembl_mapped: gene for gene in genes})
+        return self.ensembl_to_gene        
+
 
 if __name__ == '__main__':
     hugu = HGNC()
