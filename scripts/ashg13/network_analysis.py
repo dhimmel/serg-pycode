@@ -17,7 +17,6 @@ def get_parser_args():
         '~/Documents/serg/ashg13/')
     parser.add_argument('--network-id', required=True)
     parser.add_argument('--learning-edges', action='store_true')
-    parser.add_argument('--MS-edges', action='store_true')
     parser.add_argument('--diseases', nargs='*')
     #parser.add_argument('--description', required=True)
     args = parser.parse_args()
@@ -78,6 +77,11 @@ if __name__ == '__main__':
         heteronets.nxutils.write_gpickle(g, prepared_pkl_path)
     else:
         g = heteronets.nxutils.read_gpickle(prepared_pkl_path)
+
+    # Create directories
+    feature_dir = os.path.join(network_dir, 'features')
+    if not os.path.isdir(feature_dir):
+        os.mkdir(feature_dir)
 
     # Compute and learning features
     if args.learning_edges:

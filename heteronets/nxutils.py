@@ -88,16 +88,21 @@ def create_undirected_network(edge_metapaths, kind_to_abbrev=None, **kwargs):
     return g
 
 
-def node_degree_counter(g, node):
+def node_degree_counter(g, node, cache=True):
     """Returns a Counter object with edge_kind tuples as keys and the number
     of edges with the specified edge_kind incident to the node as counts.
     """
+    node_data = g.node[node]
+    if cache and 'degree_counter' in node_data:
+        return node_data['degree_counter']
     degree_counter = collections.Counter()
     for node, neighbor, key in g.edges(node, keys=True):
-        node_kind = g.node[node]['kind']
+        node_kind = node_data['kind']
         neighbor_kind = g.node[neighbor]['kind']
         edge_kind = node_kind, neighbor_kind, key
         degree_counter[edge_kind] += 1
+    if cache:
+        node_data['degree_counter'] = degree_counter
     return degree_counter
 
 

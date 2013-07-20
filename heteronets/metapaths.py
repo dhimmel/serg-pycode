@@ -1,6 +1,8 @@
 import collections
 import random
 import os
+import operator
+import math
 
 import networkx
 
@@ -326,7 +328,45 @@ def metrics_for_metapath(g, source, target, excluded_edges, metapath):
     metric_dict['PCt'] = PCt
     metric_dict['NPC'] = NPC
     metric_dict['GPC'] = GPC
+    dpc_exponents = [x / 10.0 for x in range(0, 11)]
+    for dpc_exponent in dpc_exponents:
+        feature_name = 'DPC_' + str(dpc_exponent)
+        metric_dict[feature_name] = paths_degree_product(g, paths_st, dpc_exponent)
+    metric_dict['DPC_log1p'] = paths_degree_product(g, paths_st, 'log1p')
     return metric_dict
+
+
+def paths_degree_product(g, paths, damping_exponent):
+    """ """
+    degree_products = [path_degree_product(g, path, damping_exponent) for path in paths]
+    return sum(1.0 / x for x in degree_products)
+
+def path_degree_product(g, path, damping_exponent = 0.5):
+    """If metapath is none the metapath will be calculated from path."""
+    
+    edges = list()
+    for depth in xrange(len(path) / 2):
+        edge = path[depth * 2 : depth * 2 + 3]
+        edges.append((edge[0], edge[2], edge[1]))
+        edges.append((edge[2], edge[0], edge[1]))
+    
+    damped_degrees = list()
+    for edge in edges:
+        node = edge[0]
+        node_kind = g.node[node]['kind']
+        neighbor_kind = g.node[edge[1]]['kind']
+        edge_kind = node_kind, neighbor_kind, edge[2]
+        degree_counter = nxutils.node_degree_counter(g, node)
+        degree = degree_counter[edge_kind]
+        if damping_exponent == 'log1p':
+            damped_degree = math.log1p(degree)
+        else:
+            damped_degree = degree ** damping_exponent
+        damped_degrees.append(damped_degree)
+    degree_product = reduce(operator.mul, damped_degrees)
+    return degree_product
+    
+
 
 def features_for_metapaths(g, source, target, edge_key, excluded_edges, metapaths):
     """

@@ -8,6 +8,7 @@ import sys
 
 import networkx
 
+import schema
 import metapaths
 import nxutils
 
@@ -30,7 +31,7 @@ def edge_status(g, source, target):
         status = 0
     elif edge in g.graph['positives']:
         status = 1
-    else: 
+    else:
         status = int(g.has_edge(*edge)) + 2
     return status
 
@@ -38,8 +39,11 @@ def feature_generator(g, edge_to_exclusions):
     """
     Generates features (only NPC for now) based on the graph specifications.
     """
-    schema = g.graph['schema']
     feature_paths = g.graph['metapaths']
+    prediction_metapath = schema.MetaPath((g.graph['source_kind'], g.graph['edge_key'], g.graph['target_kind']))
+    if prediction_metapath in feature_paths:
+        feature_paths.remove(prediction_metapath)
+    
     kind_to_nodes = nxutils.get_kind_to_nodes(g)
 
     edge_to_exclusions = collections.OrderedDict(sorted(edge_to_exclusions.items()))
@@ -62,7 +66,6 @@ def write_features(g, edge_to_exclusions, path):
     """
     """
     schema = g.graph['schema']
-    feature_paths = g.graph['metapaths']
     feature_file = open(path, 'w')
     
     initialize_writer = True
