@@ -2,6 +2,7 @@ import os
 import csv
 import collections
 import re
+import logging
 
 import data
 
@@ -144,6 +145,7 @@ class GwasCatalog(object):
         trait_tuple_to_efo_ids = dict()
 
         with open(path) as f:
+            unmatched_efo_terms = set()
             reader = csv.DictReader(f, delimiter='\t')
             for row in reader:
                 catalog_term = row['DISEASETRAIT']
@@ -152,11 +154,12 @@ class GwasCatalog(object):
                 efo_id = efo_id.replace('rdfns#', 'ORP_')
                 efo_id = efo_id.replace('CL#', '')
                 if efo_id not in efo_graph.node:
-                    print efo_id, 'from ebi gwas catalog to EFO mappings not found in EFO.'
-                    #raise KeyError # Exception can be commented out 
+                    unmatched_efo_terms.add(efo_id)
                     continue
                 trait_tuple = row['PUBMEDID'], catalog_term
                 trait_tuple_to_efo_ids.setdefault(trait_tuple, list()).append(efo_id)
+            for efo_id in unmatched_efo_terms:
+                logging.warning(efo_id + " from EBI's gwas_catalog_to_EFO_mappings not found in EFO.")
         
         trait_tuple_to_rows = self.get_trait_tuple_to_rows()
         for trait_tuple, efo_ids in trait_tuple_to_efo_ids.iteritems():

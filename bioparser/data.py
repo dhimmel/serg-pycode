@@ -6,6 +6,7 @@ import ctd
 import drugbank
 import dvd
 import efo
+import etiome
 import frimp
 import gwas_catalog
 import hgnc
@@ -96,4 +97,5 @@ class Data:
         self.sider = sider.SIDER(current_path('sider'))
         self.pdn = pdn.PDN()
         self.tiger = tiger.TIGER()
+        self.etiome = etiome.Etiome()
 

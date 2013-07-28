@@ -394,7 +394,7 @@ def flatten_feature_dict(metapath_to_metric_dict):
     return feature_dict
 
 
-if __name__ =='__main__':
+if __name__ == '__main__':
     ipanet_dir = '/home/dhimmels/Documents/serg/ipanet/'
     network_id = '130116-1'
     pkl_path_prepared = os.path.join(ipanet_dir, 'networks', network_id, 'prepared-graph.pkl')

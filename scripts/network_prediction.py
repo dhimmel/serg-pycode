@@ -9,8 +9,8 @@ import heteronets.features
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--networks-dir', type=os.path.expanduser, default=
-    '~/Documents/serg/networks/')
-parser.add_argument('--network-id', default='130403-1')
+    '~/Documents/serg/ashg13/')
+parser.add_argument('--network-id', default='130717-1')
 args = parser.parse_args()
 
 
@@ -20,10 +20,14 @@ leaning_features_path = os.path.join(network_dir, 'features', 'learning-features
 
 feature_tuple = heteronets.features.numpy_read_features(leaning_features_path)
 source, target, status, features, feature_names = feature_tuple
+dpc_feature = numpy.core.defchararray.startswith(feature_names, 'DPC_05')
+
+feature_names = feature_names[dpc_feature]
+features = features[:, dpc_feature]
 
 
 # logistic regression
-logreg = sklearn.linear_model.LogisticRegression(C=0.0001)
+logreg = sklearn.linear_model.LogisticRegression(C=0.5)
 logreg.fit(features, status)
 logreg.score(features, status)
 

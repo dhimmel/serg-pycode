@@ -3,6 +3,7 @@ import csv
 import os
 import collections
 import itertools
+import logging
 
 import networkx
 
@@ -14,7 +15,7 @@ import heteronets.metapaths
 import heteronets.features
 
 import copub_analysis
-
+import mappings
 
 
 def create_graph(network_id):
@@ -27,8 +28,10 @@ def create_graph(network_id):
     # Define and initialize networkx graph
     edge_metapaths = [('disease', 'gene', 'association'),
                       ('gene', 'gene', 'interaction'),
+                      ('gene', 'gene', 'function'),
                       ('gene', 'tissue', 'specificity'),
-                      ('disease', 'tissue', 'pathology')]
+                      ('disease', 'tissue', 'pathology'),
+                      ('disease', 'factor', 'involvement')]
     g = heteronets.nxutils.create_undirected_network(edge_metapaths)
     g.graph['name'] = 'ashg-net'
     g.graph['network_id'] = network_id
@@ -52,8 +55,25 @@ def create_graph(network_id):
         name = efo_id_to_name[disease_term]
         g.add_node(disease_term, name=name, kind='disease')
     
+    # Add Factor Nodes
+    for factor in data.etiome.get_factors():
+        factor_id = 'factor: ' + factor
+        g.add_node(factor_id, kind='factor')
+
+    # Add (disease, factor, involvement) edges
+    disease_to_factors = data.etiome.get_disease_to_factors()
+    etiome_to_efo_id = mappings.get_mappings('etiome_name', 'efo_id')
+    for etiome_disease, efo_id in etiome_to_efo_id.items():
+        factors = disease_to_factors[etiome_disease]
+        for factor in factors:
+            factor_id = 'factor: ' + factor
+            if factor_id not in g:
+                print 'Factor not found in network:', factor_id
+                continue
+            g.add_edge(efo_id, factor_id, key='involvement')
+    
     # Add (disease, gene, association) edges
-    exclude_pmids = {'21833088'}
+    exclude_pmids = {} # {'21833088'}
     efo_id_to_genes = data.gwas_catalog.get_efo_id_to_genes(fdr_cutoff=0.05,
         mapped_term_cutoff=1, exclude_pmids=exclude_pmids)
     for efo_id, gcat_symbols in efo_id_to_genes.iteritems():
@@ -121,11 +141,20 @@ def create_graph(network_id):
         assert symbol_a in g and g.node[symbol_a]['kind'] == 'gene'
         assert symbol_b in g and g.node[symbol_b]['kind'] == 'gene'
         g.add_edge(symbol_a, symbol_b, key='interaction')
+
+    # (gene, gene, function) information
+    fr_generator = data.frimp.read(prob_cutoff=0.5, symbol=True)
+    for symbol_a, symbol_b, prob in fr_generator:
+        assert symbol_a in g and g.node[symbol_a]['kind'] == 'gene'
+        assert symbol_b in g and g.node[symbol_b]['kind'] == 'gene'
+        g.add_edge(symbol_a, symbol_b, key='function')
+        
     
     heteronets.nxutils.remove_unconnected_nodes(g)
     print 'After filtering unconnected nodes'
-    heteronets.nxutils.print_node_kind_counts(g)
-    heteronets.nxutils.print_edge_kind_counts(g)
+    logging.info('filtering unconnected nodes')
+    logging.info(heteronets.nxutils.print_node_kind_counts(g))
+    logging.info(heteronets.nxutils.print_edge_kind_counts(g))
     return g
 
 
@@ -149,6 +178,8 @@ if __name__ == '__main__':
     if not os.path.isdir(network_dir):
         os.mkdir(network_dir)
 
+    log_path = os.path.join(network_dir, 'network_creation.log')
+    logging.basicConfig(filename=log_path, level=logging.INFO, filemode='w', format='%(levelname)s:%(message)s')
     g = create_graph(args.network_id)
     pkl_path = os.path.join(network_dir, 'raw-graph.pkl')
     gml_path = os.path.join(network_dir, 'raw-graph.gml')

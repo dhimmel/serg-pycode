@@ -178,7 +178,7 @@ def numpy_read_features(path):
     source = feature_array['source']
     target = feature_array['target']
     status = feature_array['status']
-    feature_names = list(feature_array.dtype.names[3: ])
+    feature_names = numpy.array(feature_array.dtype.names[3: ])
     features = feature_array[feature_names]
     # convert from structured array to normal ndarray
     features = features.view((numpy.float, len(features.dtype.names)))

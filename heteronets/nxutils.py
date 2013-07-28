@@ -64,18 +64,24 @@ def get_kind_to_edges(g, refresh=True):
     return kind_to_edges
 
 def print_node_kind_counts(g):
+    s = 'Node kind counts:\n'
     kind_to_nodes = get_kind_to_nodes(g)
     for key, value in kind_to_nodes.items():
-        print key, len(value)
+        s += key + ' ' + str(len(value)) + '\n'
+    print s
+    return s
 
 def print_edge_kind_counts(g):
+    s = 'Edge kind counts:\n'
     kind_to_edges = get_kind_to_edges(g)
     printed_edge_kinds = set()
     for edge_kind, edges in kind_to_edges.items():
         edge_set_kind = frozenset({edge_kind[0], edge_kind[1]}), edge_kind[2]
         if not edge_set_kind in printed_edge_kinds:
             printed_edge_kinds.add(edge_set_kind)
-            print edge_kind, len(edges)
+            s += str(edge_kind) + ' ' + str(len(edges)) + '\n'
+    print s
+    return s
 
 def create_undirected_network(edge_metapaths, kind_to_abbrev=None, **kwargs):
     """Create an undirected heterogeneous network encoded as a networkx
@@ -157,4 +163,3 @@ def read_gpickle(path):
     kind_to_abbrev = g.graph['kind_to_abbrev']
     schema.MetaPath.kind_to_abbrev = kind_to_abbrev
     return g
-
