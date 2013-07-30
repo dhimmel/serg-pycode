@@ -1,3 +1,4 @@
+import logging
 import networkx
 
 
@@ -27,9 +28,29 @@ def create_undirected_schema(edges, kind_to_abbrev=None):
         kind_to_abbrev = create_abbreviations(node_kinds, edges)
     else:
         check_abbreviations(schema, kind_to_abbrev)
-    MetaPath.kind_to_abbrev = kind_to_abbrev
-    
+    MetaPath.kind_to_abbrev = kind_to_abbrev    
+    log_undirected_schema(schema)
     return schema
+
+def log_undirected_schema(schema):
+    """ """
+    kind_to_abbrev = MetaPath.kind_to_abbrev
+    
+    lines = []
+    lines.append('----------Undirected Graph Schema------------')
+    lines.append('Nodes (abbreviation - kind):')
+    for node in schema.nodes():
+        abbrev = kind_to_abbrev[node]
+        lines.append(abbrev + ' - ' + node)
+    
+    lines.append('Edges (abbreviation - kind_tuple):')
+    for edge in schema.edges(keys=True):
+        abbrev = kind_to_abbrev[edge[2]]
+        lines.append(abbrev + ' - ' + str(edge))
+    
+    msg = '\n'.join(lines)
+    logging.info(msg)
+    
 
 def get_duplicates(iterable):
     """Return a set of the elements which appear multiple times in iterable."""

@@ -1,4 +1,5 @@
 import collections
+import logging
 
 import networkx
 
