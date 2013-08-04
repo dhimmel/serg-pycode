@@ -103,13 +103,9 @@ class Schema(object):
         
         return kind_to_abbrev
 
-    def get_node_dicts(self, node_kind):
-        edge_kind_filter = lambda d: (ek[2] for ek in self.edge_kinds
-                                      if ek[0] == node_kind and ek[3] == d)
-        incoming = {key: set() for key in edge_kind_filter('backward')}
-        outgoing = {key: set() for key in edge_kind_filter('forward')}
-        incident = {key: set() for key in edge_kind_filter('both')}
-        return incoming, outgoing, incident
+    def edge_kinds_for_node(self, node_kind):
+        return [ek for ek in self.edge_kinds if ek[0] == node_kind]
+        
 
 class Path(object):
     
@@ -200,13 +196,18 @@ class Graph(object):
     
     def get_paths(self, source, target, metapath):
         """ """
+        
+        source.edge_kind_to_edges.get(metapath[0])
+        
+        
         paths = [Path(tuple())]
         for i in range(len(metapath)):
+            if i == 0:
+                source
             source_kind, target_kind, edge_kind, direction = metapath[i]
             for path in paths:
                 nodes = path.get_nodes()
                 node = nodes[-1]
-                attribute = Node.direction_to_attr[direction]
                 nodes[-1].getattr
     
     def add_node(self, node_id, kind, data=dict()):
@@ -229,23 +230,19 @@ class Graph(object):
 
 class Node(object):
     
-    direction_to_attr = {'both': 'incident', 'forward': 'outgoing', 'backward': 'incoming'}
-
     def __init__(self, graph, node_id, kind, data):
         """Graph class"""
         self.__dict__.update(locals())
         assert kind in graph.schema.node_kinds
         assert node_id not in graph.node_dict
         graph.node_dict[node_id] = self
-
-        node_dicts = graph.schema.get_node_dicts(kind)
-        self.incoming, self.outgoing, self.incident = node_dicts
+        edge_kinds = graph.schema.edge_kinds_for_node(kind)
+        self.edge_kind_to_edges = {key: set() for key in edge_kinds}
     
     def all_edges(self):
         all_edges = list()
-        for kind_to_edges in (self.incoming, self.outgoing, self.incident):
-            for edges in kind_to_edges.values():
-                all_edges.extend(edges)
+        for edges in self.edge_kind_to_edges.itervalues():
+            all_edges.extend(edges)
         return all_edges
     
     def degree(self):
@@ -271,12 +268,12 @@ class Edge(object):
     def __init__(self, graph, source, target, kind, direction, data):
         """Graph class"""
         self.__dict__.update(locals())
-        assert self.get_edge_kind() in graph.schema.edge_kinds
+        edge_kind = self.get_edge_kind()
         edge_id = self.get_edge_id()
+        assert edge_kind in graph.schema.edge_kinds
         assert edge_id not in graph.edge_dict
         graph.edge_dict[edge_id] = self
-        getattr(source, Node.direction_to_attr[direction])[kind].add(self)
-
+        source.edge_kind_to_edges.setdefault(edge_kind, set()).add(self)
         
     def get_edge_kind(self):
         return self.source.kind, self.target.kind, self.kind, self.direction
@@ -295,7 +292,7 @@ class Edge(object):
     
     def remove(self):
         for edge in (self, self.inverse):
-            getattr(edge.source, Node.direction_to_attr[edge.direction])[edge.kind].remove(edge)
+            del edge.source.edge_kind_to_edges[edge.get_edge_kind()]
             del edge.inverse
             del edge.graph.edge_dict[edge.get_edge_id()]
     
@@ -330,10 +327,6 @@ if __name__ == '__main__':
     graph.add_edge('IL17', 'brain', 'expression', 'both')
     graph.add_edge('IL17', 'BRCA1', 'transcription', 'backward')
 
-    for node in graph.get_nodes():
-        print node, node.degree()
-
-    
 
     #metapath_edges = (('gene', 'disease', 'association', 'both'),)
     #schema.metapath(metapath_edges)
