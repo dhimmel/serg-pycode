@@ -1,8 +1,6 @@
 import os
 import csv
 
-import ashg13
-
 import bioparser.data
 import bioparser.copub
 
@@ -12,7 +10,7 @@ data = bioparser.data.Data()
 ashg_dir = os.path.expanduser('~/Documents/serg/ashg13/')
 
 def map_efo_to_copub():
-    """ """
+    """ ashg13 module has been removed. function will not work"""
     efo_id_to_name = data.efo.get_id_to_name()
     path = os.path.join(ashg_dir, 'efo-to-copub-mappings-auto.txt')
     mapping_file = open(path, 'w')

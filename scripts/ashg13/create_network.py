@@ -17,7 +17,6 @@ import heteronets.features
 import copub_analysis
 import mappings
 
-
 def create_graph(network_id):
     data = bioparser.data.Data()
     
@@ -41,8 +40,9 @@ def create_graph(network_id):
     # Add Gene Nodes
     for gene in data.hgnc.get_genes():
         g.add_node(gene.symbol, name=gene.name, kind='gene')
-
+    
     # Add TIGER Tissue Nodes
+    logging.info('Adding tiger tissue nodes.')
     for tissue in data.tiger.get_tissues():
         g.add_node(tissue, kind='tissue')
     
@@ -54,7 +54,7 @@ def create_graph(network_id):
     for disease_term in disease_terms:
         name = efo_id_to_name[disease_term]
         g.add_node(disease_term, name=name, kind='disease')
-    
+    """
     # Add Factor Nodes
     for factor in data.etiome.get_factors():
         factor_id = 'factor: ' + factor
@@ -71,7 +71,7 @@ def create_graph(network_id):
                 print 'Factor not found in network:', factor_id
                 continue
             g.add_edge(efo_id, factor_id, key='involvement')
-    
+    """
     # Add (disease, gene, association) edges
     exclude_pmids = {} # {'21833088'}
     efo_id_to_genes = data.gwas_catalog.get_efo_id_to_genes(fdr_cutoff=0.05,
@@ -85,7 +85,7 @@ def create_graph(network_id):
             assert efo_id in g and g.node[efo_id]['kind'] == 'disease'
             assert gene_symbol in g and g.node[gene_symbol]['kind'] == 'gene'
             g.add_edge(efo_id, gene_symbol, key='association')
-    
+    """
     # Add (gene, tissue, specificity) edges
     gene_to_tissues = data.tiger.get_gene_to_tissues()
     for symbol, tissues in gene_to_tissues.iteritems():
@@ -109,7 +109,7 @@ def create_graph(network_id):
         assert disease in g
         assert tissue in g
         g.add_edge(disease, tissue, key='pathology')
-        
+    """
         
     """
     # Add (disease, gene, regulation) edges
@@ -134,17 +134,17 @@ def create_graph(network_id):
         for symbol in up_symbols:
             g.add_edge(efo_id, symbol, key='up-regulation')
     """
-    
+    """
     # (gene, gene, interaction) information:
     for interaction in data.iref.get_interactions(min_publications=2):
         symbol_a, symbol_b = interaction
         assert symbol_a in g and g.node[symbol_a]['kind'] == 'gene'
         assert symbol_b in g and g.node[symbol_b]['kind'] == 'gene'
         g.add_edge(symbol_a, symbol_b, key='interaction')
-
+    """
     # (gene, gene, function) information
-    fr_generator = data.frimp.read(prob_cutoff=0.5, symbol=True)
-    for symbol_a, symbol_b, prob in fr_generator:
+    relationships = data.frimp.read_processed_relationships(args.network_id)
+    for symbol_a, symbol_b, prob in relationships:
         assert symbol_a in g and g.node[symbol_a]['kind'] == 'gene'
         assert symbol_b in g and g.node[symbol_b]['kind'] == 'gene'
         g.add_edge(symbol_a, symbol_b, key='function')
@@ -164,8 +164,9 @@ def get_parser_args():
     parser.add_argument('--networks-dir', type=os.path.expanduser, default=
         '~/Documents/serg/networks/')
     parser.add_argument('--project-dir', type=os.path.expanduser, default=
-        '~/Documents/serg/ashg13/')
+        '~/Documents/serg/ashg13/imp-optimizer/')
     parser.add_argument('--network-id', required=True)
+    #parser.add_argument('--imp-name', required=True)
     #parser.add_argument('--description', required=True)
     args = parser.parse_args()
     return args

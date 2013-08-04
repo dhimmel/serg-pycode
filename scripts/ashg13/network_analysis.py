@@ -14,7 +14,7 @@ import heteronets.features
 def get_parser_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--project-dir', type=os.path.expanduser, default=
-        '~/Documents/serg/ashg13/')
+        '~/Documents/serg/ashg13/imp-optimizer')
     parser.add_argument('--network-id', required=True)
     parser.add_argument('--learning-edges', action='store_true')
     parser.add_argument('--diseases', nargs='*')
@@ -33,8 +33,8 @@ def select_positives(g):
         degree_counter = heteronets.nxutils.node_degree_counter(g, disease)
         if ('disease', 'gene', 'association') not in degree_counter:
             continue
-        if ('disease', 'tissue', 'pathology') not in degree_counter:
-            continue
+        #if ('disease', 'tissue', 'pathology') not in degree_counter:
+        #    continue
         learning_diseases.add(disease)
     
     # Take all associations edges from those nodes as positives
@@ -69,9 +69,13 @@ if __name__ == '__main__':
         
         
         schema = g.graph['schema']
-        g.graph['metapaths'] = heteronets.schema.extract_metapaths(
-            g.graph['schema'], g.graph['source_kind'], g.graph['target_kind'],
-            max_length = 3, exclude_all_source_target_edges = False)
+        #g.graph['metapaths'] = heteronets.schema.extract_metapaths(
+        #    g.graph['schema'], g.graph['source_kind'], g.graph['target_kind'],
+        #    max_length = 3, exclude_all_source_target_edges = False)
+
+        mpath_tuples = [('gene', 'function', 'gene', 'association', 'disease'),
+                        ('gene', 'function', 'gene', 'function', 'gene', 'association', 'disease')]
+        g.graph['metapaths'] = map(heteronets.schema.MetaPath, mpath_tuples)
     
         print 'Writing prepared graph to pkl.'
         heteronets.nxutils.write_gpickle(g, prepared_pkl_path)

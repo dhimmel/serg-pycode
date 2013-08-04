@@ -174,7 +174,7 @@ class MetaPath(object):
 
     def __new__(cls, kind_tuple):
         """
-        If a MetaPath object representing kin_tuple exists, return that
+        If a MetaPath object representing kind_tuple exists, return that
         object. Otherwise create and return a new MetaPath object.
         """
         assert isinstance(kind_tuple, tuple)

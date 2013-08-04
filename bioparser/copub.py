@@ -1,23 +1,22 @@
 import os
 import itertools
-
 import suds.client
 
 import data
-#import scripts.ashg13
-
 
 #CoPub Web Services
 # http://services.nbic.nl/copub5/help/CoPub_web_services.html
 # http://services.nbic.nl/copub5/copub.wsdl.html
+
+"""
+COMMENTED OUT BECAUSE WAS CAUSING BUG BUT CRUCIAL
+SHOULD NOT LOAD BY DEFAULT.
 wsdl_url = 'http://services.nbic.nl/copub5/copub.wsdl'
 client = suds.client.Client(wsdl_url)
 client.service.version()
 categories = map(str, client.service.get_categories('keyword')[0])
-
-
-#class CoPubQuerier(object):
-
+print 'copub4'
+"""
 
 def get_top_keyword(query, category):
     """

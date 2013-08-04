@@ -64,9 +64,9 @@ class SIDER(bioparser.shelved.Shelved):
             type_to_concept_ids = self.shelves['type_to_concept_ids']
             type_to_concept_ids['indications'] = all_indications
             type_to_concept_ids['adverse_effects'] = all_adverse_effects
-        
-            indication_to_drugs = dict.fromkeys(all_indications, set())
-            adverse_effect_to_drugs = dict.fromkeys(all_adverse_effects, set())
+            
+            indication_to_drugs = {key: set() for key in all_indications}
+            adverse_effect_to_drugs = {key: set() for key in all_adverse_effects}
             for drug in self.drugs:
                 drug_name = drug.name
                 for concept_id in drug_to_indications[drug_name]:

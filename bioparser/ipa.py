@@ -17,7 +17,7 @@ class Function(object):
         An ingenuity Function
         """
         self.name = name
-        self.molecules = dict.fromkeys(self.effect_kinds, list())
+        self.molecules = {key: list() for key in self.effect_kinds}
         
     def __hash__(self):
         return hash(self.name)
