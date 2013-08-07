@@ -197,18 +197,15 @@ class Graph(object):
     def get_paths(self, source, target, metapath):
         """ """
         
-        source.edge_kind_to_edges.get(metapath[0])
+        paths = source.edge_kind_to_edges[metapath[0]] # need to make paths from edges
         
-        
-        paths = [Path(tuple())]
-        for i in range(len(metapath)):
-            if i == 0:
-                source
-            source_kind, target_kind, edge_kind, direction = metapath[i]
+        for i in range(1, len(metapath)):
+            edge_kind = metapath[i]
             for path in paths:
                 nodes = path.get_nodes()
-                node = nodes[-1]
-                nodes[-1].getattr
+                end_node = nodes[-1]
+                for extensions in end_node.edge_kind_to_edges[edge_kind]:
+                    pass
     
     def add_node(self, node_id, kind, data=dict()):
         """ """
