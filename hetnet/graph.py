@@ -1,61 +1,71 @@
 # daniel.himmelstein@gmail.com
 
-class Schema(object):
+class BasePath(object):
     
-    inverse_direction = {'forward': 'backward',
-                         'backward': 'forward',
-                         'both': 'both'}
+    def __init__(self, edges):
+        assert isinstance(edges, tuple)
+        self.edges = edges
     
-    direction_to_abbrev = {'forward': '>', 'backward': '<', 'both': '-'}
+    def source(self):
+        return self[0].source
+
+    def target(self):
+        return self[-1].target
     
-    def __init__(self, edge_kinds, kind_to_abbrev=None):
-        """edges is a list of tuples in the format: (source, target, kind, direction)"""
-        self.edge_kinds = set()
-        self.node_kinds = set()
+    def get_nodes(self):
+        nodes = tuple(edge.source for edge in self)
+        nodes = nodes + (self.target(), )
+        return nodes
+    
+    def inverse_edges(self):
+        return tuple(reversed(list(edge.inverse for edge in self)))
+    
+    def traverses_mask(self):
+        """Whether any nodes or edges contained in the path are masked."""
+        for edge in self:
+            if edge.masked or edge.source.masked:
+                return True
+        return self.target().masked
+    
+    def __iter__(self):
+        return iter(self.edges)
 
-        for edge_kind in edge_kinds:
-            source_kind, target_kind, kind, direction = edge_kind
+    def __getitem__(self, key):
+        return self.edges[key]
 
-            for node_kind in [source_kind, target_kind]:
-                self.node_kinds.add(node_kind)
+    def __len__(self):
+        return len(self.edges)
 
-            inverse_edge_kind = target_kind, source_kind, kind, Schema.inverse_direction[direction]
-            for ek in [edge_kind, inverse_edge_kind]:
-                self.edge_kinds.add(ek)
+    def __hash__(self):
+        return hash(self.edges)
+    
+    def __eq__(self):
+        return self.edges == other.edges
 
-        self.edges_to_metapath = dict()
+
+class MetaGraph(object):
+    
+    def __init__(self):
+        """ """
+        self.node_dict = dict()
+        self.edge_dict = dict()
+        self.path_dict = dict()
+    
+    
+    @staticmethod
+    def from_edge_tuples(metaedge_tuples):
+        metagraph = MetaGraph()
+        node_kinds = set()
+        for source_kind, target_kind, kind, direction in metaedge_tuples:
+            node_kinds.add(source_kind)
+            node_kinds.add(target_kind)
+        for kind in node_kinds:
+            metagraph.add_node(kind)
+        for edge_tuple in metaedge_tuples:
+            metagraph.add_edge(edge_tuple)
         
-        if kind_to_abbrev is None:
-            kind_to_abbrev = self.create_abbreviations()
-        self.kind_to_abbrev = kind_to_abbrev
-    
-    def get_metapath(self, edges):
-        """Retreive or construct metapath based on edges"""
-        try:
-            return self.edges_to_metapath[edges]
-        except KeyError:
-            metapath = MetaPath(self, edges)
-            self.edges_to_metapath[edges] = metapath
-            return metapath
-    
-    def extract_metapaths(self, source, target, max_length):
-        metapaths = list()
-        metapaths_of_depth = list()
-        for depth in range(max_length):
-            if depth == 0:
-                metapaths_of_depth = [MetaPath(self, (e, )) for e in self.edge_kinds if e[0] == source]
-            else:
-                temp_paths = list()
-                for metapath in metapaths_of_depth:
-                    node_kind = metapath.get_nodes()[-1]
-                    temp_paths.extend(metapath.append(e) for e in self.edge_kinds if e[0] == node_kind)
-                metapaths_of_depth = temp_paths
-            
-            for metapath in metapaths_of_depth:
-                if target == metapath.get_nodes()[-1]:
-                    metapaths.append(metapath)
-        
-        return metapaths
+        metagraph.create_abbreviations()
+        return metagraph
 
     @staticmethod
     def get_duplicates(iterable):
@@ -72,7 +82,7 @@ class Schema(object):
     def find_abbrevs(kinds):
         """For a list of strings (kinds), find the shortest unique abbreviation."""
         kind_to_abbrev = {kind: kind[0] for kind in kinds}
-        duplicates = Schema.get_duplicates(kind_to_abbrev.values())
+        duplicates = MetaGraph.get_duplicates(kind_to_abbrev.values())
         while duplicates:
             for kind, abbrev in kind_to_abbrev.items():
                 if abbrev in duplicates:
@@ -83,236 +93,317 @@ class Schema(object):
 
     def create_abbreviations(self):
         """Creates abbreviations for node and edge kinds."""
-        kind_to_abbrev = Schema.find_abbrevs(self.node_kinds)
+        kind_to_abbrev = MetaGraph.find_abbrevs(self.node_dict.keys())
         kind_to_abbrev = {kind: abbrev.upper()
                           for kind, abbrev in kind_to_abbrev.items()}
         
         edge_set_to_keys = dict()
-        for edge in self.edge_kinds:
+        for edge in self.edge_dict.keys():
             key = frozenset(map(str.lower, edge[:2]))
             value = edge[2]
             edge_set_to_keys.setdefault(key, list()).append(value)
         
         for edge_set, keys in edge_set_to_keys.items():
-            key_to_abbrev = Schema.find_abbrevs(keys)
+            key_to_abbrev = MetaGraph.find_abbrevs(keys)
             for key, abbrev in key_to_abbrev.items():
                 previous_abbrev = kind_to_abbrev.get(key)
                 if previous_abbrev and len(abbrev) <= len(previous_abbrev):
                     continue
                 kind_to_abbrev[key] = abbrev
         
+        self.set_abbreviations(kind_to_abbrev)
+        self.kind_to_abbrev = kind_to_abbrev
         return kind_to_abbrev
 
-    def edge_kinds_for_node(self, node_kind):
-        return [ek for ek in self.edge_kinds if ek[0] == node_kind]
+    def set_abbreviations(self, kind_to_abbrev):
+        for kind, node in self.node_dict.iteritems():
+            node.abbrev = kind_to_abbrev[kind]
+        for metaedge in self.edge_dict.itervalues():
+            metaedge.kind_abbrev = kind_to_abbrev[metaedge.kind]
         
+    def get_node(self, kind):
+        return self.node_dict[kind]
 
-class Path(object):
+    def get_edge(self, edge_tuple):
+        return self.edge_dict[edge_tuple]
+
+    def add_node(self, kind):
+        metanode = MetaNode(kind)
+        self.node_dict[kind] = metanode
+
+    def add_edge(self, edge_tuple):
+        """source_kind, target_kind, kind, direction"""
+        source_kind, target_kind, kind, direction = edge_tuple
+        source = self.get_node(source_kind)
+        target = self.get_node(target_kind)
+        
+        metaedge = MetaEdge(source, target, kind, direction)
+        self.edge_dict[edge_tuple] = metaedge
+        source.edges.add(metaedge)
+
+        if source == target and direction == 'both':
+            metaedge.inverse = metaedge
+        else:
+            inverse_direction = MetaEdge.inverse_direction[direction]
+            inverse = MetaEdge(target, source, kind, inverse_direction)
+            inverse_tuple = target_kind, source_kind, kind, inverse_direction
+            self.edge_dict[inverse_tuple] = inverse
+            target.edges.add(inverse)
+            metaedge.inverse = inverse
+            inverse.inverse = metaedge
+
+       
+    def extract_metapaths(self, source_kind, target_kind, max_length):
+        source = self.node_dict[source_kind]
+        target = self.node_dict[target_kind]
+        
+        metapaths = ()
+        metapaths = [self.get_metapath((edge, )) for edge in source.edges]
+        previous_metapaths = list(metapaths)
+        for depth in range(1, max_length):
+            current_metapaths = list()
+            for metapath in previous_metapaths:
+                for add_edge in metapath.target().edges:
+                    new_metapath = self.get_metapath(metapath.edges + (add_edge, ))
+                    current_metapaths.append(new_metapath)
+            metapaths.extend(current_metapaths)
+            previous_metapaths = current_metapaths
+        metapaths = [metapath for metapath in metapaths if metapath.target() == target]
+        return metapaths
+            
+    def get_metapath(self, edges):
+        """ """
+        try:
+            return self.path_dict[edges]
+        except KeyError:
+            assert isinstance(edges, tuple)
+            metapath = MetaPath(edges)
+            self.path_dict[edges] = metapath
+
+            inverse_edges = metapath.inverse_edges()
+            inverse = MetaPath(inverse_edges)
+            self.path_dict[inverse_edges] = inverse
+
+            metapath.inverse = inverse
+            inverse.inverse = metapath
+
+            return metapath
     
-    def __init__(self, edges):
-        self.edges = edges
+    
+class MetaNode(object):
+    
+    def __init__(self, kind):
+        """ """
+        self.kind = kind
+        self.edges = set()
+        self.masked = False
     
     def __hash__(self):
-        return hash(self.edges)
-
+        return hash(self.kind)
+    
     def __eq__(self, other):
-        return self.edges == other.edges
-
-    def get_nodes(self):
-        nodes = [edge[0] for edge in self.edges]
-        nodes.append(self.edges[-1][1])
-        return tuple(nodes)
-
-    def get_edge_kinds(self):
-        return tuple(edge[2] for edge in self.edges)
-
-    def get_directions(self):
-        return tuple(edge[3] for edge in self.edges)
+        return self.kind == other.kind
 
     def __repr__(self):
-        return str(self.edges)
+        return self.kind
 
-        
-class MetaPath(Path):
+class MetaEdge(object):
+
+    inverse_direction = {'forward': 'backward',
+                         'backward': 'forward',
+                         'both': 'both'}
+    direction_to_abbrev = {'forward': '>', 'backward': '<', 'both': '-'}
+
+    def __init__(self, source, target, kind, direction):
+        """source and target are MetaNodes."""
+        self.__dict__.update(locals())
+        self.hash_ = hash((source, target, kind, direction))
+        self.masked = False
+
+    def __hash__(self):
+        return self.hash_
+
+    def __repr__(self):
+        direction_abbrev = MetaEdge.direction_to_abbrev[self.direction]
+        return '%s %s %s %s %s' % (self.source, direction_abbrev, self.kind, direction_abbrev, self.target)
+
+
+class MetaPath(BasePath):
     
-    def __init__(self, schema, edge_kinds):
-        """schema is the Schema object defining the metapath. kind is a tuple
-        of the node and edge kinds composing the metapath."""
-        super(MetaPath, self).__init__(edge_kinds)
-        self.edge_kinds = self.edges
-        self.schema = schema
-        for edge_kind in edge_kinds:
-            assert edge_kind in schema.edge_kinds
-
-    def append(self, edge_kind):
-        """Returns a new MetaPath with the edge appended."""
-        edge_kinds = self.edge_kinds + (edge_kind, )
-        return self.schema.get_metapath(edge_kinds)
+    def __init__(self, edges):
+        """metaedges is a tuple of edges"""
+        assert all(isinstance(edge, MetaEdge) for edge in edges)
+        super(MetaPath, self).__init__(edges)
     
     def __repr__(self):
-        if hasattr(self, 'abbreviation'):
-            return self.abbreviation
-        kind_to_abbrev = self.schema.kind_to_abbrev
-        nodes = [kind_to_abbrev[x] for x in self.get_nodes()]
-        edges = [kind_to_abbrev[x] for x in self.get_edge_kinds()]
-        directions = [Schema.direction_to_abbrev[x] for x in self.get_directions()]
-        abbreviation = ''
-        for i in range(len(edges)):
-            direction = directions[i]
-            abbreviation += nodes[i] + direction + edges[i] + direction
-        abbreviation += nodes[-1]
-        self.abbreviation = abbreviation
-        return abbreviation
-            
-    
+        s = ''
+        for edge in self:
+            source_abbrev = edge.source.abbrev
+            dir_abbrev = MetaEdge.direction_to_abbrev[edge.direction]
+            kind_abbrev = edge.kind_abbrev
+            s += '{0}{1}{2}{1}'.format(source_abbrev, dir_abbrev, kind_abbrev)
+        s+= self.target().abbrev
+        return s
+
+
 class Graph(object):
     
-    def __init__(self, schema, data=dict()):
-        """Graph class"""
+    def __init__(self, metagraph, data=dict()):
+        """ """
+        self.metagraph = metagraph
         self.data = data
         self.node_dict = dict()
         self.edge_dict = dict()
-        self.schema = schema
 
-    def get_node(self, node_id):
+    def add_node(self, id_, kind, data=dict()):
         """ """
-        return self.node_dict[node_id]
-        
-    def get_edge(self, source, target, kind, direction):
-        """ """
-        edge_id = source, target, kind, direction
-        return self.edge_dict[edge_id]
-        
-    def get_nodes(self):
-        """iterator over nodes"""
-        return self.node_dict.itervalues()
-    
-    def get_edges(self, include_inverts=False):
-        """iterator over edges"""
-        if include_inverts:
-            return self.edge_dict.itervalues()
-        else:
-            return (edge for edge in self.edge_dict.itervalues() if edge.inverted == False)
-    
-    def get_paths(self, source, target, metapath):
-        """ """
-        
-        paths = source.edge_kind_to_edges[metapath[0]] # need to make paths from edges
-        
-        for i in range(1, len(metapath)):
-            edge_kind = metapath[i]
-            for path in paths:
-                nodes = path.get_nodes()
-                end_node = nodes[-1]
-                for extensions in end_node.edge_kind_to_edges[edge_kind]:
-                    pass
-    
-    def add_node(self, node_id, kind, data=dict()):
-        """ """
-        node = Node(self, node_id, kind, data)
+        metanode = self.metagraph.node_dict[kind]
+        node = Node(id_, metanode, data)
+        self.node_dict[id_] = node
         return node
     
     def add_edge(self, source_id, target_id, kind, direction, data=dict()):
         """ """
         source = self.node_dict[source_id]
         target = self.node_dict[target_id]
-        edge = Edge(self, source, target, kind, direction, data)
-        inverse = edge.invert()
+        metaedge_id = source.metanode.kind, target.metanode.kind, kind, direction
+        metaedge = self.metagraph.edge_dict[metaedge_id]
+        edge = Edge(source, target, metaedge, data)
+        self.edge_dict[edge.get_id()] = edge
+        
+        inverse = Edge(target, source, metaedge.inverse, data)
+        inverse_id = inverse.get_id()
+        self.edge_dict[inverse_id] = inverse
+        
         return edge, inverse
 
-    def remove_unconnected_nodes(self):
-        unconnected = [node for node in self.get_nodes() if node.degree() == 0]
-        for node in unconnected:
-            node.remove()
+    def paths_from(self, source, metapath, duplicates=False, exclude_edges=set()):
+        """ """
+        if not isinstance(source, Node):
+            source = self.node_dict[source]
+        
+        paths = list(Path((edge, )) for edge in source.edges[metapath[0]])
 
+        for i in range(1, len(metapath)):
+            current_paths = list()
+            metaedge = metapath[i]
+            for path in paths:
+                nodes = path.get_nodes()
+                edges = path.target().edges[metaedge]
+                for edge in edges:
+                    if not duplicates and edge.target in nodes:
+                        continue
+                    if edge in exclude_edges:
+                        continue
+                    newpath = Path(path.edges + (edge, ))
+                    current_paths.append(newpath)
+            paths = current_paths
+        return paths
+    
+    def paths_between(self, source, target, metapath,  no_duplicates=True, excluded_edges=set()):
+        """UNTESTED can potentially divide paths"""
+
+        potential_paths = self.paths_from(source, metapath, no_duplicates, excluded_edges)
+        paths = list()
+        for potential_path in potential_paths:
+            if potential_path.target != target:
+                continue
+            paths.append(potential_path)
+        return paths        
+    
+    def unmask(self):
+        """Unmask all nodes and edges contained within the graph"""
+        for dictionary in self.node_dict, self.edge_dict:
+            for value in dictionary.itervalues():
+                value.masked = False
+    
 class Node(object):
     
-    def __init__(self, graph, node_id, kind, data):
-        """Graph class"""
+    def __init__(self, id_, metanode, data):
+        """ """
         self.__dict__.update(locals())
-        assert kind in graph.schema.node_kinds
-        assert node_id not in graph.node_dict
-        graph.node_dict[node_id] = self
-        edge_kinds = graph.schema.edge_kinds_for_node(kind)
-        self.edge_kind_to_edges = {key: set() for key in edge_kinds}
-    
-    def all_edges(self):
-        all_edges = list()
-        for edges in self.edge_kind_to_edges.itervalues():
-            all_edges.extend(edges)
-        return all_edges
-    
-    def degree(self):
-        return len(self.all_edges())
-    
+        self.edges = {metaedge: set() for metaedge in metanode.edges}
+        self.masked = False
+
+    def get_edges(self, metaedge, exclude_masked=True):
+        
+        if exclude_masked:
+            edges = []
+            for edge in self.edges[metaedge]:
+                if edge.masked or edge.target.masked:
+                    continue
+                edges.append(edge)
+        else:
+            edges = self.edges[metaedge]
+        return edges
+
     def __hash__(self):
-        return hash(self.node_id)
+        return hash(self.id_)
     
     def __eq__(self, other):
-        return self.node_id == other.node_id
-    
+        return self.id_ == other.id_
+
     def __repr__(self):
-        return self.node_id
-    
-    def remove(self):
-        for edge in self.all_edges():
-            edge.remove()
-        del self.graph.node_dict[self.node_id]
-    
+        return self.id_
+
 class Edge(object):
     
-    
-    def __init__(self, graph, source, target, kind, direction, data):
-        """Graph class"""
+    def __init__(self, source, target, metaedge, data):
+        """source and target are Node objects. metaedge is the MetaEdge object
+        representing the edge
+        """
+        assert isinstance(source, Node)
+        assert isinstance(target, Node)
+        assert isinstance(metaedge, MetaEdge)
         self.__dict__.update(locals())
-        edge_kind = self.get_edge_kind()
-        edge_id = self.get_edge_id()
-        assert edge_kind in graph.schema.edge_kinds
-        assert edge_id not in graph.edge_dict
-        graph.edge_dict[edge_id] = self
-        source.edge_kind_to_edges.setdefault(edge_kind, set()).add(self)
+        self.source.edges[metaedge].add(self)
+        self.masked = False
+    
+    def mask(self):
+        self.masked = True
         
-    def get_edge_kind(self):
-        return self.source.kind, self.target.kind, self.kind, self.direction
-    
-    def get_edge_id(self):
-        return self.source.node_id, self.target.node_id, self.kind, self.direction
-    
-    def invert(self):
-        inverse = Edge(self.graph, self.target, self.source, self.kind,
-                    Schema.inverse_direction[self.direction], self.data)
-        inverse.inverted = True
-        self.inverted = False
-        self.inverse = inverse
-        inverse.inverse = self
-        return inverse
-    
-    def remove(self):
-        for edge in (self, self.inverse):
-            del edge.source.edge_kind_to_edges[edge.get_edge_kind()]
-            del edge.inverse
-            del edge.graph.edge_dict[edge.get_edge_id()]
-    
+    def unmask(self):
+        self.masked = False
+        
+    def get_id(self):
+        return self.source.id_, self.target.id_, self.metaedge.kind, self.metaedge.direction
+
     def __hash__(self):
-        return hash(self.get_edge_id())
+        return hash(self.get_id())
     
     def __eq__(self, other):
-        return self.get_edge_id() == other.get_edge_id()
+        return self.get_id() == other.get_id()
     
     def __repr__(self):
-        direction_abbrev = Schema.direction_to_abbrev[self.direction]
-        return '%s %s %s %s %s' % (self.source, direction_abbrev, self.kind, direction_abbrev, self.target)
+        source, target, kind, direction = self.get_id()
+        direction = MetaEdge.direction_to_abbrev[direction]
+        return '{0} {3} {2} {3} {1}'.format(source, target, kind, direction)
+
+class Path(BasePath):
+    
+    def __init__(self, edges):
+        """potentially metapath should be an input although it can be calculated"""
+        super(Path, self).__init__(edges)
+    
+    def __repr__(self):
+        s = ''
+        for edge in self:
+            dir_abbrev = MetaEdge.direction_to_abbrev[edge.metaedge.direction]
+            kind_abbrev = edge.metaedge.kind_abbrev
+            s += '{0} {1} {2} {1} '.format(edge.source, dir_abbrev, edge.metaedge.kind)
+        s = '{}{}'.format(s, self.target())
+        return s
 
 if __name__ == '__main__':
     """ """
-    schema_edges = [('gene', 'disease', 'association', 'both'),
+    metaedges = [('gene', 'disease', 'association', 'both'),
              ('gene', 'gene', 'function', 'both'),
              ('gene', 'tissue', 'expression', 'both'),
              ('disease', 'tissue', 'pathology', 'both'),
              ('gene', 'gene', 'transcription', 'forward')]
+    metagraph = MetaGraph.from_edge_tuples(metaedges)
 
-    schema = Schema(schema_edges)
-    graph = Graph(schema)
+    graph = Graph(metagraph)
     graph.add_node('IL17', 'gene')
     graph.add_node('BRCA1', 'gene')
     graph.add_node('ANAL1', 'gene')
@@ -324,9 +415,14 @@ if __name__ == '__main__':
     graph.add_edge('IL17', 'brain', 'expression', 'both')
     graph.add_edge('IL17', 'BRCA1', 'transcription', 'backward')
 
+    
+    metapaths = metagraph.extract_metapaths('gene', 'disease', 2)
+    
+    print graph.paths_from('BRCA1', metapaths[3])
+    
+    #print graph.node_dict.values()[0].edges
+    #print graph.edge_dict
 
-    #metapath_edges = (('gene', 'disease', 'association', 'both'),)
-    #schema.metapath(metapath_edges)
-    #print schema.extract_metapaths('gene', 'disease', 3)
-    
-    
+    #print nodes and edges
+    #
+    #print metapaths
