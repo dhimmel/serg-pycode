@@ -11,12 +11,12 @@ def degree_weighted_path_count(paths, damping_exponent=0.5):
     dwpc = sum(path_weights)
     return dwpc
         
-def path_degree_product(path, damping_exponent):
+def path_degree_product(path, damping_exponent, exclude_masked=True):
     """ """
     degrees = list()
     for edge in path:
-        source_degree = len(edge.source.edges[edge.metaedge])
-        target_degree = len(edge.target.edges[edge.metaedge.inverse])
+        source_degree = len(edge.source.get_edges(edge.metaedge, exclude_masked))
+        target_degree = len(edge.target.get_edges(edge.metaedge.inverse, exclude_masked))
         degrees.append(source_degree)
         degrees.append(target_degree)
 
@@ -24,19 +24,19 @@ def path_degree_product(path, damping_exponent):
     degree_product = reduce(operator.mul, damped_degrees)
     return degree_product
 
-def features_between(graph, source, target, metapath):
+def features_between(graph, source, target, metapath, **kwargs):
     """ """
     if not isinstance(source, hetnet.Node):
         source = graph.node_dict[source]
     if not isinstance(target, hetnet.Node):
         target = graph.node_dict[target]
 
-    
     feature_dict = collections.OrderedDict()
     
     # compute normalized path count
-    paths_source = graph.paths_from(source, metapath)
-    paths_target = graph.paths_from(target, metapath.inverse)
+    paths_source = graph.paths_from(source, metapath, **kwargs)
+    print paths_source
+    paths_target = graph.paths_from(target, metapath.inverse, **kwargs)
     PCs = len(paths_source)
     PCt = len(paths_target)
     paths = [path for path in paths_source if path.target() == target]
@@ -56,7 +56,6 @@ def features_between(graph, source, target, metapath):
     
     return feature_dict
 
-
 def create_example_graph():
     
     metaedges = [('gene', 'disease', 'association', 'both'),
@@ -71,7 +70,8 @@ def create_example_graph():
     graph.add_node('BRCA1', 'gene')
     graph.add_node('ANAL1', 'gene')
     graph.add_node('MS', 'disease')
-    graph.add_node('ALS', 'disease')
+    als = graph.add_node('ALS', 'disease')
+    #als.masked = True
     graph.add_node('brain', 'tissue')
     
     graph.add_edge('MS', 'IL17', 'association', 'both')
@@ -81,7 +81,6 @@ def create_example_graph():
     graph.add_edge('IL17', 'BRCA1', 'transcription', 'backward')
     return graph
 
-
 if __name__ == '__main__':
 
     graph = create_example_graph()
@@ -89,5 +88,5 @@ if __name__ == '__main__':
 
     for metapath in metapaths:
         print metapath
-        print features_between(graph, 'IL17', 'MS', metapath)
+        print features_between(graph, 'IL17', 'MS', metapath, masked=False)
 
