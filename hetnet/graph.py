@@ -1,5 +1,4 @@
 # daniel.himmelstein@gmail.com
-import pickle as pickle
 
 import readwrite
 
@@ -9,8 +8,76 @@ direction_to_inverse = {'forward': 'backward',
 
 direction_to_abbrev = {'forward': '>', 'backward': '<', 'both': '-'}
 
+class ElemMask(object):
+    
+    def __init__(self):
+        self.masked = False
 
-class BasePath(object):
+    def is_masked(self):
+        return self.masked
+
+    def mask(self):
+        self.masked = True
+        
+    def unmask(self):
+        self.masked = False
+
+class IterMask(object):
+    
+    def is_masked(self):
+        return any(elem.is_masked() for elem in self.mask_elem_iter())
+
+class BaseGraph(object):
+    
+    def __init__(self):
+        self.node_dict = dict()
+        self.edge_dict = dict()
+        self.path_dict = dict()
+
+    def get_node(self, kind):
+        return self.node_dict[kind]
+
+    def get_edge(self, edge_tuple):
+        return self.edge_dict[edge_tuple]
+
+    def get_nodes(self):
+        return self.node_dict.itervalues()
+
+    def get_edges(self, exclude_inverts=True):
+        for edge in self.edge_dict.itervalues():
+            if exclude_inverts and edge.inverted:
+                continue
+            yield edge
+
+class BaseNode(ElemMask):
+    
+    def __init__(self, id_):
+        ElemMask.__init__(self)
+        self.id_ = id_
+    
+    def __hash__(self):
+        return hash(self.id_)
+
+    def __eq__(self, other):
+        return self.id_ == other.id_
+
+    def __repr__(self):
+        return self.id_    
+
+class BaseEdge(ElemMask):
+    
+    def __init__(self, source, target):
+        ElemMask.__init__(self)
+        self.source = source
+        self.target = target
+    
+    def __hash__(self):
+        try:
+            return self.hash_
+        except AttributeError:
+            return hash(self.get_id())
+    
+class BasePath(IterMask):
     
     def __init__(self, edges):
         assert isinstance(edges, tuple)
@@ -30,13 +97,12 @@ class BasePath(object):
     def inverse_edges(self):
         return tuple(reversed(list(edge.inverse for edge in self)))
     
-    def traverses_mask(self):
-        """Whether any nodes or edges contained in the path are masked."""
+    def mask_elem_iter(self):
         for edge in self:
-            if edge.masked or edge.source.masked:
-                return True
-        return self.target().masked
-    
+            yield edge
+            yield edge.source
+        yield self.target()
+        
     def __iter__(self):
         return iter(self.edges)
 
@@ -53,27 +119,12 @@ class BasePath(object):
         return self.edges == other.edges
 
 
-class MetaGraph(object):
+class MetaGraph(BaseGraph):
     
     def __init__(self):
         """ """
-        self.node_dict = dict()
-        self.edge_dict = dict()
-        self.path_dict = dict()
+        BaseGraph.__init__(self)
     
-    def __getstate__(self):
-        state = self.__dict__.copy()
-        state['node_dict_items'] = state.pop('node_dict').items()
-        state['path_dict_items'] = state.pop('path_dict').items()
-        state['edge_dict_items'] = state.pop('edge_dict').items()
-        return state
-
-    def __setstate__(self, state):
-        state['node_dict'] = dict(state['node_dict_items'])
-        state['edge_dict'] = dict(state['edge_dict_items'])
-        state['path_dict'] = dict(state['path_dict_items'])
-        self.__dict__.update(state)
-
     @staticmethod
     def from_edge_tuples(metaedge_tuples):
         metagraph = MetaGraph()
@@ -143,11 +194,6 @@ class MetaGraph(object):
         for metaedge in self.edge_dict.itervalues():
             metaedge.kind_abbrev = kind_to_abbrev[metaedge.kind]
         
-    def get_node(self, kind):
-        return self.node_dict[kind]
-
-    def get_edge(self, edge_tuple):
-        return self.edge_dict[edge_tuple]
 
     def add_node(self, kind):
         metanode = MetaNode(kind)
@@ -162,6 +208,7 @@ class MetaGraph(object):
         metaedge = MetaEdge(source, target, kind, direction)
         self.edge_dict[edge_tuple] = metaedge
         source.edges.add(metaedge)
+        metaedge.inverted = False
 
         if source == target and direction == 'both':
             metaedge.inverse = metaedge
@@ -173,7 +220,7 @@ class MetaGraph(object):
             target.edges.add(inverse)
             metaedge.inverse = inverse
             inverse.inverse = metaedge
-
+            inverse.inverted = True
        
     def extract_metapaths(self, source_kind, target_kind, max_length):
         source = self.node_dict[source_kind]
@@ -211,64 +258,30 @@ class MetaGraph(object):
             return metapath
     
     
-class MetaNode(object):
+class MetaNode(BaseNode):
     
-    def __init__(self, kind):
+    def __init__(self, id_):
         """ """
-        self.kind = kind
+        BaseNode.__init__(self, id_)
         self.edges = set()
-        self.masked = False
-    
-    def __hash__(self):
-        return hash(self.kind)
 
-    def __getstate__(self):
-        state = self.__dict__.copy()
-        state['edges_list'] = list(state.pop('edges'))
-        return state
-    
-    def __setstate__(self, state):
-        state['edges'] = set(state['edges_list'])
-        self.__dict__.update(state)    
-
-    def __eq__(self, other):
-        return self.kind == other.kind
-
-    def __repr__(self):
-        return self.kind
-
-class MetaEdge(object):
-    """ """
-    
+class MetaEdge(BaseEdge):
 
     def __init__(self, source, target, kind, direction):
         """source and target are MetaNodes."""
-        #self.__dict__.update(locals())
-        self.source = source
-        self.target = target
+        BaseEdge.__init__(self, source, target)
         self.kind = kind
         self.direction = direction
         self.hash_ = hash(self.get_id())
-        self.masked = False
-
-
-    def __getstate__(self):
-        state = self.__dict__.copy()
-        state['inverse_id'] = state.pop('inverse').get_id()
-        return state
-
 
     def get_id(self):
         """ """
-        return self.source.kind, self.target.kind, self.kind, self.direction
-
-    def __hash__(self):
-        return self.hash_
-
-    """
-    def __eq__(self, other):
-        self.get_id() == other.get_id()
-    """
+        return self.source.id_, self.target.id_, self.kind, self.direction
+    
+    def filesystem_str(self):
+        dir_abbrev = direction_to_abbrev[self.direction]
+        return '{0}{2}{1}-{1}'.format(
+            self.source.abbrev, self.target.abbrev, self.kind.abbrev, self.direction)
     
     def __repr__(self):
         dir_abbrev = direction_to_abbrev[self.direction]
@@ -281,27 +294,26 @@ class MetaPath(BasePath):
     def __init__(self, edges):
         """metaedges is a tuple of edges"""
         assert all(isinstance(edge, MetaEdge) for edge in edges)
-        super(MetaPath, self).__init__(edges)
+        BasePath.__init__(self, edges)
     
     def __repr__(self):
-        s = ''
+        s = str()
         for edge in self:
             source_abbrev = edge.source.abbrev
             dir_abbrev = direction_to_abbrev[edge.direction]
             kind_abbrev = edge.kind_abbrev
             s += '{0}{1}{2}{1}'.format(source_abbrev, dir_abbrev, kind_abbrev)
-        s+= self.target().abbrev
+        s += self.target().abbrev
         return s
 
 
-class Graph(object):
+class Graph(BaseGraph):
     
     def __init__(self, metagraph, data=dict()):
         """ """
+        BaseGraph.__init__(self)
         self.metagraph = metagraph
-        self.data = data
-        self.node_dict = dict()
-        self.edge_dict = dict()
+        self.data = data        
 
     def add_node(self, id_, kind, data=dict()):
         """ """
@@ -314,7 +326,7 @@ class Graph(object):
         """ """
         source = self.node_dict[source_id]
         target = self.node_dict[target_id]
-        metaedge_id = source.metanode.kind, target.metanode.kind, kind, direction
+        metaedge_id = source.metanode.id_, target.metanode.id_, kind, direction
         metaedge = self.metagraph.edge_dict[metaedge_id]
         edge = Edge(source, target, metaedge, data)
         self.edge_dict[edge.get_id()] = edge
@@ -385,7 +397,6 @@ class Graph(object):
         
         return paths
     
-    
     def paths_between(self, source, target, metapath,
                       duplicates=False, masked=True,
                       exclude_nodes=set(), exclude_edges=set()):
@@ -404,71 +415,16 @@ class Graph(object):
         for dictionary in self.node_dict, self.edge_dict:
             for value in dictionary.itervalues():
                 value.masked = False
+                
     
-    def write_gml(self, path):
-        writer = readwrite.HetnetGMLWriter(self, path)
-        writer.export_graph()
-
-    #"""
-    def __getstate__(self):
-        state = self.__dict__.copy()
-        state['node_dict_items'] = state.pop('node_dict').items()
-        state['edge_dict_items'] = state.pop('edge_dict').items()
-        return state
-
-    def __setstate__(self, state):
-        state['node_dict'] = dict(state['node_dict_items'])
-        state['edge_dict'] = dict(state['edge_dict_items'])
-        self.__dict__.update(state)
-    #"""
-    def write_pickle(self, path):
-        """
-        http://bugs.python.org/issue1761028
-        http://bugs.python.org/issue1062277
-        http://bugs.python.org/issue998998
-        http://bugs.python.org/issue1581183
-        http://bugs.python.org/issue9269
-        """
-        with open(path, 'w') as write_file:
-            pickle.dump(self, write_file, protocol=-1)
-
-    @staticmethod
-    def read_pickle(path):
-        """
-        http://bugs.python.org/issue1761028
-        http://bugs.python.org/issue1062277
-        http://bugs.python.org/issue998998
-        http://bugs.python.org/issue1581183
-        """
-        with open(path) as read_file:
-            graph = pickle.load(read_file)
-
-
-        # Reconstruct metagraph inverse references
-        metaedge_dict = graph.metagraph.edge_dict
-        for metaedge in metaedge_dict.itervalues():
-            inverse_id = metaedge.__dict__.pop('inverse_id')
-            inverse_metaedge = metaedge_dict[inverse_id]
-            metaedge.inverse = inverse_metaedge
-            print metaedge
-
-        """
-        # Reconstruct edge source and target Node references
-        node_dict = graph.node_dict
-        for edge in graph.edge_dict.itervalues():
-            edge.source = node_dict[edge.source_id]
-            edge.target = node_dict[edge.target_id]
-        """
-        return graph
-        
-    
-class Node(object):
+class Node(BaseNode):
     
     def __init__(self, id_, metanode, data):
         """ """
-        self.__dict__.update(locals())
+        BaseNode.__init__(self, id_)
+        self.metanode = metanode
+        self.data = data
         self.edges = {metaedge: set() for metaedge in metanode.edges}
-        self.masked = False
 
     def get_edges(self, metaedge, exclude_masked=True):
         
@@ -482,27 +438,7 @@ class Node(object):
             edges = self.edges[metaedge]
         return edges
 
-    def __getstate__(self):
-        state = self.__dict__.copy()
-        state['edges_items'] = [(metaedge, list(edge_set))
-            for metaedge, edge_set in state.pop('edges').items()]
-        return state
-
-    def __setstate__(self, state):
-        state['edges'] = {metaedge: set(edge_list) for metaedge, edge_list in state['edges_items']}
-        self.__dict__.update(state)
-
-
-    def __hash__(self):
-        return hash(self.id_)
-    
-    def __eq__(self, other):
-        return self.id_ == other.id_
-
-    def __repr__(self):
-        return self.id_
-
-class Edge(object):
+class Edge(BaseEdge):
     
     def __init__(self, source, target, metaedge, data):
         """source and target are Node objects. metaedge is the MetaEdge object
@@ -511,35 +447,14 @@ class Edge(object):
         assert isinstance(source, Node)
         assert isinstance(target, Node)
         assert isinstance(metaedge, MetaEdge)
-        self.__dict__.update(locals())
-        self.hash_ = hash(self.get_id())
+        BaseEdge.__init__(self, source, target)
+        self.metaedge = metaedge
+        self.data = data
         self.source.edges[metaedge].add(self)
-        self.masked = False
     
-    def mask(self):
-        self.masked = True
-        
-    def unmask(self):
-        self.masked = False
         
     def get_id(self):
         return self.source.id_, self.target.id_, self.metaedge.kind, self.metaedge.direction
-
-    """
-    def __getstate__(self):
-        state = self.__dict__
-        state['source_id'] = state.pop('source').id_
-        state['target_id'] = state.pop('target').id_
-        return state
-
-    def __setstate__(self, state):
-        self.__dict__.update(state)
-    """
-    def __hash__(self):
-        return self.hash_
-    
-    def __eq__(self, other):
-        return self.get_id() == other.get_id()
     
     def __repr__(self):
         source, target, kind, direction = self.get_id()
@@ -550,7 +465,7 @@ class Path(BasePath):
     
     def __init__(self, edges):
         """potentially metapath should be an input although it can be calculated"""
-        super(Path, self).__init__(edges)
+        BasePath.__init__(self, edges)
     
     def __repr__(self):
         s = ''
@@ -583,17 +498,25 @@ if __name__ == '__main__':
     graph.add_edge('IL17', 'brain', 'expression', 'both')
     graph.add_edge('IL17', 'BRCA1', 'transcription', 'backward')
 
-    #metapaths = metagraph.extract_metapaths('gene', 'disease', 2)
 
+
+    #gml_path = '/home/dhimmels/Desktop/test-graph.gml'
+    #readwrite.write_gml(graph, gml_path)
+
+    json_path = '/home/dhimmels/Desktop/test-graph.json'
+    readwrite.graph.write_json(graph, json_path)
     
-    pkl_path = '/home/dhimmels/Desktop/test-graph.pkl'
-    graph.write_pickle(pkl_path)
-    graph = Graph.read_pickle(pkl_path)
-
-
+    #graph = readwrite.read_json(json_path)
+    
+    
+    
+    metapaths = metagraph.extract_metapaths('gene', 'disease', 2)
+    print metapaths
+    
+    """
     metapaths = metagraph.extract_metapaths('gene', 'disease', 2)
     print graph.paths_from('BRCA1', metapaths[3])
-
+    """
     """
     for node in graph.node_dict.values():
         print node.edges
