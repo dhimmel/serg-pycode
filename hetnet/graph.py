@@ -76,7 +76,12 @@ class BaseEdge(ElemMask):
             return self.hash_
         except AttributeError:
             return hash(self.get_id())
-    
+
+    def __repr__(self):
+        source, target, kind, direction = self.get_id()
+        dir_abbrev = direction_to_abbrev[direction]
+        return '{0} {3} {2} {3} {1}'.format(source, target, kind, dir_abbrev)
+
 class BasePath(IterMask):
     
     def __init__(self, edges):
@@ -102,7 +107,7 @@ class BasePath(IterMask):
             yield edge
             yield edge.source
         yield self.target()
-        
+    
     def __iter__(self):
         return iter(self.edges)
 
@@ -117,7 +122,6 @@ class BasePath(IterMask):
     
     def __eq__(self):
         return self.edges == other.edges
-
 
 class MetaGraph(BaseGraph):
     
@@ -199,14 +203,15 @@ class MetaGraph(BaseGraph):
         metanode = MetaNode(kind)
         self.node_dict[kind] = metanode
 
-    def add_edge(self, edge_tuple):
+    def add_edge(self, edge_id):
         """source_kind, target_kind, kind, direction"""
-        source_kind, target_kind, kind, direction = edge_tuple
+        assert edge_id not in self.edge_dict
+        source_kind, target_kind, kind, direction = edge_id
         source = self.get_node(source_kind)
         target = self.get_node(target_kind)
         
         metaedge = MetaEdge(source, target, kind, direction)
-        self.edge_dict[edge_tuple] = metaedge
+        self.edge_dict[edge_id] = metaedge
         source.edges.add(metaedge)
         metaedge.inverted = False
 
@@ -214,9 +219,11 @@ class MetaGraph(BaseGraph):
             metaedge.inverse = metaedge
         else:
             inverse_direction = direction_to_inverse[direction]
+            inverse_id = target_kind, source_kind, kind, inverse_direction
+            assert inverse_id not in self.edge_dict
+
             inverse = MetaEdge(target, source, kind, inverse_direction)
-            inverse_tuple = target_kind, source_kind, kind, inverse_direction
-            self.edge_dict[inverse_tuple] = inverse
+            self.edge_dict[inverse_id] = inverse
             target.edges.add(inverse)
             metaedge.inverse = inverse
             inverse.inverse = metaedge
@@ -279,15 +286,8 @@ class MetaEdge(BaseEdge):
         return self.source.id_, self.target.id_, self.kind, self.direction
     
     def filesystem_str(self):
-        dir_abbrev = direction_to_abbrev[self.direction]
-        return '{0}{2}{1}-{1}'.format(
-            self.source.abbrev, self.target.abbrev, self.kind.abbrev, self.direction)
-    
-    def __repr__(self):
-        dir_abbrev = direction_to_abbrev[self.direction]
-        return '{0} {3} {2} {3} {1}'.format(
-            self.source, self.target, self.kind, dir_abbrev)
-
+        return '{0}{2}{1}-{3}'.format(self.source.abbrev, self.target.abbrev,
+                                      self.kind_abbrev, self.direction)
 
 class MetaPath(BasePath):
     
@@ -336,7 +336,10 @@ class Graph(BaseGraph):
         inverse_id = inverse.get_id()
         self.edge_dict[inverse_id] = inverse
         inverse.inverted = True
-       
+
+        edge.inverse = inverse
+        inverse.inverse = edge
+        
         return edge, inverse
 
     def paths_from(self, source, metapath,
@@ -444,23 +447,14 @@ class Edge(BaseEdge):
         """source and target are Node objects. metaedge is the MetaEdge object
         representing the edge
         """
-        assert isinstance(source, Node)
-        assert isinstance(target, Node)
-        assert isinstance(metaedge, MetaEdge)
         BaseEdge.__init__(self, source, target)
         self.metaedge = metaedge
         self.data = data
         self.source.edges[metaedge].add(self)
     
-        
     def get_id(self):
         return self.source.id_, self.target.id_, self.metaedge.kind, self.metaedge.direction
-    
-    def __repr__(self):
-        source, target, kind, direction = self.get_id()
-        dir_abbrev = direction_to_abbrev[direction]
-        return '{0} {3} {2} {3} {1}'.format(source, target, kind, dir_abbrev)
-
+        
 class Path(BasePath):
     
     def __init__(self, edges):
@@ -471,7 +465,6 @@ class Path(BasePath):
         s = ''
         for edge in self:
             dir_abbrev = direction_to_abbrev[edge.metaedge.direction]
-            kind_abbrev = edge.metaedge.kind_abbrev
             s += '{0} {1} {2} {1} '.format(edge.source, dir_abbrev, edge.metaedge.kind)
         s = '{}{}'.format(s, self.target())
         return s

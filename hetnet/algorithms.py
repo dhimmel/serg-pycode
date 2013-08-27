@@ -1,5 +1,6 @@
 import collections
 import operator
+import random
 
 import hetnet
 
@@ -80,6 +81,51 @@ def create_example_graph():
     graph.add_edge('IL17', 'brain', 'expression', 'both')
     graph.add_edge('IL17', 'BRCA1', 'transcription', 'backward')
     return graph
+    
+
+def matched_negatives(positives, source_negatives=1, target_negatives=1, seed=0):
+    """ positives is a list of edges"""
+    random.seed(seed)
+    
+    negative_to_exclusions = dict()
+    positive_to_exclusions = dict()
+    
+    for positive in positives:
+        positive_id = positive.get_id()
+        source_id, target_id, kind, direction = positive_id
+        excluded_edges = {positive, positive.inverse}
+        positive_to_exclusions[positive_id] = excluded_edges
+        
+        # Generate negatives with the same source as the positive
+        sources_matched = 0
+        while sources_matched < source_negatives:
+            new_target = random.choice(positives).target
+            negative_id = (source_id, new_target.id_, kind, direction)
+            if (negative_id in positive_to_exclusions or 
+                negative_id in negative_to_exclusions):
+                continue
+            edges = list(new_target.edges[positive.metaedge.inverse])
+            exclude_edge = random.choice(edges)
+            negative_edge_exlusions = {exclude_edge, exclude_edge.inverse}
+            negative_to_exclusions[negative_id] = excluded_edges | negative_edge_exlusions
+            sources_matched += 1
+
+        # Generate negatives with the same target as the positive
+        targets_matched = 0
+        while targets_matched < target_negatives:
+            new_source = random.choice(positives).source
+            negative_id = (new_source.id_, target_id, kind, direction)
+            if (negative_id in positive_to_exclusions or 
+                negative_id in negative_to_exclusions):
+                continue
+            edges = list(new_source.edges[positive.metaedge])
+            exclude_edge = random.choice(edges)
+            negative_edge_exlusions = {exclude_edge, exclude_edge.inverse}
+            negative_to_exclusions[negative_id] = excluded_edges | negative_edge_exlusions
+            targets_matched += 1
+    
+    return positive_to_exclusions, negative_to_exclusions
+
 
 if __name__ == '__main__':
 
