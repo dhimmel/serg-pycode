@@ -3,7 +3,7 @@ import operator
 import random
 
 import hetnet
-
+import hetnet.agents
 
 def degree_weighted_path_count(paths, damping_exponent=0.5):
     """ """
@@ -57,6 +57,47 @@ def features_between(graph, source, target, metapath, **kwargs):
     
     return feature_dict
 
+def get_features():
+    """ """
+    features = list()
+    
+    feature = collections.OrderedDict()
+    feature['name'] = 'PC'
+    feature['algorithm'] = 'PC'
+    feature['arguments'] = dict()
+    features.append(feature)
+
+    feature = collections.OrderedDict()
+    feature['name'] = 'PCs'
+    feature['algorithm'] = 'PCs'
+    feature['arguments'] = dict()
+    features.append(feature)
+
+    feature = collections.OrderedDict()
+    feature['name'] = 'PCt'
+    feature['algorithm'] = 'PCt'
+    feature['arguments'] = dict()
+    features.append(feature)
+
+    feature = collections.OrderedDict()
+    feature['name'] = 'NPC'
+    feature['algorithm'] = 'NPC'
+    feature['arguments'] = dict()
+    features.append(feature)
+    
+    dwpc_exponents = [x / 10.0 for x in range(0, 11)]
+    for damping_exponent in dwpc_exponents:
+        feature = collections.OrderedDict()
+        feature['name'] = 'DWPC_{}'.format(damping_exponent)
+        feature['algorithm'] = 'DWPC'
+        feature['arguments'] = {'damping_exponent': damping_exponent}
+        features.append(feature)
+    
+    return features
+    
+    
+    
+
 def create_example_graph():
     
     metaedges = [('gene', 'disease', 'association', 'both'),
@@ -87,27 +128,35 @@ def matched_negatives(positives, source_negatives=1, target_negatives=1, seed=0)
     """ positives is a list of edges"""
     random.seed(seed)
     
-    negative_to_exclusions = dict()
-    positive_to_exclusions = dict()
+    positive_ids = set(positive.get_id() for positive in positives)
+    learning_edges = collections.OrderedDict()
     
-    for positive in positives:
+    for i, positive in enumerate(positives):
         positive_id = positive.get_id()
         source_id, target_id, kind, direction = positive_id
         excluded_edges = {positive, positive.inverse}
-        positive_to_exclusions[positive_id] = excluded_edges
+        
+        learning_edge = collections.OrderedDict((
+            ('status', 1), ('group', i),
+            ('edge_id', positive_id), ('exclusions', excluded_edges)))
+        learning_edges[positive_id] = learning_edge
         
         # Generate negatives with the same source as the positive
         sources_matched = 0
         while sources_matched < source_negatives:
             new_target = random.choice(positives).target
             negative_id = (source_id, new_target.id_, kind, direction)
-            if (negative_id in positive_to_exclusions or 
-                negative_id in negative_to_exclusions):
+            if negative_id in learning_edges or negative_id in positive_ids:
                 continue
             edges = list(new_target.edges[positive.metaedge.inverse])
             exclude_edge = random.choice(edges)
             negative_edge_exlusions = {exclude_edge, exclude_edge.inverse}
-            negative_to_exclusions[negative_id] = excluded_edges | negative_edge_exlusions
+            
+            learning_edge = collections.OrderedDict((
+                ('status', 0), ('group', i),
+                ('edge_id', negative_id),
+                ('exclusions', excluded_edges | negative_edge_exlusions)))
+            learning_edges[negative_id] = learning_edge
             sources_matched += 1
 
         # Generate negatives with the same target as the positive
@@ -115,17 +164,24 @@ def matched_negatives(positives, source_negatives=1, target_negatives=1, seed=0)
         while targets_matched < target_negatives:
             new_source = random.choice(positives).source
             negative_id = (new_source.id_, target_id, kind, direction)
-            if (negative_id in positive_to_exclusions or 
-                negative_id in negative_to_exclusions):
+            if negative_id in learning_edges or negative_id in positive_ids:
                 continue
             edges = list(new_source.edges[positive.metaedge])
             exclude_edge = random.choice(edges)
             negative_edge_exlusions = {exclude_edge, exclude_edge.inverse}
-            negative_to_exclusions[negative_id] = excluded_edges | negative_edge_exlusions
+
+            learning_edge = collections.OrderedDict((
+                ('status', 0), ('group', i),
+                ('edge_id', negative_id),
+                ('exclusions', excluded_edges | negative_edge_exlusions)))
+            learning_edges[negative_id] = learning_edge
             targets_matched += 1
     
-    return positive_to_exclusions, negative_to_exclusions
+    learning_edges = learning_edges.values()
+    return learning_edges
 
+
+    
 
 if __name__ == '__main__':
 
