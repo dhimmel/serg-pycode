@@ -36,7 +36,6 @@ def features_between(graph, source, target, metapath, **kwargs):
     
     # compute normalized path count
     paths_source = graph.paths_from(source, metapath, **kwargs)
-    print paths_source
     paths_target = graph.paths_from(target, metapath.inverse, **kwargs)
     PCs = len(paths_source)
     PCt = len(paths_target)

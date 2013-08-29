@@ -254,14 +254,14 @@ class MetaGraph(BaseGraph):
             assert isinstance(edges, tuple)
             metapath = MetaPath(edges)
             self.path_dict[edges] = metapath
-            """
+
             inverse_edges = metapath.inverse_edges()
             inverse = MetaPath(inverse_edges)
             self.path_dict[inverse_edges] = inverse
 
             metapath.inverse = inverse
             inverse.inverse = metapath
-            """
+
             return metapath
     
     
