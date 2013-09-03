@@ -110,7 +110,7 @@ class FeaturesAgent(object):
         return self.features
     
     def _read(self):
-        features = readwrite.features.read_text(self.path)
+        return readwrite.features.read_text(self.path)
 
     
 class LearningEdgesAgent(object):

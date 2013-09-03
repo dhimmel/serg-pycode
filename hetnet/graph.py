@@ -1,4 +1,5 @@
 # daniel.himmelstein@gmail.com
+import itertools
 
 import readwrite
 
@@ -363,8 +364,7 @@ class Graph(BaseGraph):
             return None
         
         paths = list()
-        print metapath[0]
-        print source.edges
+
         for edge in source.edges[metapath[0]]:
             edge_target = edge.target
             if edge_target in exclude_nodes:
@@ -409,9 +409,51 @@ class Graph(BaseGraph):
         paths_from the source and target and look for the intersection at the
         intermediary Node position.
         """
-        paths = self.paths_from(source, metapath, duplicates, masked, exclude_nodes, excluded_edges)
-        paths = [path for path in paths if path.target == target]
+        if len(metapath) <= 1:
+            paths = self.paths_from(source, metapath, duplicates, masked,
+                                    exclude_nodes, exclude_edges)
+            paths = [path for path in paths if path.target() == target]
+            return paths
+        
+        
+        split_index = len(metapath) / 2
+
+        get_metapath = self.metagraph.get_metapath
+        metapath_head = get_metapath(metapath[:split_index])
+        metapath_tail = get_metapath(tuple(mp.inverse for mp in reversed(metapath[split_index:])))
+        paths_head = self.paths_from(source, metapath_head, duplicates, masked, exclude_nodes, exclude_edges)
+        paths_tail = self.paths_from(target, metapath_tail, duplicates, masked, exclude_nodes, exclude_edges)
+        
+        node_intersect = (set(path.target() for path in paths_head) & 
+                          set(path.target() for path in paths_tail))
+                
+        head_dict = dict()
+        for path in paths_head:
+            path_target = path.target()
+            if path_target in node_intersect:
+                head_dict.setdefault(path_target, list()).append(path)
+
+        tail_dict = dict()
+        for path in paths_tail:
+            path_target = path.target()
+            if path_target in node_intersect:
+                path = Path(path.inverse_edges())
+                tail_dict.setdefault(path_target, list()).append(path)
+
+        paths = list()
+        for node in node_intersect:
+            heads = head_dict[node]
+            tails = tail_dict[node]
+            for head, tail in itertools.product(heads, tails):
+                path = Path(head.edges + tail.edges)
+                if not duplicates:
+                    nodes = path.get_nodes()
+                    if len(set(nodes)) < len(nodes):
+                        continue
+                paths.append(path)
+        
         return paths        
+    
     
     def unmask(self):
         """Unmask all nodes and edges contained within the graph"""

@@ -22,7 +22,6 @@ def write_text(metapaths, path):
         writer.writerows(row_generator)
 
 def read_text(path, metagraph):
-    print path
     with open(path) as read_file:
         reader = csv.DictReader(read_file, delimiter='\t')
         metapaths = list()
