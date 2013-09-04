@@ -1,55 +1,80 @@
-import re
-import simplejson as json
 import collections
-import os
+import cPickle as pickle
 import gzip
+import json
+import os
+import re
+
+import yaml
 
 import hetnet
 
-def read_json(path):
-    """ """
+def open_ext(path, *args, **kwargs):
+    open_fxn = gzip.open if path.endswith('.gz') else open
+    return open_fxn(path, *args, **kwargs)
+
+def write_pickle(graph, path):
+    writable = writable_from_graph(graph)
+    write_file = open_ext(path, 'wb')
+    pickle.dump(writable, write_file)
+    write_file.close()
     
-    if path.endswith('.gz'):
-        read_file = gzip.open(path)
-    else:
-        read_file = open(path)
-    json_object = json.load(read_file)
+def read_pickle(path):
+    read_file = open_ext(path)
+    writable = pickle.load(read_file)
+    read_file.close()
+    return graph_from_writable(writable)
+
+
+def read_yaml(path):
+    """ """
+    read_file = open_ext(path)
+    try:
+        loader = yaml.CSafeLoader
+    except AttributeError:
+        loader = yaml.SafeLoader
+    writable = yaml.load(read_file, Loader=loader)
     read_file.close()
     
-    metaedge_tuples = json_object['metaedge_tuples']
+    return graph_from_writable(writable)
+
+def write_json(graph, path):
+    """ """
+    writable = writable_from_graph(graph, False)
+    write_file = open_ext(path, 'w')
+    json.dump(writable, write_file)
+    write_file.close()
+
+def write_yaml(graph, path):
+    """ """
+    writable = writable_from_graph(graph, False)
+    write_file = open_ext(path, 'w')
+    try:
+        dumper = yaml.CSafeDumper
+    except AttributeError:
+        dumper = yaml.SafeDumper
+    yaml.dump(writable, write_file, Dumper=dumper)
+    write_file.close()
+
+def graph_from_writable(writable):
+    """ """
+    metaedge_tuples = writable['metaedge_tuples']
     metaedge_tuples = map(tuple, metaedge_tuples)
     metagraph = hetnet.MetaGraph.from_edge_tuples(metaedge_tuples)
     graph = hetnet.Graph(metagraph)
 
-    nodes = json_object['nodes']
+    nodes = writable['nodes']
     for node in nodes:
         graph.add_node(**node)
 
-    edges = json_object['edges']
+    edges = writable['edges']
     for edge in edges:
         graph.add_edge(**edge)
     
     return graph
 
-def write_json(graph, path):
-    """ """
-    metanode_kinds, metaedge_tuples, nodes, edges = get_graph_writables(graph)
 
-    combined = collections.OrderedDict()
-    combined['metanode_kinds'] = metanode_kinds
-    combined['metaedge_tuples'] = metaedge_tuples
-    combined['nodes'] = nodes
-    combined['edges'] = edges
-
-
-    if path.endswith('.gz'):
-        write_file = gzip.open(path, 'w')
-    else:
-        write_file = open(path, 'w')
-    json.dump(combined, write_file, indent=2)
-    write_file.close()
-
-def get_graph_writables(graph):
+def writable_from_graph(graph, ordered=True):
     """ """
     metanode_kinds = graph.metagraph.node_dict.keys()
     
@@ -57,8 +82,8 @@ def get_graph_writables(graph):
                        graph.metagraph.get_edges(exclude_inverts=True)]
     
     nodes = list()
-    for node in graph.node_dict.itervalues():
-        node_as_dict = collections.OrderedDict()
+    for node in graph.node_dict.itervalues():        
+        node_as_dict = collections.OrderedDict() if ordered else dict()
         node_as_dict['id_'] = node.id_
         node_as_dict['kind'] = node.metanode.id_
         node_as_dict['data'] = node.data
@@ -69,15 +94,22 @@ def get_graph_writables(graph):
         edge_id_keys = ('source_id', 'target_id', 'kind', 'direction')
         edge_id = edge.get_id()
         edge_items = zip(edge_id_keys, edge_id)
-        edge_as_dict = collections.OrderedDict(edge_items)
+        edge_as_dict = collections.OrderedDict(edge_items) if ordered else dict(edge_items)
         edge_as_dict['data'] = edge.data
         edges.append(edge_as_dict)
 
-    return metanode_kinds, metaedge_tuples, nodes, edges
+    writable = collections.OrderedDict() if ordered else dict()
+    writable['metanode_kinds'] = metanode_kinds
+    writable['metaedge_tuples'] = metaedge_tuples
+    writable['nodes'] = nodes
+    writable['edges'] = edges
+
+    return writable
 
 def write_gml_graph(graph, path):
     """ """
-    metanode_kinds, metaedge_tuples, nodes, edges = get_graph_writables(graph)
+    raise(Exception)
+    metanode_kinds, metaedge_tuples, nodes, edges = writable_from_graph(graph)
     
     with open(path, 'w') as write_file:
         gml_writer = GMLWriter(write_file)

@@ -52,6 +52,10 @@ def write_config(graph_dir):
     section = "('gene', 'gene', 'function', 'both')"
     config.add_section(section)
     config.set(section, 'include', 'True')
+    config.set(section, 'processed_file', 'positives_and_predictions_0.5') # overrides
+    config.set(section, 'include_positives', 'True')
+    config.set(section, 'include_predictions', 'True')
+    config.set(section, 'probability_cutoff', '0.50')
 
     section = "('gene', 'tissue', 'specificity', 'both')"
     config.add_section(section)
@@ -195,7 +199,19 @@ def create_graph(config):
         graph.add_edge(symbol_a, symbol_b, 'interaction', 'both')
 
     # (gene, gene, function) information
-    relationships = data.frimp.read_processed_relationships('positives_and_predictions_0.5')
+    section = "('gene', 'gene', 'function', 'both')"
+    processed_file = config.get(section, 'processed_file')
+    include_positives = config.getboolean(section, 'include_positives')
+    include_predictions = config.getboolean(section, 'include_predictions')
+    probability_cutoff = config.getfloat(section, 'probability_cutoff')
+
+    if processed_file:
+        relationships = data.frimp.read_processed_relationships(processed_file)
+    else:
+        relationships = data.frimp.get_relationships(
+            predictions = include_predictions,
+            positives = include_positives,
+            prob_cutoff = probability_cutoff)
     for symbol_a, symbol_b, prob in relationships:
         edge_data = {'probability': prob}
         graph.add_edge(symbol_a, symbol_b, 'function', 'both', edge_data)
@@ -210,12 +226,13 @@ if __name__ == '__main__':
     # Parse the arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--network-dir', type=os.path.expanduser, default=
-        '~/Documents/serg/ashg13/130814-1')
+        '~/Documents/serg/ashg13/130904-1')
     parser.add_argument('--config', action='store_true')
     parser.add_argument('--create', action='store_true')
     args = parser.parse_args()
     network_dir = args.network_dir
-    graph_dir = os.path.join(network_dir, 'graph')
+    graph_agent = hetnet.agents.GraphAgent(network_dir)
+    graph_dir = graph_agent.graph_dir
     
     
     if args.config:
@@ -235,9 +252,7 @@ if __name__ == '__main__':
         graph = create_graph(config)
         
         # Save the graph
-        metagraph_agent = hetnet.agents.MetaGraphAgent(network_dir)
-        metagraph_agent.write(graph.metagraph)
-        
         graph_agent = hetnet.agents.GraphAgent(network_dir)
-        graph_agent.write(graph)
+        graph_agent.set(graph)
+        graph_agent.write_additional_formats()
 

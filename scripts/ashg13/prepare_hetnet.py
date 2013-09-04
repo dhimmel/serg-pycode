@@ -2,12 +2,16 @@ import hetnet
 import hetnet.agents
 import hetnet.algorithms
 
-network_dir = '/home/dhimmels/Documents/serg/ashg13/130814-1'
+network_dir = '/home/dhimmels/Documents/serg/ashg13/130904-1'
 graph_agent = hetnet.agents.GraphAgent(network_dir)
 
 # Load graph
+print 'loading graph'
 graph = graph_agent.get()
+print 'graph loaded'
 metagraph = graph.metagraph
+
+#graph_agent.set(graph)
 
 
 # MetaEdgeAgent
@@ -18,17 +22,13 @@ metaedge = metaedge_agent.get()
 
 
 # MetaPathsAgent
-metapaths_agent = hetnet.agents.MetaPathsAgent(metaedge_agent, 'length-4-cutoff')
-metapaths = metagraph.extract_metapaths('gene', 'disease', 4)
-metapaths_agent.set(metapaths)
-metapaths = metapaths_agent.get()
-
-# MetaPathsAgent
-metapaths_agent = hetnet.agents.MetaPathsAgent(metaedge_agent, 'length-3-cutoff')
-metapaths = metagraph.extract_metapaths('gene', 'disease', 3)
-metapaths_agent.set(metapaths)
-metapaths = metapaths_agent.get()
-
+for cutoff in range(2, 5):
+    identifier = 'length-{}-cutoff'.format(cutoff)
+    metapaths_agent = hetnet.agents.MetaPathsAgent(metaedge_agent, identifier)
+    metapaths = metagraph.extract_metapaths('gene', 'disease', cutoff)
+    metapaths_agent.set(metapaths)
+    metapaths = metapaths_agent.get()
+    
 
 # Create LearningEdges
 positives = [edge for edge in graph.get_edges(False) if edge.metaedge == metaedge]
@@ -38,7 +38,7 @@ learning_edges_agent.set(learning_edges)
 learning_edges = learning_edges_agent.get()
 
 # Create Features
-features_agent = hetnet.agents.FeaturesAgent(network_dir, 'all-features')
+features_agent = hetnet.agents.FeaturesAgent(graph_agent, 'all-features')
 features = hetnet.algorithms.get_features()
 features_agent.set(features)
 features = features_agent.get()

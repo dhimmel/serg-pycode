@@ -11,7 +11,11 @@ class GraphAgent(object):
     def __init__(self, network_dir):
         """ """
         self.network_dir = network_dir
-        self.path = os.path.join(network_dir, 'graph', 'graph.json.gz')
+        self.graph_dir = os.path.join(network_dir, 'graph')
+        for directory in (self.network_dir, self.graph_dir):
+            if not os.path.isdir(directory):
+                os.mkdir(directory)
+        self.path = os.path.join(self.graph_dir, 'graph.pkl.gz')
     
     def get(self):
         if not hasattr(self, 'graph'):
@@ -20,11 +24,22 @@ class GraphAgent(object):
     
     def _read(self):
         """ """
-        return readwrite.graph.read_json(self.path)
+        return readwrite.graph.read_pickle(self.path)
     
-    def write(self, graph):
+    def set(self, graph):
+        self.graph = graph
+        self._write()
+    
+    def _write(self):
         """ """
-        readwrite.graph.write_json(graph, self.path)
+        readwrite.graph.write_pickle(self.graph, self.path)
+        #print datetime.datetime.now().time().isoformat()
+
+    def write_additional_formats(self):
+        yaml_path = os.path.join(self.graph_dir, 'graph.yaml.gz')
+        readwrite.graph.write_yaml(self.graph, yaml_path)
+        json_path = os.path.join(self.graph_dir, 'graph.json.gz')
+        readwrite.graph.write_json(self.graph, json_path)
 
 
 class MetaEdgeAgent(object):
@@ -89,10 +104,10 @@ class MetaPathsAgent(object):
 
 class FeaturesAgent(object):
     
-    def __init__(self, network_dir, identifier):
-        self.network_dir = network_dir
+    def __init__(self, graph_agent, identifier):
+        self.graph_agent = graph_agent
         self.identifier = identifier
-        directory = os.path.join(network_dir, 'features')
+        directory = os.path.join(graph_agent.network_dir, 'features')
         if not os.path.isdir(directory):
             os.mkdir(directory)
         self.path = os.path.join(directory, '{}.txt'.format(identifier))
@@ -140,11 +155,65 @@ class LearningEdgesAgent(object):
         graph = self.metaedge_agent.graph_agent.get()
         return readwrite.learning_edges.read_text(self.path, graph)
 
+class AnalysisAgent(object):
+    
+    def __init__(self, metaedge_agent, identifier):
+        """ """
+        self.metaedge_agent = metaedge_agent
+        self.graph_agent = metaedge_agent.graph_agent
+        #self.network_dir = self.graph_agent.network_dir
+        self.identifier = identifier
+        
+        # analyses directory
+        directory = os.path.join(metaedge_agent.directory, 'analyses')
+        if not os.path.isdir(directory):
+            os.mkdir(directory)
+        
+        # analyses/identifier directory
+        directory = os.path.join(directory, identifier)
+        if not os.path.isdir(directory):
+            os.mkdir(directory)
+        self.directory = directory
+        self.path = os.path.join(directory, 'arguments.cfg')
+    
+    def set(self, features_id, metapaths_id, learning_edges_id):
+        self.features_agent = hetnet.agents.FeaturesAgent(self.graph_agent, features_id)
+        self.metapaths_agent = hetnet.agents.MetaPathsAgent(self.metaedge_agent, metapaths_id)
+        self.learning_edges_agent = hetnet.agents.LearningEdgesAgent(self.metaedge_agent, learning_edges_id)
+        self._write()
+    
+    def _write(self):
+        config = ConfigParser.SafeConfigParser()
 
+        section = 'redundant'
+        config.add_section(section)
+        config.set(section, 'network_dir', self.graph_agent.network_dir)
+        config.set(section, 'metaedge_id', self.metaedge_agent.identifier)
 
-
-
-
+        section = 'analysis'
+        config.add_section(section)
+        config.set(section, 'features_id', self.features_agent.identifier)
+        config.set(section, 'metapaths_id', self.metapaths_agent.identifier)
+        config.set(section, 'learning_edges_id', self.learning_edges_agent.identifier)
+        
+        with open(self.path, 'w') as write_file:
+            config.write(write_file)
+    
+    def get(self):
+        self._read()
+        return #TODO
+    
+    def _read(self):
+        config = ConfigParser.SafeConfigParser()
+        config.read(self.path)
+        section = 'analysis'
+        features_id = config.get(section, 'features_id')
+        self.features_agent = FeaturesAgent(self.graph_agent, features_id)
+        metapaths_id = config.get(section, 'metapaths_id')
+        self.metapaths_agent = FeaturesAgent(self.metaedge_agent, metapaths_id)
+        learning_edges_id = config.get(section, 'learning_edges_id')
+        self.learning_edges_agent = FeaturesAgent(self.metaedge_agent, learning_edges_id)
+    
 
 if __name__ == '__main__':
     import readwrite

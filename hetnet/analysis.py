@@ -1,34 +1,60 @@
 import argparse
 import collections
+import csv
+import itertools
+import os
 
 import hetnet
 import hetnet.agents
 import hetnet.algorithms
 
 
-def analysis(network_dir, features_id, metaedge_id, metapaths_id, learning_edges_id):
+def analysis(identifier, network_dir, features_id, metaedge_id, metapaths_id, learning_edges_id):
     """ """
     graph_agent = hetnet.agents.GraphAgent(network_dir)
-    features_agent = hetnet.agents.FeaturesAgent(network_dir, features_id)
     metaedge_agent = hetnet.agents.MetaEdgeAgent(graph_agent, metaedge_id)
-    metapaths_agent = hetnet.agents.MetaPathsAgent(metaedge_agent, metapaths_id)
-    learning_edges_agent = hetnet.agents.LearningEdgesAgent(metaedge_agent, learning_edges_id)
-    
-    features = features_agent.get()
+    analysis_agent = hetnet.agents.AnalysisAgent(metaedge_agent, identifier)
+    analysis_agent.set(features_id, metapaths_id, learning_edges_id)
+
     graph = graph_agent.get()
-    metapaths = metapaths_agent.get()
-    learning_edges = learning_edges_agent.get()
+    features = analysis_agent.features_agent.get()
+    metapaths = analysis_agent.metapaths_agent.get()
+    learning_edges = analysis_agent.learning_edges_agent.get()
     
+    result_gen = edge_feature_generator(graph, learning_edges, features, metapaths)
+    
+    feature_fieldnames = ['{}:{}'.format(feature['name'], metapath) 
+        for feature, metapath in itertools.product(features, metapaths)]
+    identity_fieldnames = ['source', 'target', 'status', 'group']
+    fieldnames = identity_fieldnames + feature_fieldnames
+    
+    path = os.path.join(analysis_agent.directory, 'learning-features.txt')
+    write_file = open(path, 'w')
+    writer = csv.DictWriter(write_file, delimiter='\t', fieldnames=fieldnames)
+    writer.writeheader()
+    
+    for learning_edge, feature_dict in result_gen:
+        source, target, kind, direction = learning_edge['edge_id']
+        rowdict = collections.OrderedDict()
+        rowdict['source'] = source
+        rowdict['target'] = target
+        rowdict['status'] = learning_edge['status']
+        rowdict['group'] = learning_edge['group']
+        rowdict.update(feature_dict)
+        writer.writerow(rowdict)
+        print source, target
+        
+    write_file.close()
+
+def edge_feature_generator(graph, learning_edges, features, metapaths):
+    """Returns a generator of (learning_edge, feature_dict) tuples"""
     for learning_edge in learning_edges:
-        prediction_id = learning_edge['edge_id']
-        source, target, kind, direction = prediction_id
+        source, target, kind, direction = learning_edge['edge_id']
         source = graph.get_node(source)
         target = graph.get_node(target)
         exclude_edges = learning_edge['exclusions']
-        results = features_betweens(graph, source, target, metapaths, features, exclude_edges)
-        print source, target
-        print results
-        #collections.OrderedDict()
+        feature_dict = features_betweens(graph, source, target, metapaths, features, exclude_edges)
+        yield learning_edge, feature_dict
 
 def PCs(paths):
     return len(paths['paths_s'])
@@ -69,7 +95,7 @@ def features_betweens(graph, source, target, metapaths, features, exclude_edges=
     for metapath in metapaths:
         feature_dict = features_between(graph, source, target, metapath, features, exclude_edges)
         for name, value in feature_dict.iteritems():
-            key = '{}_{}'.format(name, metapath)
+            key = '{}:{}'.format(name, metapath)
             results[key] = value
     return results
 
@@ -113,9 +139,10 @@ def paths_between(graph, source, target, metapath, path_types, exclude_edges):
 
 
 if __name__ == '__main__':
-    network_dir = '/home/dhimmels/Documents/serg/ashg13/130814-1'
-    features_id = 'dwpc_0.5'
+    network_dir = '/home/dhimmels/Documents/serg/ashg13/130904-1'
+    features_id = 'all-features'
     metaedge_id = 'GaD-both'
-    metapaths_id = 'length-4-cutoff'
+    metapaths_id = 'length-2-cutoff'
     learning_edges_id = 'matched-negative-1s-1t'
-    analysis(network_dir, features_id, metaedge_id, metapaths_id, learning_edges_id)
+    identifier = 'trial2'
+    analysis(identifier, network_dir, features_id, metaedge_id, metapaths_id, learning_edges_id)
