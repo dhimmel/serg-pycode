@@ -15,7 +15,7 @@ class EFO(object):
         if efo_dir is None:
             efo_dir = data.current_path('efo')
         self.efo_dir = efo_dir
-        self.obo_path = os.path.join(efo_dir, 'efo.obo.txt')
+        self.obo_path = os.path.join(efo_dir, 'efo.obo')
         self.graph_json_path = os.path.join(efo_dir, 'efo.networkx.json')
         self.graph_pkl_path = os.path.join(efo_dir, 'efo.networkx.pkl')
         

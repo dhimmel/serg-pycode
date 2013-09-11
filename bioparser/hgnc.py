@@ -1,4 +1,6 @@
 import os
+import csv
+import gzip
 
 import data
 import utilities.omictools
@@ -26,7 +28,7 @@ class HGNC(object):
         if hgnc_dir is None:
             hgnc_dir = data.current_path('hgnc')
         self.hgnc_dir = hgnc_dir
-        self.hgnc_path = os.path.join(hgnc_dir, 'hgnc_complete_set.txt')
+        self.hgnc_path = os.path.join(hgnc_dir, 'hgnc_complete_set.txt.gz')
         self.genes = None
         self.symbol_to_gene = dict()
         self.entrez_to_gene = dict()
@@ -57,23 +59,27 @@ class HGNC(object):
                            'Ensembl ID (supplied by Ensembl)': 'ensembl_id_ensembl_mapped',
                            'OMIM ID (supplied by NCBI)': 'omim_id'}
         keys_requiring_splitting = ['previous_symbols', 'synonyms', 'refseq_ids']
-        for line_dict in utilities.omictools.read_tdt(self.hgnc_path):
-            if line_dict['Status'] != 'Approved':
+        read_file = gzip.open(self.hgnc_path)
+        reader = csv.DictReader(read_file, delimiter='\t')
+        for row in reader:
+            if row['Status'] != 'Approved':
                 continue
-            line_dict = {converted_key: line_dict[key] for key, converted_key in key_conversions.items()}
-            for key, value in line_dict.items():
+            row = {converted_key: row[key] for key, converted_key in key_conversions.items()}
+            for key, value in row.items():
                 if value == '':
-                    line_dict[key] = None
+                    row[key] = None
             for key in keys_requiring_splitting:
-                value = line_dict[key]
+                value = row[key]
                 if value is None:
                     value = list()
                 else:
                     value = value.split(', ')
-                line_dict[key] = value
-            gene = Gene(line_dict['symbol'])
-            gene.__dict__.update(line_dict)
+                row[key] = value
+            gene = Gene(row['symbol'])
+            gene.__dict__.update(row)
+            gene.id_ = int(gene.hgnc_id.split(':')[1])
             yield gene
+        read_file.close()
     
     def get_genes(self):
         """Return a list of genes."""

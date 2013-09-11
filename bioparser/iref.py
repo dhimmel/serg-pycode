@@ -39,7 +39,24 @@ class iRefIndex(object):
                 
             yield row
         iref_file.close()
-        
+    
+    def gene_map_counter(self):
+        entrez_to_gene = data.Data().hgnc.get_entrez_to_gene()
+        hgnc_entrez_ids = set(entrez_to_gene)
+        rows = self.row_generator()
+        counter = collections.Counter()
+        for row in rows:
+            entrez_a = row['altA'].get('entrezgene/locuslink')
+            entrez_b = row['altB'].get('entrezgene/locuslink')
+            if not entrez_a or not entrez_b:
+                counter['No entrezgene/locuslink'] += 1
+            elif entrez_a == entrez_b:
+                counter['self interaction'] += 1
+            else:
+                counter['entrezgene/locuslink mapped'] += 1
+        return counter
+            
+    
     def row_to_interaction(self, row):
         entrez_a = row['altA'].get('entrezgene/locuslink')
         entrez_b = row['altB'].get('entrezgene/locuslink')
@@ -72,10 +89,16 @@ class iRefIndex(object):
     
 if __name__ =='__main__':
     iref = iRefIndex()
-    rows = iref.row_generator()
-    for i, row in enumerate(rows):
-        if i % 1000 == 0:
-            print i, row['altA'].get('entrezgene/locuslink'), row['altA'].get('entrezgene/locuslink')
+    
+    counter = iref.gene_map_counter()
+    total = sum(counter.values())
+    print counter
+    print 'total', total
+    print {k: float(v) / total for k, v in counter.items()}
+    #rows = iref.row_generator()
+    #for i, row in enumerate(rows):
+    #    if i % 1000 == 0:
+    #        print i, row['altA'].get('entrezgene/locuslink'), row['altA'].get('entrezgene/locuslink')
     #print len(iref.all_interactions())
     
 

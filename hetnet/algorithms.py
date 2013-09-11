@@ -5,12 +5,6 @@ import random
 import hetnet
 import hetnet.agents
 
-def degree_weighted_path_count(paths, damping_exponent=0.5):
-    """ """
-    degree_products = (path_degree_product(path, damping_exponent) for path in paths)
-    path_weights = (1.0 / degree_product for degree_product in degree_products)
-    dwpc = sum(path_weights)
-    return dwpc
         
 def path_degree_product(path, damping_exponent, exclude_masked=True):
     """ """
@@ -25,36 +19,90 @@ def path_degree_product(path, damping_exponent, exclude_masked=True):
     degree_product = reduce(operator.mul, damped_degrees)
     return degree_product
 
-def features_between(graph, source, target, metapath, **kwargs):
-    """ """
-    if not isinstance(source, hetnet.Node):
-        source = graph.node_dict[source]
-    if not isinstance(target, hetnet.Node):
-        target = graph.node_dict[target]
+def PCs(paths):
+    return len(paths['paths_s'])
 
-    feature_dict = collections.OrderedDict()
+def PCt(paths):
+    return len(paths['paths_t'])
+
+def PC(paths):
+    return len(paths['paths_st'])
+
+def NPC(paths):
+    denom = len(paths['paths_s']) + len(paths['paths_t'])
+    if denom:
+        return 2.0 * len(paths['paths_st']) / denom
+    else:
+        return None
+
+def DWPC(paths, damping_exponent):
+    paths = paths['paths_st']
+    degree_products = (path_degree_product(path, damping_exponent) for path in paths)
+    path_weights = (1.0 / degree_product for degree_product in degree_products)
+    dwpc = sum(path_weights)
+    return dwpc
+
+algorithm_to_path_types = {
+    'PCs': {'paths_s'},
+    'PCt': {'paths_t'},
+    'PC': {'paths_st'},
+    'NPC': {'paths_st', 'paths_s', 'paths_t'},
+    'DWPC': {'paths_st'}}
+
+algorithm_to_function = {
+    'PCs': PCs,
+    'PCt': PCt,
+    'PC': PC,
+    'NPC': NPC,
+    'DWPC': DWPC}
     
-    # compute normalized path count
-    paths_source = graph.paths_from(source, metapath, **kwargs)
-    paths_target = graph.paths_from(target, metapath.inverse, **kwargs)
-    PCs = len(paths_source)
-    PCt = len(paths_target)
-    paths = [path for path in paths_source if path.target() == target]
-    PC = len(paths)
-    assert PC == len([path for path in paths_target if path.target() == source])
-    NPC = 2.0 * PC / (PCs + PCt) if PCs + PCt else None
-    feature_dict['PC'] = PC
-    feature_dict['PCs'] = PCs
-    feature_dict['PCt'] = PCt
-    feature_dict['NPC'] = NPC
+
+def features_betweens(graph, source, target, metapaths, features, exclude_edges=set()):
+    results = collections.OrderedDict()
+    for metapath in metapaths:
+        feature_dict = features_between(graph, source, target, metapath, features, exclude_edges)
+        for name, value in feature_dict.iteritems():
+            key = '{}:{}'.format(name, metapath)
+            results[key] = value
+    return results
+
+def features_between(graph, source, target, metapath, features, exclude_edges=set()):
+    path_types = set()
     
-    # compute degree weighted path count
-    dwpc_exponents = [x / 10.0 for x in range(0, 11)]
-    for dwpc_exponent in dwpc_exponents:
-        feature_name = 'DWPC_' + str(dwpc_exponent)
-        feature_dict[feature_name] = degree_weighted_path_count(paths, dwpc_exponent)
+    for feature in features:
+        algorithm = feature['algorithm']
+        path_types |= algorithm_to_path_types[algorithm]
+        
+    paths = paths_between(graph, source, target, metapath, path_types, exclude_edges)
     
-    return feature_dict
+    results = collections.OrderedDict()
+    for feature in features:
+        function = algorithm_to_function[feature['algorithm']]
+        results[feature['name']] = function(paths, **feature['arguments'])
+    return results
+
+def paths_between(graph, source, target, metapath, path_types, exclude_edges):
+    paths = dict()
+    
+    if 'paths_s' in path_types:
+        paths['paths_s'] = graph.paths_from(source, metapath, exclude_edges=exclude_edges)
+        
+    if 'paths_t' in path_types:
+        paths['paths_t'] = graph.paths_from(target, metapath.inverse, exclude_edges=exclude_edges)
+    
+    if 'paths_st' in path_types:
+        
+        if 'paths_s' in path_types:
+            paths['paths_st'] = [path for path in paths['paths_s'] if path.target() == target]
+            
+        elif 'paths_t' in path_types:
+            paths_ts = [path for path in paths['paths_t'] if path.target() == source]
+            paths['paths_st'] = [hetnet.Path(path.inverse_edges) for path in paths_ts]
+            
+        else:
+            paths['paths_st'] = graph.paths_between(source, target, metapath, exclude_edges=exclude_edges)
+        
+    return paths
 
 def get_features():
     """ """
@@ -93,8 +141,6 @@ def get_features():
         features.append(feature)
     
     return features
-    
-    
     
 
 def create_example_graph():

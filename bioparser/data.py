@@ -19,6 +19,7 @@ import nci_thesaurus
 import omim
 import sider
 import pdn
+import ppitrim
 import tiger
 
 
@@ -98,4 +99,5 @@ class Data:
         self.pdn = pdn.PDN()
         self.tiger = tiger.TIGER()
         self.etiome = etiome.Etiome()
+        self.ppitrim = ppitrim.PPITrim()
 

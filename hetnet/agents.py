@@ -182,7 +182,7 @@ class AnalysisAgent(object):
         self.learning_edges_agent = hetnet.agents.LearningEdgesAgent(self.metaedge_agent, learning_edges_id)
         self._write()
     
-    def _write(self):
+    def write_config(self, features_id='', metapaths_id='', learning_edges_id=''):
         config = ConfigParser.SafeConfigParser()
 
         section = 'redundant'
@@ -192,12 +192,18 @@ class AnalysisAgent(object):
 
         section = 'analysis'
         config.add_section(section)
-        config.set(section, 'features_id', self.features_agent.identifier)
-        config.set(section, 'metapaths_id', self.metapaths_agent.identifier)
-        config.set(section, 'learning_edges_id', self.learning_edges_agent.identifier)
+        config.set(section, 'features_id', features_id)
+        config.set(section, 'metapaths_id', metapaths_id)
+        config.set(section, 'learning_edges_id', learning_edges_id)
         
         with open(self.path, 'w') as write_file:
             config.write(write_file)
+    
+    def _write(self):
+        features_id = self.features_agent.identifier
+        metapaths_id = self.metapaths_agent.identifier
+        learning_edges_id = self.learning_edges_agent.identifier
+        self.write_config(features_id, metapaths_id, learning_edges_id)
     
     def get(self):
         self._read()
@@ -210,9 +216,9 @@ class AnalysisAgent(object):
         features_id = config.get(section, 'features_id')
         self.features_agent = FeaturesAgent(self.graph_agent, features_id)
         metapaths_id = config.get(section, 'metapaths_id')
-        self.metapaths_agent = FeaturesAgent(self.metaedge_agent, metapaths_id)
+        self.metapaths_agent = MetaPathsAgent(self.metaedge_agent, metapaths_id)
         learning_edges_id = config.get(section, 'learning_edges_id')
-        self.learning_edges_agent = FeaturesAgent(self.metaedge_agent, learning_edges_id)
+        self.learning_edges_agent = LearningEdgesAgent(self.metaedge_agent, learning_edges_id)
     
 
 if __name__ == '__main__':

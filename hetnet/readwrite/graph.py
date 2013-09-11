@@ -42,7 +42,7 @@ def write_json(graph, path):
     """ """
     writable = writable_from_graph(graph, False)
     write_file = open_ext(path, 'w')
-    json.dump(writable, write_file)
+    json.dump(writable, write_file, indent=2)
     write_file.close()
 
 def write_yaml(graph, path):
