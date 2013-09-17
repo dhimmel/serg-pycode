@@ -5,6 +5,7 @@ import utilities.omictools
 import ctd
 import drugbank
 import dvd
+import doid
 import efo
 import etiome
 import frimp
@@ -82,7 +83,8 @@ class Data:
     def __init__(self):
         #print 'initializing DataObjects'
         self.ctd = ctd.CTD(current_path('ctd'))
-        self.drugbank = drugbank.DrugBank(current_path('drugbank'))
+        self.drugbank = drugbank.DrugBank()
+        self.doid = doid.DO()
         self.dvd = dvd.DvD()
         self.efo = efo.EFO()
         self.frimp = frimp.IMP(current_path('imp'))

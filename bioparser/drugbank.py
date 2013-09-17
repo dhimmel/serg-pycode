@@ -3,6 +3,8 @@ import sys
 import os
 import re
 
+import data
+
 class DrugBank(object):
     """Reads and parses the drugbank xml file. Extracts drugs and targets."""
     
@@ -20,8 +22,10 @@ class DrugBank(object):
     xml ordering.
     """
 
-    def __init__(self, drugbank_dir):
+    def __init__(self, drugbank_dir=None):
         """Download xml full database: http://www.drugbank.ca/downloads"""
+        if not drugbank_dir:
+            drugbank_dir = data.current_path('drugbank')
         self.drugbank_dir = drugbank_dir
         self.xml_path = os.path.join(drugbank_dir, 'drugbank.xml')
         self.xml_namespace = '{http://drugbank.ca}'
@@ -141,11 +145,12 @@ class DrugBank(object):
             
         for tag in singular_tags:
             text = elem.findtext(self.xml_namespace + tag)
+            text = text.encode('utf-8')
             if text: elem_dict[tag] = text
             
         for tag in plural_tags:
             plural_elem = elem.find(self.xml_namespace + tag)
-            texts = [sub_elem.text for sub_elem in plural_elem]
+            texts = [sub_elem.text.encode('utf-8') for sub_elem in plural_elem]
             # brands include manufacturers in parenthesis. brands and synonyms
             # include language in brackets.
             texts = map(self.remove_bracketed_or_parenthesized_text, texts)
@@ -182,3 +187,11 @@ class DrugBank(object):
     def get_id_to_partner(self):
         """Returns a list of dictionaries each representing a partner."""
         return {partner['id']: partner for partner in self.partners}
+
+if __name__ == "__main__":
+    drugbank_dir
+    db = drugbank.DrugBank()
+    db.read()
+    self.drugs
+    
+

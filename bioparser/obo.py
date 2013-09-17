@@ -449,7 +449,9 @@ class OBOOntology(object):
         """ Add OBOObject instance to this ontology.
         """
         if object.id in self.id2term:
-            raise ValueError("OBOObject with id: %s already in the ontology" % object.id)
+            #raise ValueError("OBOObject with id: %s already in the ontology" % object.id)
+            print "OBOObject with id: %s already in the ontology" % object.id
+            return
         self.objects.append(object)
         self.id2term[object.id] = object
         self._invalid_cache_flag = True
@@ -699,7 +701,7 @@ class OBOOntology(object):
                     
         return graph
     
-    def to_directed_networkx(self, terms=None):
+    def to_directed_networkx(self, terms=None, attributes = ['name']):
         """Daniel Himmelstein
         Edges start at parent and point to child.
         """
@@ -716,7 +718,9 @@ class OBOOntology(object):
             terms = reduce(set.union, super_terms, set(terms))
             
         for term in terms:
-            graph.add_node(term.id, name=term.name)
+            attr_dict = {attribute: getattr(term, attribute, None)
+                         for attribute in attributes}
+            node = graph.add_node(term.id, **attr_dict)
             
         for term in terms:
             # parents of term

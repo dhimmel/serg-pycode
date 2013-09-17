@@ -12,7 +12,7 @@ class Concept(object):
     def __init__(self, concept_id):
         """A Concept object represents a UMLS metathesaurus concept."""
         self.concept_id = concept_id
-        self.symantic_types = set()
+        self.semantic_types = set()
         self.name = None
         self.source_to_rank = dict()
         self.source_to_code = dict()
@@ -27,7 +27,7 @@ class Concept(object):
     
     def __str__(self):
         s = 'concept_id: ' + self.concept_id
-        for attribute in ['name', 'symantic_types']:
+        for attribute in ['name', 'semantic_types']:
             if not getattr(self, attribute):
                 continue
             s += '\n  %s: %s' % (attribute, getattr(self, attribute))
@@ -44,7 +44,7 @@ class Metathesaurus(utilities.shelved.Shelved):
         Sources: http://www.nlm.nih.gov/research/umls/sourcereleasedocs/index.html#
         """
         if not umls_dir:
-            umls_dir = os.path.join(data.data_dir, 'umls', '2012AA')
+            umls_dir = os.path.join(data.data_dir, 'umls', '2013AA')
         self.umls_dir = umls_dir
         self.meta_dir = os.path.join(self.umls_dir, 'META')
         
@@ -71,13 +71,13 @@ class Metathesaurus(utilities.shelved.Shelved):
         self.fname_to_fieldnames = dict()
         id_to_concept = dict()
         
-        # Gather concept_ids and their symantic types.
+        # Gather concept_ids and their semantic types.
         for row in self.read_rrf('MRSTY.RRF'):
-            # Each row represents a concept to symantic_type pair
-            symantic_type = row['STY']
+            # Each row represents a concept to semantic_type pair
+            semantic_type = row['STY']
             concept_id = row['CUI']
             concept = id_to_concept.setdefault(concept_id, Concept(concept_id))
-            concept.symantic_types.add(symantic_type)
+            concept.semantic_types.add(semantic_type)
         
         source_and_tty_to_rank = dict()
         source_to_tty_ranks = dict()
@@ -129,8 +129,8 @@ class Metathesaurus(utilities.shelved.Shelved):
         for concept_id, concept in id_to_concept.iteritems():
             del concept.name_rank
             del concept.source_to_rank
-            for symantic_type in concept.symantic_types:
-                type_to_ids.setdefault(symantic_type, set()).add(concept_id)
+            for semantic_type in concept.semantic_types:
+                type_to_ids.setdefault(semantic_type, set()).add(concept_id)
             for source in concept.source_to_code:
                 source_to_ids.setdefault(source, set()).add(concept_id)
         
