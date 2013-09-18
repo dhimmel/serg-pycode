@@ -36,7 +36,6 @@ class TableWriter(object):
             self.writerow(row)
         
     def close(self):
-        print 'Writing', self.table_name, 'is complete.'
         self.file.close()
     
     def __enter__(self):
@@ -45,6 +44,10 @@ class TableWriter(object):
     def __exit__(self, *args, **kwargs):
         self.close()
 
+def write_table(name, fielnames, rows):
+    with TableWriter(name, fielnames) as writer:
+        writer.writerows(rows)
+    print 'Writing {} is complete'.format(name)
 
 
 hgnc = bioparser.data.Data().hgnc
@@ -69,12 +72,10 @@ for gene in genes:
         tb_gene_alias_rows.append(row)
 
 # write tb_gene_rows
-with TableWriter('tb_gene', tb_gene_fieldnames) as writer:
-    writer.writerows(tb_gene_rows)
+write_table('tb_gene', tb_gene_fieldnames, tb_gene_rows)
 
 # write tb_gene_alias_rows
-with TableWriter('tb_gene_alias', tb_gene_alias_fieldnames) as writer:
-    writer.writerows(tb_gene_alias_rows)
+write_table('tb_gene_alias', tb_gene_alias_fieldnames, tb_gene_alias_rows)
 
 ################################################################################
 ############# ppi
@@ -94,8 +95,7 @@ for is_complex, ppis in enumerate([binary_interactions, complex_interactions]):
         tb_ppi_rows.append(row)
 
 # write tb_ppi_rows
-with TableWriter('tb_ppi', tb_ppi_fieldnames) as writer:
-    writer.writerows(tb_ppi_rows)
+write_table('tb_ppi', tb_ppi_fieldnames, tb_ppi_rows)
 
 ################################################################################
 ############# diseases - Disease Ontology
@@ -109,6 +109,10 @@ tb_doid_ontology_rows = list()
 tb_doid_omim_map_fieldnames = ['doid_id', 'omim_id']
 tb_doid_omim_map_rows = list()
 
+tb_doid_mesh_map_fieldnames = ['doid_id', 'mesh_id']
+tb_doid_mesh_map_rows = list()
+
+
 
 do_graph = bioparser.data.Data().doid.get_graph()
 for node, data in do_graph.nodes(data=True):
@@ -121,16 +125,21 @@ for node, data in do_graph.nodes(data=True):
         child_id = do_graph.node[child]['id_']
         tb_doid_ontology_rows.append({'parent': parent_id, 'child': child_id})
     
+    # OMIM mappings
     for omim_id in data['xref'].get('OMIM', list()):
         row = {'doid_id': doid_id, 'omim_id': omim_id}
         tb_doid_omim_map_rows.append(row)
-    
-with TableWriter('tb_doid', tb_doid_fieldnames) as writer:
-    writer.writerows(tb_doid_rows)
-with TableWriter('tb_doid_ontology', tb_doid_ontology_fieldnames) as writer:
-    writer.writerows(tb_doid_ontology_rows)
-with TableWriter('tb_doid_omim_map', tb_doid_omim_map_fieldnames) as writer:
-    writer.writerows(tb_doid_omim_map_rows)
+
+    # MESH mappings
+    for mesh_id in data['xref'].get('MSH', list()):
+        row = {'doid_id': doid_id, 'mesh_id': mesh_id}
+        tb_doid_mesh_map_rows.append(row)
+
+write_table('tb_doid', tb_doid_fieldnames, tb_doid_rows)
+write_table('tb_doid_ontology', tb_doid_ontology_fieldnames, tb_doid_ontology_rows)
+write_table('tb_doid_omim_map', tb_doid_omim_map_fieldnames, tb_doid_omim_map_rows)
+write_table('tb_doid_mesh_map', tb_doid_mesh_map_fieldnames, tb_doid_mesh_map_rows)
+
 
 ################################################################################
 ############# diseases - EFO
@@ -181,8 +190,7 @@ with metathesaurus:
         tb_omim_rows.append(row)
         #all_types |= concept.symantic_types
 
-with TableWriter('tb_omim', tb_omim_fieldnames) as writer:
-    writer.writerows(tb_omim_rows)
+write_table('tb_omim', tb_omim_fieldnames, tb_omim_rows)
 
 #omim_ids = set(row['omim_id'] for row in tb_omim_rows)
 #mapped_omim_ids = set(row['omim_id'] for row in tb_doid_omim_map_rows)
@@ -202,18 +210,16 @@ for source, target in mapping.bioportal.read_mapping(efo_doid_mapping_path):
     row = {'efo_id': source, 'doid_id': target}
     tb_efo_doid_rows.append(row)
     
-with TableWriter('tb_efo_doid_map', tb_efo_doid_fieldnames) as writer:
-    writer.writerows(tb_efo_doid_rows)
+write_table('tb_efo_doid_map', tb_efo_doid_map_fieldnames, tb_efo_doid_rows)
 
-"""
 
 ################################################################################
 ############# Drugbank
+tb_drugbank_fieldnames = ('drugbank_id', 'name', 'cas_number', 'type', 'groups')
 tb_drugbank_rows = list()
-tb_drugbank_fieldnames = ('drugbank_id', 'name', 'cas_number', 'type')
 
-tb_drugbank_alias_rows = list()
 tb_drugbank_alias_fieldnames = ('drugbank_id', 'alias')
+tb_drugbank_alias_rows = list()
 
 
 drugbank = bioparser.data.Data().drugbank
@@ -223,23 +229,70 @@ for drug in drugbank.drugs:
     row = drug.copy()
     row['drugbank_id'] = row['int_id']
     row['cas_number'] = row.get('cas_number')
+    row['groups'] = ', '.join(row.get('groups', list()))
     tb_drugbank_rows.append(row)
     aliases = drug.get('synonyms', list()) + drug.get('brands', list())
     for alias in aliases:
         row = {'drugbank_id': drug['int_id'], 'alias': alias}
         tb_drugbank_alias_rows.append(row)
 
-with TableWriter('tb_drugbank', tb_drugbank_fieldnames) as writer:
-    writer.writerows(tb_drugbank_rows)
-
-with TableWriter('tb_drugbank_alias', tb_drugbank_alias_fieldnames) as writer:
-    writer.writerows(tb_drugbank_alias_rows)
+write_table('tb_drugbank', tb_drugbank_fieldnames, tb_drugbank_rows)
+write_table('tb_drugbank_alias', tb_drugbank_alias_fieldnames, tb_drugbank_alias_rows)
+"""
 
 
+################################################################################
+############# CTD
+tb_ctd_fieldnames = ('mesh_id', 'name')
+tb_ctd_rows = list()
+
+tb_ctd_alias_fieldnames = ('mesh_id', 'alias')
+tb_ctd_alias_rows = list()
+
+tb_ctd_drugbank_map_fieldnames = ('mesh_id', 'drugbank_id')
+tb_ctd_drugbank_map_rows = list()
+
+ctd = bioparser.data.Data().ctd
+for chemical in ctd.read_chemicals():
+    mesh_id = chemical['ChemicalID']
+    row = {'mesh_id': mesh_id,
+           'name': chemical['ChemicalName'],
+           'definition': chemical['Definition']}
+    tb_ctd_rows.append(row)
+
+    for alias in chemical['Synonyms']:
+        row = {'mesh_id': mesh_id, 'alias': alias}
+        tb_ctd_alias_rows.append(row)
+    
+    for drugbank_id in chemical['DrugBankIDs']:
+        drugbank_int_id = int(drugbank_id[2:])
+        row = {'mesh_id': mesh_id, 'drugbank_id': drugbank_int_id}
+        tb_ctd_drugbank_map_rows.append(row)
+    
+write_table('tb_ctd', tb_ctd_fieldnames, tb_ctd_rows)
+write_table('tb_ctd_alias', tb_ctd_alias_fieldnames, tb_ctd_alias_rows)
+write_table('tb_ctd_drugbank_map', tb_ctd_drugbank_map_fieldnames, tb_ctd_drugbank_map_rows)
 
 
+tb_medic_fieldnames = ('disease_id', 'name')
+tb_medic_rows = list()
+
+for disease in ctd.read_diseases():
+    row = {'disease_id': disease['DiseaseID'],
+           'name': disease['DiseaseName']}
+    tb_medic_rows.append(row)
+
+write_table('tb_medic', tb_medic_fieldnames, tb_medic_rows)
 
 
+tb_ctd_medic_therapy_fieldnames = ('mesh_id', 'medic_id', 'pubmed')
+tb_ctd_medic_therapy_rows = list()
+
+
+for therapy in ctd.read_chemical2diseases():
+    if 'therapeutic' not in therapy['DirectEvidence']:
+        continue
+    row = {therapy['ChemicalID']'medic_id'}
 
 
 

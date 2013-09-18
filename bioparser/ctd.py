@@ -2,69 +2,100 @@ import os
 import csv
 import gzip
 
-import utilities.omictools
+import data
+
+
+def open_ext(path, *args, **kwargs):
+    open_fxn = gzip.open if path.endswith('.gz') else open
+    return open_fxn(path, *args, **kwargs)
+
+
+class CTDReader(csv.DictReader):
+    
+    def __init__(self, path, plural_fields=list()):
+        self.path = path
+        self.plural_fields = set(plural_fields)
+        read_file = open_ext(path)
+        self.read_file = read_file
+        # ignore comments until the line preceeding fieldname declarations
+        while read_file.next().rstrip() != '# Fields:':
+            pass
+        row = read_file.next().rstrip()
+        fieldnames = row[2:].split('\t')
+        read_file.next()
+        csv.DictReader.__init__(self, read_file, delimiter='\t', fieldnames=fieldnames)
+    
+    def next(self):
+        row = csv.DictReader.next(self)
+        for field, value in row.items():
+            if field in self.plural_fields:
+                row[field] = value.split('|') if value else list()
+            else:
+                if not value:
+                    row[field] = None
+        return row
+        
+    def close(self):
+        self.read_file.close()
+
 
 
 
 class CTD(object):
     
-    def __init__(self, ctd_dir):
-        self.ctd_dir = ctd_dir
-        
-        self.name_to_mesh = dict() # Populated by self.chemical_vocab_analyzer()
-        self.synonym_to_mesh = dict() # Populated by self.chemical_vocab_analyzer()
+    def __init__(self, directory=None):
+        """
+        http://ctdbase.org/downloads/
+        """
+        if not directory:
+            directory = data.current_path('ctd')
+        self.directory = directory
     
-    def chemical_vocab_generator(self):
-        """Read CTD_chemicals.tsv.gz"""
-        headings = ['ChemicalName', 'ChemicalID', 'CasRN', 'Definition', 
-                    'ParentIDs', 'TreeNumbers', 'ParentTreeNumbers', 'Synonyms']
-        compound_columns = ['ParentIDs', 'TreeNumbers', 'ParentTreeNumbers', 'Synonyms']
-        
-        path = os.path.join(self.ctd_dir, 'CTD_chemicals.tsv.gz')
-        
-        with gzip.GzipFile(path) as f:
-            reader = csv.DictReader(utilities.omictools.CommentedFile(f), headings, delimiter='\t')
-            for row_dict in reader:
-                for heading in compound_columns:
-                    compound_value = row_dict[heading]
-                    row_dict[heading] = compound_value.split('|') if compound_value else list()
-                row_dict['ChemicalID'] = row_dict['ChemicalID'][5:] # Remove 'MESH:'
-                yield row_dict
     
-    def chemical_vocab_analyzer(self):
-        chemicals = self.chemical_vocab_generator()
-        #keeper_headings = set(['ChemicalName', 'ChemicalID', 'CasRN', 'Definition', 'Synonyms'])
-        #chemicals = ({key: value for key, value in chemical.items() if key in keeper_headings} for chemical in chemicals)
-        for chemical in chemicals:
-            mesh = chemical['ChemicalID']
-            name = chemical['ChemicalName']
-            name = name.lower()
-            self.name_to_mesh[name] = mesh
-            for syn in chemical['Synonyms']:
-                syn = syn.lower()
-                self.synonym_to_mesh[syn] = mesh
+    def read_file(self, file_name, plural_fields):
+        path = os.path.join(self.directory, file_name)
+        reader = CTDReader(path, plural_fields)
+        for row in reader:
+            yield row
+        reader.close()
     
-    def mesh_from_name(self, name):
-        if not (self.name_to_mesh and self.synonym_to_mesh):
-            self.chemical_vocab_analyzer()
-        
-        name = name.lower()
-        
-        if name in self.name_to_mesh:
-            return self.name_to_mesh[name]
-        
-        if name in self.synonym_to_mesh:
-            return self.synonym_to_mesh[name]
+    def read_chemicals(self):
+        plural_fields = ['ParentIDs', 'TreeNumbers', 'ParentTreeNumbers', 
+                         'Synonyms', 'DrugBankIDs']
+        return self.read_file('CTD_chemicals.tsv.gz', plural_fields)
+
+    def read_diseases(self):
+        plural_fields = ['AltDiseaseIDs', 'ParentIDs', 'TreeNumbers', 
+                         'ParentTreeNumbers', 'Synonyms', 'SlimMappings']
+        return self.read_file('CTD_diseases.tsv.gz', plural_fields)
+
+    def read_chemical2genes(self):
+        plural_fields = ['GeneForms', 'InteractionActions', 'PubmedIDs']
+        return self.read_file('CTD_chem_gene_ixns.tsv.gz', plural_fields)
+
+    def read_chemical2diseases(self):
+        plural_fields = ['DirectEvidence', 'OmimIDs', 'PubmedIDs']
+        return self.read_file('CTD_chemicals_diseases.tsv.gz', plural_fields)
 
     
 if __name__ == '__main__':
-    ctd = CTD('/home/dhimmels/Documents/serg/omicnet/input-datasets/ctd/190912/')
-    ctd.chemical_vocab_analyzer()
+    ctd = CTD()
+    therapy_rows = ctd.read_chemical2diseases()
+    disease_ids = set()
+    for i, row in enumerate(therapy_rows):
+        if 'therapeutic' not in row['DirectEvidence']:
+            continue
+        disease_ids.add(row['DiseaseID'])
+        """
+        print '{ChemicalName}\t{DiseaseName}\t{DiseaseID}\t{OmimIDs}'.format(**row)
+        #print row['ChemicalName'], row['DiseaseName'], row['OmimIDs'], row['DirectEvidence']
+        if i > 1000:
+            break
+        """
     
-    names = ['rapamycin', 'isoxsuprine', '5-azacytidine', 'fluorescein', 'troglitazone', 'unoprostone', 'depsipeptide', 'pramlintide', 'triazolam', '17-hydroxyprogesterone', 'trovafloxacin', 'pyridostigmine', 'olanzapine', 'piroxicam', 'dobutamine', 'econazole']
-    names = []
-    for name in names:
-        print ctd.mesh_from_name(name)
+    for disease_id in disease_ids:
+        if not disease_id.startswith('MESH:'):
+            print disease_id
     
     
     
