@@ -94,6 +94,7 @@ class Data:
         self.ipa = ipa.IPA()
         self.meddra = meddra.MedDRA(current_path('meddra'))
         self.metathesaurus = metathesaurus.Metathesaurus()
+        self.morbid_map = omim.MorbidMap()
         self.omim = omim.OMIM(current_path('omim'))
         self.nature_predict = nature_predict.NaturePredict(source_data_dir('nature-predict'))
         self.nci = nci_thesaurus.NCIOntology(current_path('nci', path_type='files'))

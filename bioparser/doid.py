@@ -20,7 +20,6 @@ class DO(nxobo.NXOntology):
 
     def get_graph_from_obo(self):
         """
-        Colons are replaced with underscores node ids.
         """
         graph = super(DO, self).get_graph_from_obo()
         pattern = re.compile(r'^["](.*?)["]')

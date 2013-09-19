@@ -1,15 +1,49 @@
 import csv
 import os
 import re
+import itertools
 
 import utilities.omictools
 import bioparser.data
 
+
+class MorbidMap(object):
+
+    def __init__(self, omim_dir=None):
+        if not omim_dir:
+            omim_dir = bioparser.data.current_path('omim')
+        self.omim_dir = omim_dir
+
+    def read_morbidmap(self):
+        path = os.path.join(self.omim_dir, 'morbidmap')
+        read_file = open(path)
+        fieldnames = 'disease_info', 'symbols', 'omim_gene_id', 'locus'
+        reader = csv.DictReader(read_file, delimiter='|', fieldnames=fieldnames)
+        for row in reader:
+            row['symbols'] = row['symbols'].split(', ')
+            yield row
+        read_file.close()
+    
+    def get_id_to_gene_tuples(self):
+        pattern = re.compile(r"[0-9]{6}")
+        hgnc = bioparser.data.Data().hgnc
+        symbol_to_gene = hgnc.get_symbol_to_gene()
+        id_gene_tuples = set()
+        for row in self.read_morbidmap():
+            disease_info = row['disease_info']
+            ids = re.findall(pattern, disease_info)
+            genes = set(symbol_to_gene.get(symbol) for symbol in row['symbols'])
+            genes.discard(None)
+            for id_gene_tuple in itertools.product(ids, genes):
+                id_gene_tuples.add(id_gene_tuple)
+        id_gene_tuples = list(id_gene_tuples)
+        return id_gene_tuples
+    
 class OMIM(object):
     
     def __init__(self, omim_dir=None):
         if not omim_dir:
-            omim_dir = data.current_path('omim')
+            omim_dir = bioparser.data.current_path('omim')
         self.omim_dir = omim_dir
         
         self.mim_to_gene_symbol = dict()
@@ -99,8 +133,12 @@ class OMIM(object):
 
 
 if __name__ == '__main__':
-    omim = OMIM()
-    omim.read()
+    
+    mm = MorbidMap()
+    print mm.get_id_to_gene_tuples()
+    
+    #omim = OMIM()
+    #omim.read()
     #print omim.disorder_name_to_number
     #print len(omim.disorder_name_to_number)
     #print sum(bool(x) for x in omim.disorder_name_to_number.values())

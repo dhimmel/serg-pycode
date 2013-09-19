@@ -77,6 +77,10 @@ class CTD(object):
         plural_fields = ['DirectEvidence', 'OmimIDs', 'PubMedIDs']
         return self.read_file('CTD_chemicals_diseases.tsv.gz', plural_fields)
 
+    def read_gene2disease(self):
+        plural_fields = ['DirectEvidence', 'OmimIDs', 'PubMedIDs']
+        return self.read_file('CTD_genes_diseases.tsv.gz', plural_fields)
+
     
 if __name__ == '__main__':
     ctd = CTD()

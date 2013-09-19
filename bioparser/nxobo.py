@@ -19,7 +19,6 @@ class NXOntology(object):
         """
         Store a parsed EFO obo file in self.ontology and a directed 
         networkx multigraph representation in self.graph.
-        Colons are replaced with underscores node ids.
         """
         ontology = obo.OBOOntology(self.obo_path)
         graph = ontology.to_directed_networkx(attributes=self.keep_attributes)

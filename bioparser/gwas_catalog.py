@@ -44,7 +44,7 @@ class GwasCatalog(object):
     
     def __init__(self, gwas_dir=None):
         if gwas_dir is None:
-            gwas_dir = data.current_path('gwas-catalog')
+            gwas_dir = data.current_path('gwas-catalog', require_dated_format=True)
         self.gwas_dir = gwas_dir
         
     def row_generator(self, path=None):
@@ -151,8 +151,9 @@ class GwasCatalog(object):
                 catalog_term = row['DISEASETRAIT']
                 efo_id = row['EFOURI']
                 efo_id = efo_id.rsplit('/', 1)[-1]
-                efo_id = efo_id.replace('rdfns#', 'ORP_')
+                efo_id = efo_id.replace('rdfns#', '')
                 efo_id = efo_id.replace('CL#', '')
+                efo_id = ':'.join(efo_id.rsplit('_', 1))
                 if efo_id not in efo_graph.node:
                     unmatched_efo_terms.add(efo_id)
                     continue

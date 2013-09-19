@@ -8,57 +8,66 @@ import mapping.bioportal
 ictnet_dir = '/home/dhimmels/Documents/serg/ictnet/ictnet-creation2/'
 
 
+
+class Table(object):
+    
+    def __init__(self, name, fieldnames):
+        self.name = name
+        self.file_name = 'tb_{}.txt'.format(name)
+        self.path = os.path.join(ictnet_dir, 'tables', self.file_name)
+        self.rows = list()
+        self.fieldnames = fieldnames
+    
+    def sort_rows(self):
+        self.rows.sort(key=lambda row: [row[key] for key in self.fieldnames])
+
+    def write(self):
+        self.sort_rows()
+        with open(self.path, 'w') as write_file:
+            writer = csv.DictWriter(write_file, delimiter='\t',
+                fieldnames=self.fieldnames, extrasaction='ignore')
+            writer.writeheader()
+            writer.writerows(self.rows)
+        print 'Writing {} is complete'.format(self.file_name)
+
+    def append(self, row):
+        self.rows.append(row)
+
+    def get_row_tuple_to_rows(primary_keys):
+        """rows is a list of dictionaries. rows are considered unique based on
+        their primary_keys"""
+        row_tuple_to_rows = dict()
+        for row in self.rows:
+            row_tuple = tuple(row[key] for key in primary_keys)
+            row_tuple_to_rows.setdefault(row_tuple, list()).append(row)
+        return row_tuple_to_rows
+
+    def remove_duplicates(self, primary_keys):
+        """Remove duplicate rows"""
+        row_tuple_to_rows = self.get_row_tuple_to_rows(primary_keys)
+        self.rows = [rows[0] for rows in row_tuple_to_rows.itervalues()]
+
+    def condense(primary_keys, combine_keys, sep=', '):
+        """Returns rows that are unique accross primary_keys. The values for 
+        combine_keys are joined with the string sep."""
+        condensed_rows = list()
+        row_tuple_to_rows = self.get_row_tuple_to_rows(primary_keys)
+        for rows in row_tuple_to_rows.itervalues():
+            condensed_row = rows[0].copy()
+            for combine_key in combine_keys:
+                joined_value = sep.join([row[combine_key] for row in rows])
+            condensed_row[combine_key] = joined_value
+            condensed_rows.append(condensed_row)
+        self.rows = condensed_rows
+
 """
 Some chemical-gene ctd interactions don't have an organism? All option?
 Do we want approved symbol included in tb_gene_alias?
 Are we excluding non-protein coding genes?
 Several doid xrefs to omim use IDs not in the UMLS. Can table upload ignore those rows.
 """
-class TableWriter(object):
-    
-    def __init__(self, table_name, fieldnames):
-        """Class to write tab delimited text files encoding ictnet tables."""
-        self.table_name = table_name
-        self.fieldnames = fieldnames
-        self.path = os.path.join(ictnet_dir, 'tables', table_name + '.txt')
-        self.file = open(self.path, 'w')
-        self.writer = csv.DictWriter(self.file, delimiter='\t',
-            fieldnames=fieldnames, extrasaction='ignore')
-        self.writer.writeheader()
-    
-    def writerow(self, row):
-        self.writer.writerow(row)
-    
-    def writerows(self, rows, sort=True):
-        if sort:
-            rows = list(rows)
-            rows.sort(key=lambda row: [row[key] for key in self.fieldnames])
-        for row in rows:
-            self.writerow(row)
-        
-    def close(self):
-        self.file.close()
-    
-    def __enter__(self):
-        return self
-    
-    def __exit__(self, *args, **kwargs):
-        self.close()
-
-def write_table(name, fielnames, rows):
-    with TableWriter(name, fielnames) as writer:
-        writer.writerows(rows)
-    print 'Writing {} is complete'.format(name)
 
 
-def get_row_tuple_to_rows(rows, primary_keys):
-    """rows is a list of dictionaries. rows are considered unique based on
-    their primary_keys"""
-    row_tuple_to_rows = dict()
-    for row in rows:
-        row_tuple = tuple(row[key] for key in primary_keys)
-        row_tuple_to_rows.setdefault(row_tuple, list()).append(row)
-    return row_tuple_to_rows
 
 def remove_duplicate_rows(rows, primary_keys):
     """rows is a list of dictionaries. rows are considered unique based on
@@ -66,51 +75,34 @@ def remove_duplicate_rows(rows, primary_keys):
     row_tuple_to_rows = get_row_tuple_to_rows(rows, primary_keys)
     return [rows[0] for rows in row_tuple_to_rows.itervalues()]
 
-def condense_rows(rows, primary_keys, combine_keys, sep=', '):
-    """Returns rows that are unique accross primary_keys. The values for 
-    combine_keys are joined with the string sep."""
-    condensed_rows = list()
-    row_tuple_to_rows = get_row_tuple_to_rows(rows, primary_keys)
-    for rows in row_tuple_to_rows.itervalues():
-        condensed_row = rows[0].copy()
-        for combine_key in combine_keys:
-            joined_value = sep.join([row[combine_key] for row in rows])
-        condensed_row[combine_key] = joined_value
-        condensed_rows.append(condensed_row)
-    return condensed_rows
 
 hgnc = bioparser.data.Data().hgnc
 symbol_to_gene = hgnc.get_symbol_to_gene()
 
-"""
+
 ################################################################################
-############# genes
-tb_gene_fieldnames = ('gene_id', 'symbol', 'name', 'chromosome', 'group')
-tb_gene_rows = list()
-tb_gene_alias_fieldnames = ('gene_id', 'alias')
-tb_gene_alias_rows = list()
+############# HGNC - Genes
+tb_gene = Table('gene', ['hgnc_id', 'symbol', 'name', 'chromosome', 'group'])
+tb_gene_alias = Table('gene_alias', ['hgnc_id', 'alias'])
+
 genes = hgnc.get_genes()
 for gene in genes:
     gene_id = gene.id_
-    row = {'gene_id':gene_id, 'symbol': gene.symbol,
+    row = {'hgnc_id':gene_id, 'symbol': gene.symbol,
            'name': gene.name, 'chromosome': gene.chromosome,
            'group': gene.locus_group}
-    tb_gene_rows.append(row)
+    tb_gene.append(row)
     for alias in gene.synonyms + gene.previous_symbols:
-        row = {'gene_id': gene_id, 'alias': alias}
-        tb_gene_alias_rows.append(row)
+        row = {'hgnc_id': gene_id, 'alias': alias}
+        tb_gene_alias.append(row)
 
-# write tb_gene_rows
-write_table('tb_gene', tb_gene_fieldnames, tb_gene_rows)
-
-# write tb_gene_alias_rows
-write_table('tb_gene_alias', tb_gene_alias_fieldnames, tb_gene_alias_rows)
+tb_gene.write()
+tb_gene_alias.write()
 
 ################################################################################
 ############# ppi
-tb_ppi_rows = list()
-tb_ppi_fieldnames = ('source', 'target', 'pubmed', 'method', 'interaction_type',
-                     'edge_type', 'sources', 'complex')
+tb_ppi = Table('ppi', ['source', 'target', 'pubmed', 'method', 'interaction_type',
+              'edge_type', 'sources', 'complex'])
 
 ppitrim = bioparser.data.Data().ppitrim
 complex_interactions, binary_interactions = ppitrim.all_interactions()
@@ -121,26 +113,16 @@ for is_complex, ppis in enumerate([binary_interactions, complex_interactions]):
         row['source'] = ppi['source'].id_
         row['target'] = ppi['target'].id_
         row['complex'] = is_complex
-        tb_ppi_rows.append(row)
-
-# write tb_ppi_rows
-write_table('tb_ppi', tb_ppi_fieldnames, tb_ppi_rows)
+        tb_ppi.append(row)
+tb_ppi.write()
 
 ################################################################################
 ############# diseases - Disease Ontology
 
-tb_doid_fieldnames = 'doid_id', 'name'
-tb_doid_rows = list()
-
-tb_doid_ontology_fieldnames = ['parent', 'child']
-tb_doid_ontology_rows = list()
-
-tb_doid_omim_map_fieldnames = ['doid_id', 'omim_id']
-tb_doid_omim_map_rows = list()
-
-tb_doid_mesh_map_fieldnames = ['doid_id', 'mesh_id']
-tb_doid_mesh_map_rows = list()
-
+tb_doid = Table('doid', ['doid_id', 'name'])
+tb_doid_ontology = Table('doid_ontology', ['parent', 'child'])
+tb_doid_omim_map = Table('doid_omim_map', ['doid_id', 'omim_id'])
+tb_doid_medic_map = Table('doid_medic_map', ['doid_id', 'medic_id'])
 
 
 do_graph = bioparser.data.Data().doid.get_graph()
@@ -148,36 +130,34 @@ for node, data in do_graph.nodes(data=True):
     doid_id = data['id_']
     row = {'doid_id': doid_id,
            'name': data['name']}
-    tb_doid_rows.append(row)
+    tb_doid.append(row)
     for parent, child in do_graph.out_edges(node):
         parent_id = do_graph.node[parent]['id_']
         child_id = do_graph.node[child]['id_']
-        tb_doid_ontology_rows.append({'parent': parent_id, 'child': child_id})
+        tb_doid_ontology.append({'parent': parent_id, 'child': child_id})
     
     # OMIM mappings
     for omim_id in data['xref'].get('OMIM', list()):
         row = {'doid_id': doid_id, 'omim_id': omim_id}
-        tb_doid_omim_map_rows.append(row)
+        tb_doid_omim_map.append(row)
+        row = {'doid_id': doid_id, 'medic_id': 'OMIM:' + omim_id}
+        tb_doid_medic_map.append(row)
 
     # MESH mappings
     for mesh_id in data['xref'].get('MSH', list()):
-        row = {'doid_id': doid_id, 'mesh_id': mesh_id}
-        tb_doid_mesh_map_rows.append(row)
+        row = {'doid_id': doid_id, 'medic_id': 'MESH:' + mesh_id}
+        tb_doid_medic_map.append(row)
 
-write_table('tb_doid', tb_doid_fieldnames, tb_doid_rows)
-write_table('tb_doid_ontology', tb_doid_ontology_fieldnames, tb_doid_ontology_rows)
-write_table('tb_doid_omim_map', tb_doid_omim_map_fieldnames, tb_doid_omim_map_rows)
-write_table('tb_doid_mesh_map', tb_doid_mesh_map_fieldnames, tb_doid_mesh_map_rows)
-
+tb_doid.write()
+tb_doid_ontology.write()
+tb_doid_omim_map.write()
+tb_doid_medic_map.write()
 
 ################################################################################
 ############# diseases - EFO
 
-tb_efo_fieldnames = 'doid_id', 'name'
-tb_efo_rows = list()
-
-tb_efo_ontology_fieldnames = 'parent', 'child'
-tb_efo_ontology_rows = list()
+tb_efo = Table('efo', ['doid_id', 'name'])
+tb_efo_ontology = Table('efo_ontology', ['parent', 'child'])
 
 efo = bioparser.data.Data().efo
 efo_graph = efo.get_graph()
@@ -186,19 +166,38 @@ efo_graph = efo_graph.subgraph(efo_diseases)
 for node, data in efo_graph.nodes(data=True):
     row = {'doid_id': node,
            'name': data['name']}
-    tb_efo_rows.append(row)
+    tb_efo.append(row)
     for parent, child in efo_graph.out_edges(node):
-        tb_efo_ontology_rows.append({'parent': parent, 'child': child})
+        tb_efo_ontology.append({'parent': parent, 'child': child})
 
-with TableWriter('tb_efo', tb_efo_fieldnames) as writer:
-    writer.writerows(tb_efo_rows)
-with TableWriter('tb_efo_ontology', tb_efo_ontology_fieldnames) as writer:
-    writer.writerows(tb_efo_ontology_rows)
+tb_efo.write()
+tb_efo_ontology.write()
+
+
+tb_gene_efo_gwas = Table('gene_efo_gwas',
+    ['hgnc_id', 'efo_id', 'p-value', 'OR or beta', 'SNPs', 'pubmed'])
+
+gwas_catalog = bioparser.data.Data().gwas_catalog
+#path = '/home/dhimmels/Documents/serg/data-sources/gwas-catalog/GWAS-EFO-Mappings092012.txt'
+gwas_catalog.read_ebi_mappings()
+gwas_catalog.apply_fdr()
+for gwas_row in gwas_catalog.get_rows():
+    efo_id = gwas_row.get('efo_id')
+    if not efo_id:
+        continue
+    genes = set(symbol_to_gene.get(symbol) for symbol in gwas_row['genes'])
+    genes.discard(None)    
+    for gene in genes:
+        row = {'efo_id': efo_id, 'hgnc_id': gene.id_, 
+               'p-value': gwas_row['p-Value'], 'OR or beta': gwas_row['OR or beta'],
+               'SNPs': gwas_row['SNPs'], 'pubmed': gwas_row['PUBMEDID']}
+        tb_gene_efo_gwas.append(row)
+tb_gene_efo_gwas.write()
+
 
 ################################################################################
 ############# diseases - OMIM
-tb_omim_fieldnames = 'omim_id', 'name', 'types'
-tb_omim_rows = list()
+tb_omim = Table('omim', ['omim_id', 'name', 'types'])
 
 metathesaurus = bioparser.data.Data().metathesaurus
 with metathesaurus:
@@ -215,74 +214,83 @@ with metathesaurus:
         concept = concepts_shelve[cui]
         row = {'omim_id': concept.source_to_code['OMIM'],
                'name': concept.name,
-               'types': concept.symantic_types}
-        tb_omim_rows.append(row)
-        #all_types |= concept.symantic_types
-
-write_table('tb_omim', tb_omim_fieldnames, tb_omim_rows)
-
+               'types': concept.semantic_types}
+        tb_omim.append(row)
+        #all_types |= concept.semantic_types
+tb_omim.write()
 #omim_ids = set(row['omim_id'] for row in tb_omim_rows)
 #mapped_omim_ids = set(row['omim_id'] for row in tb_doid_omim_map_rows)
 #print mapped_omim_ids - omim_ids
 
+
+tb_gene_omim_morbidmap = Table('gene_omim_morbidmap', ['hgnc_id', 'omim_id'])
+morbid_map = bioparser.data.Data().morbid_map
+id_to_gene_tuples = morbid_map.get_id_to_gene_tuples()
+for omim_id, gene in id_to_gene_tuples:
+    row = {'hgnc_id': gene.id_, 'omim_id': omim_id}
+    tb_gene_omim_morbidmap.append(row)
+tb_gene_omim_morbidmap.write()
+
+
 ################################################################################
 ############# EFO DOID bioportal mappings
-
-tb_efo_doid_rows = list()
-tb_efo_doid_fieldnames = 'efo_id', 'doid_id'
-
+tb_efo_doid_map = Table('efo_doid_map', ['efo_id', 'doid_id'])
 efo_doid_mapping_path = '/home/dhimmels/Documents/serg/data-mapping/bioportal/efo_doid/130914/mappings.rdf'
-
-
 for source, target in mapping.bioportal.read_mapping(efo_doid_mapping_path):
     target = int(target.rsplit(':')[-1])
     row = {'efo_id': source, 'doid_id': target}
-    tb_efo_doid_rows.append(row)
-    
-write_table('tb_efo_doid_map', tb_efo_doid_map_fieldnames, tb_efo_doid_rows)
-
+    tb_efo_doid_map.append(row)
+tb_efo_doid_map.write()
 
 ################################################################################
 ############# Drugbank
-tb_drugbank_fieldnames = ('drugbank_id', 'name', 'cas_number', 'type', 'groups')
-tb_drugbank_rows = list()
+tb_drugbank = Table('drugbank', ['drugbank_id', 'name', 'cas_number', 'type', 'groups'])
+tb_drugbank_alias = Table('drugbank_alias', ['drugbank_id', 'alias'])
 
-tb_drugbank_alias_fieldnames = ('drugbank_id', 'alias')
-tb_drugbank_alias_rows = list()
-
-
+drugank_id_to_int = lambda s: int(s[2: ])
 drugbank = bioparser.data.Data().drugbank
 drugbank.read()
 for drug in drugbank.drugs:
-    drug['int_id'] = int(drug['drugbank_id'][2:])
+    drug['int_id'] = drugank_id_to_int(drug['drugbank_id'])
     row = drug.copy()
     row['drugbank_id'] = row['int_id']
     row['cas_number'] = row.get('cas_number')
     row['groups'] = ', '.join(row.get('groups', list()))
-    tb_drugbank_rows.append(row)
+    tb_drugbank.append(row)
     aliases = drug.get('synonyms', list()) + drug.get('brands', list())
     for alias in aliases:
         row = {'drugbank_id': drug['int_id'], 'alias': alias}
-        tb_drugbank_alias_rows.append(row)
+        tb_drugbank_alias.append(row)
+tb_drugbank.write()
+tb_drugbank_alias.write()
 
-write_table('tb_drugbank', tb_drugbank_fieldnames, tb_drugbank_rows)
-write_table('tb_drugbank_alias', tb_drugbank_alias_fieldnames, tb_drugbank_alias_rows)
-"""
 
+tb_drug_gene_drugbank = Table('drug_gene_drugbank',
+    ['drugbank_id', 'hgnc_id', 'pharmacological', 'actions'])
+
+id_to_partner = drugbank.get_id_to_partner()
+for target in drugbank.targets:
+    partner_id = target['partner']
+    partner = id_to_partner[partner_id]
+    if partner['species'] != 'Homo sapiens':
+        continue
+    gene = symbol_to_gene.get(partner.get('gene_name'))
+    if not gene:
+        continue
+    row = {'drugbank_id': drugank_id_to_int(target['drugbank_id']),
+           'hgnc_id': gene.id_,
+           'pharmacological': int(target['known_action'] == 'yes'),
+           'actions': ', '.join(target.get('actions', []))}
+    tb_drug_gene_drugbank.append(row)
+tb_drug_gene_drugbank.write()
 
 ################################################################################
 ############# CTD
-tb_ctd_fieldnames = ('mesh_id', 'name')
-tb_ctd_rows = list()
-
-tb_ctd_alias_fieldnames = ('mesh_id', 'alias')
-tb_ctd_alias_rows = list()
-
-tb_ctd_drugbank_map_fieldnames = ('mesh_id', 'drugbank_id')
-tb_ctd_drugbank_map_rows = list()
+tb_ctd = Table('ctd', ['mesh_id', 'name'])
+tb_ctd_alias = Table('ctd_alias', ['mesh_id', 'alias'])
+tb_ctd_drugbank_map = Table('ctd_drugbank_map', ['mesh_id', 'drugbank_id'])
 
 ctd = bioparser.data.Data().ctd
-"""
 for chemical in ctd.read_chemicals():
     mesh_id = chemical['ChemicalID']
     row = {'mesh_id': mesh_id,
@@ -299,25 +307,23 @@ for chemical in ctd.read_chemicals():
         row = {'mesh_id': mesh_id, 'drugbank_id': drugbank_int_id}
         tb_ctd_drugbank_map_rows.append(row)
     
-write_table('tb_ctd', tb_ctd_fieldnames, tb_ctd_rows)
-write_table('tb_ctd_alias', tb_ctd_alias_fieldnames, tb_ctd_alias_rows)
-write_table('tb_ctd_drugbank_map', tb_ctd_drugbank_map_fieldnames, tb_ctd_drugbank_map_rows)
+tb_ctd.write()
+tb_ctd_alias.write()
+tb_ctd_drugbank_map.write()
 
-
-
-tb_medic_fieldnames = ('disease_id', 'name')
-tb_medic_rows = list()
-
+tb_medic = Table('medic', ['medic_id', 'name'])
 for disease in ctd.read_diseases():
-    row = {'disease_id': disease['DiseaseID'],
+    row = {'medic_id': disease['DiseaseID'],
            'name': disease['DiseaseName']}
-    tb_medic_rows.append(row)
+    tb_medic.append(row)
+tb_medic.write()
 
-write_table('tb_medic', tb_medic_fieldnames, tb_medic_rows)
+#medic_ids = set(row['medic_id'] for row in tb_medic_rows)
+#tb_doid_medic_map_rows = list(row for row in tb_doid_medic_map_rows
+#                              if row['medic_id'] in medic_ids)
+#tb_doid_medic_map.write()
 
-
-tb_ctd_medic_therapy_fieldnames = ('mesh_id', 'medic_id', 'pubmeds')
-tb_ctd_medic_therapy_rows = list()
+tb_ctd_medic_therapy = Table('ctd_medic_therapy', ['mesh_id', 'medic_id', 'pubmeds'])
 
 for therapy in ctd.read_chemical2diseases():
     if 'therapeutic' not in therapy['DirectEvidence']:
@@ -326,14 +332,11 @@ for therapy in ctd.read_chemical2diseases():
     row = {'mesh_id': therapy['ChemicalID'],
            'medic_id': therapy['DiseaseID'],
            'pubmeds': pubmeds}
-    tb_ctd_medic_therapy_rows.append(row)
+    tb_ctd_medic_therapy.append(row)
+tb_ctd_medic_therapy.write()
 
-write_table('tb_ctd_medic_therapy', tb_ctd_medic_therapy_fieldnames, tb_ctd_medic_therapy_rows)
-"""
-
-tb_ctd_gene_ixn_fieldnames = ('mesh_id', 'symbol', 'organism_id', 'pubmeds')
-tb_ctd_gene_ixn_rows = list()
-
+tb_ctd_gene_ixn = Table('ctd_gene_ixn',
+    ['mesh_id', 'hgnc_id', 'organism_id', 'pubmeds'])
 id_to_organism = dict()
 for ixn in ctd.read_chemical2genes():
     mesh_id = ixn['ChemicalID']
@@ -351,21 +354,35 @@ for ixn in ctd.read_chemical2genes():
         organism = 'Unkown'
     id_to_organism[organism_id] = organism
     #row_tuple = mesh_id, gene.symbol, pubmeds, organism_id
-    row = {'mesh_id': mesh_id, 'symbol': gene.symbol, 'pubmeds': pubmeds,
+    row = {'mesh_id': mesh_id, 'hgnc_id': gene.id_, 'pubmeds': pubmeds,
            'organism_id': organism_id}
-    tb_ctd_gene_ixn_rows.append(row)
+    tb_ctd_gene_ixn.append(row)
 
-tb_ctd_gene_ixn_rows = remove_duplicate_rows(tb_ctd_gene_ixn_rows, tb_ctd_gene_ixn_fieldnames)
-tb_ctd_gene_ixn_rows = condense_rows(tb_ctd_gene_ixn_rows, ['mesh_id', 'symbol', 'organism_id'], ['pubmeds'])
+tb_ctd_gene_ixn.remove_duplicates(tb_ctd_gene_ixn.fieldnames)
+tb_ctd_gene_ixn.condense(['mesh_id', 'hgnc_id', 'organism_id'], ['pubmeds'])
+tb_ctd_gene_ixn.write()
 
-
-write_table('tb_ctd_gene_ixn', tb_ctd_gene_ixn_fieldnames, tb_ctd_gene_ixn_rows)
-
-tb_organism_fieldnames = 'organism_id', 'name'
-tb_organism_rows = [{'organism_id': int(id_), 'name': name}
-                    for id_, name in id_to_organism.iteritems()]
-write_table('tb_organism', tb_organism_fieldnames, tb_organism_rows)
+tb_organism = Table('organism', ['organism_id', 'name'])
+for id_, name in id_to_organism.iteritems():
+    tb_organism.append({'organism_id': int(id_), 'name': name})
+tb_organism.write()
 
 
+tb_gene_medic_ctd = Table('gene_medic_ctd', ['hgnc_id', 'medic_id', 'pubmeds'])
+for ctd_row in ctd.read_gene2disease():
+    if 'marker/mechanism' not in ctd_row['DirectEvidence']:
+        continue
+    symbol = ctd_row['GeneSymbol']
+    gene = symbol_to_gene.get(symbol)
+    if not gene:
+        continue
+    pubmeds = ', '.join(ctd_row['PubMedIDs'])
+    omims = ', '.join(ctd_row['OmimIDs'])
+    row = {'hgnc_id': gene.id_, 'medic_id': ctd_row['DiseaseID'], 'pubmeds': pubmeds}
+    tb_gene_medic_ctd.append(row)
+tb_gene_medic_ctd.write()
 
-
+    
+    
+    
+    
