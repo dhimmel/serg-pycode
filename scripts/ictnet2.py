@@ -9,6 +9,7 @@ ictnet_dir = '/home/dhimmels/Documents/serg/ictnet/ictnet-creation2/'
 
 
 """
+Some chemical-gene ctd interactions don't have an organism? All option?
 Do we want approved symbol included in tb_gene_alias?
 Are we excluding non-protein coding genes?
 Several doid xrefs to omim use IDs not in the UMLS. Can table upload ignore those rows.
@@ -49,6 +50,34 @@ def write_table(name, fielnames, rows):
         writer.writerows(rows)
     print 'Writing {} is complete'.format(name)
 
+
+def get_row_tuple_to_rows(rows, primary_keys):
+    """rows is a list of dictionaries. rows are considered unique based on
+    their primary_keys"""
+    row_tuple_to_rows = dict()
+    for row in rows:
+        row_tuple = tuple(row[key] for key in primary_keys)
+        row_tuple_to_rows.setdefault(row_tuple, list()).append(row)
+    return row_tuple_to_rows
+
+def remove_duplicate_rows(rows, primary_keys):
+    """rows is a list of dictionaries. rows are considered unique based on
+    their primary_keys"""
+    row_tuple_to_rows = get_row_tuple_to_rows(rows, primary_keys)
+    return [rows[0] for rows in row_tuple_to_rows.itervalues()]
+
+def condense_rows(rows, primary_keys, combine_keys, sep=', '):
+    """Returns rows that are unique accross primary_keys. The values for 
+    combine_keys are joined with the string sep."""
+    condensed_rows = list()
+    row_tuple_to_rows = get_row_tuple_to_rows(rows, primary_keys)
+    for rows in row_tuple_to_rows.itervalues():
+        condensed_row = rows[0].copy()
+        for combine_key in combine_keys:
+            joined_value = sep.join([row[combine_key] for row in rows])
+        condensed_row[combine_key] = joined_value
+        condensed_rows.append(condensed_row)
+    return condensed_rows
 
 hgnc = bioparser.data.Data().hgnc
 symbol_to_gene = hgnc.get_symbol_to_gene()
@@ -253,6 +282,7 @@ tb_ctd_drugbank_map_fieldnames = ('mesh_id', 'drugbank_id')
 tb_ctd_drugbank_map_rows = list()
 
 ctd = bioparser.data.Data().ctd
+"""
 for chemical in ctd.read_chemicals():
     mesh_id = chemical['ChemicalID']
     row = {'mesh_id': mesh_id,
@@ -274,6 +304,7 @@ write_table('tb_ctd_alias', tb_ctd_alias_fieldnames, tb_ctd_alias_rows)
 write_table('tb_ctd_drugbank_map', tb_ctd_drugbank_map_fieldnames, tb_ctd_drugbank_map_rows)
 
 
+
 tb_medic_fieldnames = ('disease_id', 'name')
 tb_medic_rows = list()
 
@@ -285,15 +316,55 @@ for disease in ctd.read_diseases():
 write_table('tb_medic', tb_medic_fieldnames, tb_medic_rows)
 
 
-tb_ctd_medic_therapy_fieldnames = ('mesh_id', 'medic_id', 'pubmed')
+tb_ctd_medic_therapy_fieldnames = ('mesh_id', 'medic_id', 'pubmeds')
 tb_ctd_medic_therapy_rows = list()
-
 
 for therapy in ctd.read_chemical2diseases():
     if 'therapeutic' not in therapy['DirectEvidence']:
         continue
-    row = {therapy['ChemicalID']'medic_id'}
+    pubmeds = ', '.join(therapy['PubMedIDs'])
+    row = {'mesh_id': therapy['ChemicalID'],
+           'medic_id': therapy['DiseaseID'],
+           'pubmeds': pubmeds}
+    tb_ctd_medic_therapy_rows.append(row)
 
+write_table('tb_ctd_medic_therapy', tb_ctd_medic_therapy_fieldnames, tb_ctd_medic_therapy_rows)
+"""
+
+tb_ctd_gene_ixn_fieldnames = ('mesh_id', 'symbol', 'organism_id', 'pubmeds')
+tb_ctd_gene_ixn_rows = list()
+
+id_to_organism = dict()
+for ixn in ctd.read_chemical2genes():
+    mesh_id = ixn['ChemicalID']
+    symbol = ixn['GeneSymbol']
+    gene = symbol_to_gene.get(symbol)
+    if not gene:
+        continue
+    pubmeds = ', '.join(ixn['PubMedIDs'])
+    organism_id = ixn['OrganismID']
+    organism = ixn['Organism']
+    
+    # Some chemical-gene ctd interactions don't have an organism 
+    if not organism_id:
+        organism_id = 0
+        organism = 'Unkown'
+    id_to_organism[organism_id] = organism
+    #row_tuple = mesh_id, gene.symbol, pubmeds, organism_id
+    row = {'mesh_id': mesh_id, 'symbol': gene.symbol, 'pubmeds': pubmeds,
+           'organism_id': organism_id}
+    tb_ctd_gene_ixn_rows.append(row)
+
+tb_ctd_gene_ixn_rows = remove_duplicate_rows(tb_ctd_gene_ixn_rows, tb_ctd_gene_ixn_fieldnames)
+tb_ctd_gene_ixn_rows = condense_rows(tb_ctd_gene_ixn_rows, ['mesh_id', 'symbol', 'organism_id'], ['pubmeds'])
+
+
+write_table('tb_ctd_gene_ixn', tb_ctd_gene_ixn_fieldnames, tb_ctd_gene_ixn_rows)
+
+tb_organism_fieldnames = 'organism_id', 'name'
+tb_organism_rows = [{'organism_id': int(id_), 'name': name}
+                    for id_, name in id_to_organism.iteritems()]
+write_table('tb_organism', tb_organism_fieldnames, tb_organism_rows)
 
 
 

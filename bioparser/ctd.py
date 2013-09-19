@@ -70,11 +70,11 @@ class CTD(object):
         return self.read_file('CTD_diseases.tsv.gz', plural_fields)
 
     def read_chemical2genes(self):
-        plural_fields = ['GeneForms', 'InteractionActions', 'PubmedIDs']
+        plural_fields = ['GeneForms', 'InteractionActions', 'PubMedIDs']
         return self.read_file('CTD_chem_gene_ixns.tsv.gz', plural_fields)
 
     def read_chemical2diseases(self):
-        plural_fields = ['DirectEvidence', 'OmimIDs', 'PubmedIDs']
+        plural_fields = ['DirectEvidence', 'OmimIDs', 'PubMedIDs']
         return self.read_file('CTD_chemicals_diseases.tsv.gz', plural_fields)
 
     
