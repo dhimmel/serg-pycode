@@ -15,6 +15,7 @@ import ipa
 import iref
 import meddra
 import metathesaurus
+import mircat
 import nature_predict
 import nci_thesaurus
 import omim
@@ -94,6 +95,7 @@ class Data:
         self.ipa = ipa.IPA()
         self.meddra = meddra.MedDRA(current_path('meddra'))
         self.metathesaurus = metathesaurus.Metathesaurus()
+        self.mircat = mircat.MirCat()
         self.morbid_map = omim.MorbidMap()
         self.omim = omim.OMIM(current_path('omim'))
         self.nature_predict = nature_predict.NaturePredict(source_data_dir('nature-predict'))

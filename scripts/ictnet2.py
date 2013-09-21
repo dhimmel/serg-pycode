@@ -33,7 +33,7 @@ class Table(object):
     def append(self, row):
         self.rows.append(row)
 
-    def get_row_tuple_to_rows(primary_keys):
+    def get_row_tuple_to_rows(self, primary_keys):
         """rows is a list of dictionaries. rows are considered unique based on
         their primary_keys"""
         row_tuple_to_rows = dict()
@@ -47,7 +47,7 @@ class Table(object):
         row_tuple_to_rows = self.get_row_tuple_to_rows(primary_keys)
         self.rows = [rows[0] for rows in row_tuple_to_rows.itervalues()]
 
-    def condense(primary_keys, combine_keys, sep=', '):
+    def condense(self, primary_keys, combine_keys, sep=', '):
         """Returns rows that are unique accross primary_keys. The values for 
         combine_keys are joined with the string sep."""
         condensed_rows = list()
@@ -68,18 +68,10 @@ Several doid xrefs to omim use IDs not in the UMLS. Can table upload ignore thos
 """
 
 
-
-def remove_duplicate_rows(rows, primary_keys):
-    """rows is a list of dictionaries. rows are considered unique based on
-    their primary_keys"""
-    row_tuple_to_rows = get_row_tuple_to_rows(rows, primary_keys)
-    return [rows[0] for rows in row_tuple_to_rows.itervalues()]
-
-
 hgnc = bioparser.data.Data().hgnc
 symbol_to_gene = hgnc.get_symbol_to_gene()
 
-
+"""
 ################################################################################
 ############# HGNC - Genes
 tb_gene = Table('gene', ['hgnc_id', 'symbol', 'name', 'chromosome', 'group'])
@@ -194,43 +186,31 @@ for gwas_row in gwas_catalog.get_rows():
         tb_gene_efo_gwas.append(row)
 tb_gene_efo_gwas.write()
 
-
 ################################################################################
 ############# diseases - OMIM
-tb_omim = Table('omim', ['omim_id', 'name', 'types'])
-
-metathesaurus = bioparser.data.Data().metathesaurus
-with metathesaurus:
-    omim_concepts = metathesaurus.shelves['sources']['OMIM']
-    #types_shelve = metathesaurus.shelves['types']
-    retain_types = ['Disease or Syndrome', 'Anatomical Abnormality',
-                    'Neoplastic Process', 'Congenital Abnormality']
-    #types_shelve['Disease or Syndrome']
-    #types_shelve['Anatomical Abnormality']
-    #types_shelve['Neoplastic Process']
-    #all_types = set()
-    concepts_shelve = metathesaurus.shelves['concepts']
-    for cui in omim_concepts:
-        concept = concepts_shelve[cui]
-        row = {'omim_id': concept.source_to_code['OMIM'],
-               'name': concept.name,
-               'types': concept.semantic_types}
-        tb_omim.append(row)
-        #all_types |= concept.semantic_types
-tb_omim.write()
-#omim_ids = set(row['omim_id'] for row in tb_omim_rows)
-#mapped_omim_ids = set(row['omim_id'] for row in tb_doid_omim_map_rows)
-#print mapped_omim_ids - omim_ids
-
 
 tb_gene_omim_morbidmap = Table('gene_omim_morbidmap', ['hgnc_id', 'omim_id'])
+omim_ids = set()
 morbid_map = bioparser.data.Data().morbid_map
 id_to_gene_tuples = morbid_map.get_id_to_gene_tuples()
 for omim_id, gene in id_to_gene_tuples:
     row = {'hgnc_id': gene.id_, 'omim_id': omim_id}
     tb_gene_omim_morbidmap.append(row)
+    omim_ids.add(omim_id)
 tb_gene_omim_morbidmap.write()
 
+
+tb_omim = Table('omim', ['omim_id', 'name'])
+# Use the UMLS metathesaurus to get the name for the OMIM ID
+metathesaurus = bioparser.data.Data().metathesaurus
+with metathesaurus:
+    omim_to_concept = metathesaurus.get_source_code_to_concept('OMIM')
+    for omim_id in omim_ids:
+        concept = omim_to_concept.get(omim_id)
+        omim_name = concept.source_to_name['OMIM'] if concept else None
+        row = {'omim_id': omim_id, 'name': omim_name}
+        tb_omim.append(row)
+tb_omim.write()
 
 ################################################################################
 ############# EFO DOID bioportal mappings
@@ -296,16 +276,16 @@ for chemical in ctd.read_chemicals():
     row = {'mesh_id': mesh_id,
            'name': chemical['ChemicalName'],
            'definition': chemical['Definition']}
-    tb_ctd_rows.append(row)
+    tb_ctd.append(row)
 
     for alias in chemical['Synonyms']:
         row = {'mesh_id': mesh_id, 'alias': alias}
-        tb_ctd_alias_rows.append(row)
+        tb_ctd_alias.append(row)
     
     for drugbank_id in chemical['DrugBankIDs']:
         drugbank_int_id = int(drugbank_id[2:])
         row = {'mesh_id': mesh_id, 'drugbank_id': drugbank_int_id}
-        tb_ctd_drugbank_map_rows.append(row)
+        tb_ctd_drugbank_map.append(row)
     
 tb_ctd.write()
 tb_ctd_alias.write()
@@ -382,7 +362,26 @@ for ctd_row in ctd.read_gene2disease():
     tb_gene_medic_ctd.append(row)
 tb_gene_medic_ctd.write()
 
-    
-    
-    
-    
+###############################################################################
+### MicroRNA
+mircat = bioparser.data.Data().mircat
+
+tb_mircat = Table('mircat', ['mircat_name', 'sequence', 'location'])
+tb_mircat.rows = list(mircat.read_mirna())
+tb_mircat.write()
+
+tb_gene_mirna = Table('gene_mirna', ['hgnc_id','mircat_name', 'pubmed'])
+for row in mircat.read_targets():
+    row['hgnc_id'] = row['gene'].id_
+    tb_gene_mirna.append(row)
+# Condensation isn't needed because each interaction has only a single pmid.
+# This seems unlikely and could indicate an upstream bug.
+#tb_gene_mirna.condense(['hgnc_id','mircat_name'], ['pubmed'])
+tb_gene_mirna.write()
+
+"""
+
+
+
+
+

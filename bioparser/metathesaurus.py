@@ -177,7 +177,18 @@ class Metathesaurus(utilities.shelved.Shelved):
             concept_ids = self.shelves['sources'][source]
             source_code_to_concept_id = {id_to_concept[cid].source_to_code[source]: cid for cid in concept_ids}
         return source_code_to_concept_id
-
+    
+    def get_source_code_to_concept(self, source):
+        """ """
+        source_code_to_concept = dict()
+        with self:
+            id_to_concept = self.shelves['concepts']
+            concept_ids = self.shelves['sources'][source]
+            for cid in concept_ids:
+                concept = id_to_concept[cid]
+                source_code = concept.source_to_code[source]
+                source_code_to_concept[source_code] = concept
+        return source_code_to_concept
 
 if __name__ == '__main__':
     meta = Metathesaurus()
