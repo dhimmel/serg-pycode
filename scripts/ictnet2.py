@@ -6,7 +6,7 @@ from bioparser.metathesaurus import Concept
 import mapping.bioportal
 
 ictnet_dir = '/home/dhimmels/Documents/serg/ictnet/ictnet-creation2/'
-
+input_dir = os.path.join(ictnet_dir, 'input')
 
 
 class Table(object):
@@ -381,6 +381,50 @@ tb_gene_mirna.write()
 
 """
 
+def read_input(name):
+    path = os.path.join(ictnet_dir, 'input', name + '.txt')
+    with open(path) as read_file:
+        reader = csv.DictReader(read_file, delimiter='\t')
+        rows = list(reader)
+    return rows
+
+tissues = read_input('gep-tissues')
+tissue_to_id = {row['gep_tissue']: i for i, row in enumerate(tissues)}
+tb_tissue = Table('tissue', ['tissue_id', 'name'])
+for tissue, tissue_id in tissue_to_id.items():
+    row = {'tissue_id': tissue_id, 'name': tissue}
+    tb_tissue.append(row)
+tb_tissue.write()
+
+doid = bioparser.data.Data().doid
+do_graph = doid.get_graph()
+
+for node, data in do_graph.nodes_iter(data=True):
+    data['tissues'] = set()
+
+tissue_doid_pairs = read_input('tissue-to-doid')
+for pair in tissue_doid_pairs:
+    disease_id = pair['doid']
+    tissue = pair['gep_tissue']
+    diseases = doid.get_descendents(disease_id)
+    diseases.add(disease_id)
+    for disease in diseases:
+        do_graph.node[disease]['tissues'].add(tissue)
+
+tb_doid_tissue = Table('doid_tissue', ['doid_id', 'tissue_id'])
+for node, data in do_graph.nodes_iter(data=True):
+    doid_id = data['id_']
+    for tissue in data['tissues']:
+        row = {'doid_id': doid_id, 'tissue_id': tissue_to_id[tissue]}
+        tb_doid_tissue.append(row)
+tb_doid_tissue.write()
+"""
+# Read tissues
+gep_tissues_path = os.path.join(input_dir, 'gep-tissues.txt')
+with open(gep_tissues_path) as read_file:
+    tissues = [row.rstrip() for row in read_file]
+tissue_to_id = {tissue: i for i, tissue in enumerate(tissues)}
+"""
 
 
 
