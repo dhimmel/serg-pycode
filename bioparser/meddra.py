@@ -30,6 +30,7 @@ class MedDRA(object):
                 code = row['{}_code'.format(level)]
                 name = row['{}_name'.format(level)]
                 row['name'] = name
+                row['level'] = level
                 graph.add_node(code, row)
         
         # Add edges

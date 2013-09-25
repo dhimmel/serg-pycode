@@ -100,7 +100,7 @@ class Data:
         self.omim = omim.OMIM(current_path('omim'))
         self.nature_predict = nature_predict.NaturePredict(source_data_dir('nature-predict'))
         self.nci = nci_thesaurus.NCIOntology(current_path('nci', path_type='files'))
-        self.sider = sider.SIDER(current_path('sider'))
+        self.sider = sider.SIDER()
         self.pdn = pdn.PDN()
         self.tiger = tiger.TIGER()
         self.etiome = etiome.Etiome()

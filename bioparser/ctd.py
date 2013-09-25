@@ -64,6 +64,24 @@ class CTD(object):
                          'Synonyms', 'DrugBankIDs']
         return self.read_file('CTD_chemicals.tsv.gz', plural_fields)
 
+    def get_all_names_to_chemical_id(self):
+        name_to_chemical = dict()
+        for chemical in self.read_chemicals():
+            names = set(chemical['Synonyms'] + [chemical['ChemicalName']])
+            for name in list(names):
+                names.add(name.lower())
+            for name in names:
+                name_to_chemical[name] = chemical['ChemicalID']
+        return name_to_chemical
+
+    def get_name_to_chemical_id(self):
+        name_to_chemical = dict()
+        for chemical in self.read_chemicals():
+            name = chemical['ChemicalName']
+            for name in [name, name.lower()]:
+                name_to_chemical[name] = chemical['ChemicalID']
+        return name_to_chemical
+
     def read_diseases(self):
         plural_fields = ['AltDiseaseIDs', 'ParentIDs', 'TreeNumbers', 
                          'ParentTreeNumbers', 'Synonyms', 'SlimMappings']

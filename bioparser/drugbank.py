@@ -180,6 +180,13 @@ class DrugBank(object):
     def replace_dashes_in_dict_keys(d, replacement='_'):
         return {key.replace('-', replacement): value for key, value in d.items()}
     
+    def get_name_to_drug(self):
+        name_to_drug = dict()
+        for drug in self.drugs:
+            names = [drug['name']] + drug.get('synonyms', []) + drug.get('brands', [])
+            name_to_drug.update(dict.fromkeys(names, drug))
+        return name_to_drug
+    
     def get_id_to_drug(self):
         """Returns a list of dictionaries each representing a drug."""
         return {drug['drugbank_id']: drug for drug in self.drugs}

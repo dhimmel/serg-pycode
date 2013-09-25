@@ -379,7 +379,6 @@ for row in mircat.read_targets():
 #tb_gene_mirna.condense(['hgnc_id','mircat_name'], ['pubmed'])
 tb_gene_mirna.write()
 
-"""
 
 def read_input(name):
     path = os.path.join(ictnet_dir, 'input', name + '.txt')
@@ -418,14 +417,64 @@ for node, data in do_graph.nodes_iter(data=True):
         row = {'doid_id': doid_id, 'tissue_id': tissue_to_id[tissue]}
         tb_doid_tissue.append(row)
 tb_doid_tissue.write()
+
+
+
+tb_meddra = Table('meddra', ['code', 'name'])
+meddra = bioparser.data.Data().meddra
+meddra_graph = meddra.get_networkx()
+for node, data in meddra_graph.nodes_iter(data=True):
+    row = {'code': node, 'name': data['name']}
+    tb_meddra.append(row)
+tb_meddra.write()
+    
+
+ctd = bioparser.data.Data().ctd
+name_to_chemical_id = ctd.get_name_to_chemical_id()
+chemical_names = set(name_to_chemical_id)
+all_names_to_chemical_id = ctd.get_all_names_to_chemical_id()
+all_chemical_names = set(all_names_to_chemical_id)
+
+sider = bioparser.data.Data().sider
+sider_drugs = sider.get_meddra_annotated_drugs()
+#name_to_sider_drug = sider.get_name_to_drug
+
+
+sider_mesh_id_tuples = list()
+
+for drug in sider_drugs:
+    drug_name = drug.name
+    chemical_id = None
+    if drug_name in chemical_names:
+        chemical_id = name_to_chemical_id[drug_name]
+        sider_mesh_id_tuples.append((drug, chemical_id))
+        continue
+    if drug_name in all_chemical_names:
+        chemical_id = all_names_to_chemical_id[drug_name]
+        sider_mesh_id_tuples.append((drug, chemical_id))
+        continue
+    all_sider_names = drug.get_all_names(copy_to_lower=True)
+    common_names = all_chemical_names & all_sider_names
+    if not common_names:
+        #print 'No ctd match for SIDER drug:', drug.name
+        continue
+    chemical_ids = set(all_names_to_chemical_id[name] for name in common_names)
+    if len(chemical_ids) == 1:
+        chemical_id = chemical_ids.pop()
+        sider_mesh_id_tuples.append((drug, chemical_id))
+        continue
+    for chemical_id in chemical_ids:
+        sider_mesh_id_tuples.append((drug, chemical_id))
+    #print drug.name, 'mapped to multiple CTD chemicals:', chemical_ids
+
+tb_ctd_meddra_sider = Table('ctd_meddra_sider', ['mesh_id', 'meddra_code'])
+for sider_drug, mesh_id in sider_mesh_id_tuples:
+    for meddra_code in sider_drug.meddra_codes:
+        row = {'mesh_id': mesh_id, 'meddra_code': meddra_code}
+        tb_ctd_meddra_sider.append(row)
+tb_ctd_meddra_sider.write()
+#ctd = bioparser.data.Data().ctd
+#name_to_chemical_id = ctd.get_name_to_chemical_id()
+#print name_to_chemical_id.keys()
+#print len(set(sider_drugs) & set(name_to_chemical_id)), 'out of', len(sider_drugs)
 """
-# Read tissues
-gep_tissues_path = os.path.join(input_dir, 'gep-tissues.txt')
-with open(gep_tissues_path) as read_file:
-    tissues = [row.rstrip() for row in read_file]
-tissue_to_id = {tissue: i for i, tissue in enumerate(tissues)}
-"""
-
-
-
-
