@@ -24,11 +24,11 @@ class Gene(object):
     
 class HGNC(object):
     
-    def __init__(self, hgnc_dir=None):
-        if hgnc_dir is None:
-            hgnc_dir = data.current_path('hgnc')
-        self.hgnc_dir = hgnc_dir
-        self.hgnc_path = os.path.join(hgnc_dir, 'hgnc_complete_set.txt.gz')
+    def __init__(self, directory=None):
+        if directory is None:
+            directory = data.current_path('hgnc')
+        self.directory = directory
+        self.hgnc_path = os.path.join(directory, 'hgnc_complete_set.txt.gz')
         self.genes = None
         self.symbol_to_gene = dict()
         self.entrez_to_gene = dict()

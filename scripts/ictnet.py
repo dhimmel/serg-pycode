@@ -1,3 +1,4 @@
+import datetime
 import csv
 import os
 
@@ -5,7 +6,8 @@ import bioparser.data
 from bioparser.metathesaurus import Concept
 import mapping.bioportal
 
-ictnet_dir = '/home/dhimmels/Documents/serg/ictnet/ictnet-creation2/'
+
+ictnet_dir = '/home/dhimmels/Documents/serg/ictnet/ictnet-creation/'
 input_dir = os.path.join(ictnet_dir, 'input')
 
 
@@ -98,9 +100,15 @@ def factor_table(table, fieldname):
         row[id_fieldname] = value_to_id[row[fieldname]]
     return factored_table
 
+tb_resource_version = Table('resource_versions', ['resource', 'version'])
+def add_version(resource, version):
+    tb_resource_version.append({'resource': resource, 'version': version})
+
+add_version('date', str(datetime.date.today()))
+
 hgnc = bioparser.data.Data().hgnc
 symbol_to_gene = hgnc.get_symbol_to_gene()
-
+add_version('hgnc', hgnc.directory)
 ################################################################################
 ############# HGNC - Genes
 tb_gene = Table('gene', ['hgnc_id', 'symbol', 'name', 'location', 'group_id'])
@@ -129,6 +137,7 @@ tb_ppi = Table('ppi', ['source', 'target', 'pubmed', 'method_id', 'interaction_t
               'edge_type_id', 'sources', 'complex'])
 
 ppitrim = bioparser.data.Data().ppitrim
+add_version('ppitrim', ppitrim.consolidated_path)
 complex_interactions, binary_interactions = ppitrim.all_interactions()
 complex_interactions = list() # excluded complexes
 for is_complex, ppis in enumerate([binary_interactions, complex_interactions]):
@@ -158,8 +167,10 @@ tb_doid_ontology = Table('doid_ontology', ['parent', 'child'])
 tb_doid_omim_map = Table('doid_omim_map', ['doid_id', 'omim_id'])
 tb_doid_medic_map = Table('doid_medic_map', ['doid_id', 'medic_id'])
 
+doid = bioparser.data.Data().doid
+do_graph = doid.get_graph()
+add_version('doid', doid.directory)
 
-do_graph = bioparser.data.Data().doid.get_graph()
 for node, data in do_graph.nodes(data=True):
     doid_id = data['id_']
     row = {'doid_id': doid_id,
@@ -194,6 +205,7 @@ tb_efo = Table('efo', ['doid_id', 'name'])
 tb_efo_ontology = Table('efo_ontology', ['parent', 'child'])
 
 efo = bioparser.data.Data().efo
+add_version('efo', efo.directory)
 efo_diseases = efo.get_diseases()
 efo_graph = efo.get_graph().subgraph(efo_diseases)
 for node, data in efo_graph.nodes(data=True):
@@ -211,6 +223,8 @@ tb_gene_efo_gwas = Table('gene_efo_gwas',
     ['hgnc_id', 'efo_id', 'p-value', 'OR or beta', 'SNPs', 'pubmed'])
 
 gwas_catalog = bioparser.data.Data().gwas_catalog
+add_version('gwas_catalog', gwas_catalog.gwas_dir)
+
 #path = '/home/dhimmels/Documents/serg/data-sources/gwas-catalog/GWAS-EFO-Mappings092012.txt'
 gwas_catalog.read_ebi_mappings()
 gwas_catalog.apply_fdr()
@@ -233,6 +247,8 @@ tb_gene_efo_gwas.write()
 tb_gene_omim_morbidmap = Table('gene_omim_morbidmap', ['hgnc_id', 'omim_id'])
 omim_ids = set()
 morbid_map = bioparser.data.Data().morbid_map
+add_version('morbid_map', morbid_map.omim_dir)
+
 id_to_gene_tuples = morbid_map.get_id_to_gene_tuples()
 for omim_id, gene in id_to_gene_tuples:
     row = {'hgnc_id': gene.id_, 'omim_id': omim_id}
@@ -244,6 +260,8 @@ tb_gene_omim_morbidmap.write()
 tb_omim = Table('omim', ['omim_id', 'name'])
 # Use the UMLS metathesaurus to get the name for the OMIM ID
 metathesaurus = bioparser.data.Data().metathesaurus
+add_version('umls_for_omim_names', metathesaurus.directory)
+
 with metathesaurus:
     omim_to_concept = metathesaurus.get_source_code_to_concept('OMIM')
     for omim_id in omim_ids:
@@ -257,6 +275,8 @@ tb_omim.write()
 ############# EFO DOID bioportal mappings
 tb_efo_doid_map = Table('efo_doid_map', ['efo_id', 'doid_id'])
 efo_doid_mapping_path = '/home/dhimmels/Documents/serg/data-mapping/bioportal/efo_doid/130914/mappings.rdf'
+add_version('efo_doid_mapping', efo_doid_mapping_path)
+
 for source, target in mapping.bioportal.read_mapping(efo_doid_mapping_path):
     target = int(target.rsplit(':')[-1])
     row = {'efo_id': source, 'doid_id': target}
@@ -270,6 +290,7 @@ tb_drugbank_alias = Table('drugbank_alias', ['drugbank_id', 'alias'])
 
 drugank_id_to_int = lambda s: int(s[2: ])
 drugbank = bioparser.data.Data().drugbank
+add_version('drugbank', drugbank.drugbank_dir)
 drugbank.read()
 for drug in drugbank.drugs:
     drug['int_id'] = drugank_id_to_int(drug['drugbank_id'])
@@ -312,6 +333,8 @@ tb_ctd_alias = Table('ctd_alias', ['mesh_id', 'alias'])
 tb_ctd_drugbank_map = Table('ctd_drugbank_map', ['mesh_id', 'drugbank_id'])
 
 ctd = bioparser.data.Data().ctd
+add_version('ctd', ctd.directory)
+
 for chemical in ctd.read_chemicals():
     mesh_id = chemical['ChemicalID']
     row = {'mesh_id': mesh_id,
@@ -452,9 +475,8 @@ tb_side_effect = Table('side_effect', ['umls_id', 'umls_name', 'meddra_code', 'm
 
 meddra = bioparser.data.Data().meddra
 meddra.annotate_umls(version='2011AB')
+add_version('umls_for_meddra', '2011AB')
 meddra_ontology = meddra.get_networkx_ontology()
-#metathesaurus = bioparser.data.Data().metathesaurus
-#meddra_code_to_concept = metathesaurus.get_source_code_to_concept('MDR')
 
 for node, data in meddra_ontology.graph.nodes_iter(data=True):
     if not 'umls_id' in data:
@@ -496,6 +518,7 @@ all_names_to_chemical_id = ctd.get_all_names_to_chemical_id()
 all_chemical_names = set(all_names_to_chemical_id)
 
 sider = bioparser.data.Data().sider
+add_version('sider', sider.directory)
 sider_drugs = sider.get_meddra_annotated_drugs()
 #name_to_sider_drug = sider.get_name_to_drug
 
@@ -534,3 +557,4 @@ for sider_drug, mesh_id in sider_mesh_id_tuples:
         tb_ctd_side_effect.append(row)
 tb_ctd_side_effect.write()
 
+tb_resource_version.write()
