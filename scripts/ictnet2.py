@@ -67,6 +67,12 @@ Are we excluding non-protein coding genes?
 Several doid xrefs to omim use IDs not in the UMLS. Can table upload ignore those rows.
 """
 
+def read_input(name):
+    path = os.path.join(ictnet_dir, 'input', name + '.txt')
+    with open(path) as read_file:
+        reader = csv.DictReader(read_file, delimiter='\t')
+        rows = list(reader)
+    return rows
 
 hgnc = bioparser.data.Data().hgnc
 symbol_to_gene = hgnc.get_symbol_to_gene()
@@ -380,12 +386,6 @@ for row in mircat.read_targets():
 tb_gene_mirna.write()
 
 
-def read_input(name):
-    path = os.path.join(ictnet_dir, 'input', name + '.txt')
-    with open(path) as read_file:
-        reader = csv.DictReader(read_file, delimiter='\t')
-        rows = list(reader)
-    return rows
 
 tissues = read_input('gep-tissues')
 tissue_to_id = {row['gep_tissue']: i for i, row in enumerate(tissues)}
@@ -398,17 +398,12 @@ tb_tissue.write()
 doid = bioparser.data.Data().doid
 do_graph = doid.get_graph()
 
-for node, data in do_graph.nodes_iter(data=True):
-    data['tissues'] = set()
-
+doid.initialize_attribute('tissues')
 tissue_doid_pairs = read_input('tissue-to-doid')
 for pair in tissue_doid_pairs:
     disease_id = pair['doid']
     tissue = pair['gep_tissue']
-    diseases = doid.get_descendents(disease_id)
-    diseases.add(disease_id)
-    for disease in diseases:
-        do_graph.node[disease]['tissues'].add(tissue)
+    doid.propogate_annotation(disease_id, 'tissues', tissue)
 
 tb_doid_tissue = Table('doid_tissue', ['doid_id', 'tissue_id'])
 for node, data in do_graph.nodes_iter(data=True):
@@ -419,15 +414,42 @@ for node, data in do_graph.nodes_iter(data=True):
 tb_doid_tissue.write()
 
 
-
-tb_meddra = Table('meddra', ['code', 'name'])
+"""
+tb_side_effect = Table('side_effect', ['umls_id', 'umls_name', 'meddra_code', 'meddra_name'])
 meddra = bioparser.data.Data().meddra
 meddra_graph = meddra.get_networkx()
+meddra.annotate_umls(version='2011AB')
+metathesaurus = bioparser.data.Data().metathesaurus
+meddra_code_to_concept = metathesaurus.get_source_code_to_concept('MDR')
+
 for node, data in meddra_graph.nodes_iter(data=True):
-    row = {'code': node, 'name': data['name']}
-    tb_meddra.append(row)
-tb_meddra.write()
-    
+    if not 'umls_id' in data:
+        print node, 'no umls match for meddra'
+        continue
+    row = {'meddra_code': node, 'umls_id': data['umls_id'], 
+           'meddra_name': data['name'], 'umls_name': data['umls_name']}
+    tb_side_effect.append(row)
+tb_side_effect.write()
+
+
+#######################
+## Meddra Side Effect to Tissue
+tb_side_effect_tissue = Table('side_effect_tissue', ['umls_id', 'tissue_id'])
+
+meddra.initialize_attribute('tissues')
+for tissue_mapping in read_input('tissue-to-meddra'):
+    gep_tissue = tissue_mapping['gep_tissue']
+    meddra_code = tissue_mapping['meddra_code']
+    meddra.propogate_annotation(meddra_code, 'tissues', gep_tissue)
+
+for node, data in meddra_graph.nodes_iter(data=True):
+    umls_id = data['umls_id']
+    for tissue in data['tissues']:
+        tissue_id = tissue_to_id[tissue]
+        row = {'umls_id': umls_id, 'tissue_id': tissue_id}
+        tb_side_effect_tissue.append(row)
+tb_side_effect_tissue.write()
+
 
 ctd = bioparser.data.Data().ctd
 name_to_chemical_id = ctd.get_name_to_chemical_id()
@@ -441,7 +463,6 @@ sider_drugs = sider.get_meddra_annotated_drugs()
 
 
 sider_mesh_id_tuples = list()
-
 for drug in sider_drugs:
     drug_name = drug.name
     chemical_id = None
@@ -467,14 +488,24 @@ for drug in sider_drugs:
         sider_mesh_id_tuples.append((drug, chemical_id))
     #print drug.name, 'mapped to multiple CTD chemicals:', chemical_ids
 
+"""
 tb_ctd_meddra_sider = Table('ctd_meddra_sider', ['mesh_id', 'meddra_code'])
 for sider_drug, mesh_id in sider_mesh_id_tuples:
     for meddra_code in sider_drug.meddra_codes:
         row = {'mesh_id': mesh_id, 'meddra_code': meddra_code}
         tb_ctd_meddra_sider.append(row)
 tb_ctd_meddra_sider.write()
+"""
+
+tb_ctd_side_effect = Table('ctd_side_effect', ['mesh_id', 'umls_id'])
+for sider_drug, mesh_id in sider_mesh_id_tuples:
+    for umls_id in sider_drug.meddra_concepts:
+        row = {'mesh_id': mesh_id, 'meddra_code': umls_id}
+        tb_ctd_meddra_sider.append(row)
+tb_ctd_side_effect.write()
+
 #ctd = bioparser.data.Data().ctd
 #name_to_chemical_id = ctd.get_name_to_chemical_id()
 #print name_to_chemical_id.keys()
 #print len(set(sider_drugs) & set(name_to_chemical_id)), 'out of', len(sider_drugs)
-"""
+

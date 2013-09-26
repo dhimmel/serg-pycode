@@ -39,16 +39,16 @@ class Concept(object):
 
 class Metathesaurus(utilities.shelved.Shelved):
 
-    def __init__(self, umls_dir=None):
+    def __init__(self, directory=None):
         """
         Sources: http://www.nlm.nih.gov/research/umls/sourcereleasedocs/index.html#
         """
-        if not umls_dir:
-            umls_dir = os.path.join(data.data_dir, 'umls', '2013AA')
-        self.umls_dir = umls_dir
-        self.meta_dir = os.path.join(self.umls_dir, 'META')
+        if not directory:
+            directory = os.path.join(data.data_dir, 'umls', '2013AA')
+        self.directory = directory
+        self.meta_dir = os.path.join(self.directory, 'META')
         
-        self.pymeta_dir = os.path.join(self.umls_dir, 'pyMETA')
+        self.pymeta_dir = os.path.join(self.directory, 'pyMETA')
         if not os.path.exists(self.pymeta_dir):
             os.mkdir(self.pymeta_dir)
         
@@ -191,7 +191,8 @@ class Metathesaurus(utilities.shelved.Shelved):
         return source_code_to_concept
 
 if __name__ == '__main__':
-    meta = Metathesaurus()
+    directory = os.path.join(data.source_data_dir('umls'), '2011AB')
+    meta = Metathesaurus(directory)
     with meta:
         concepts = meta.shelves['concepts']
         print concepts['C0155555']

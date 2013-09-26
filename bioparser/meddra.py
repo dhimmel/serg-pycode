@@ -4,6 +4,7 @@ import csv
 import networkx
 
 import data
+import metathesaurus
 
 class MedDRA(object):
     
@@ -12,7 +13,7 @@ class MedDRA(object):
             directory = data.current_path('meddra')
         self.directory = directory
     
-    def get_networkx(self):
+    def create_networkx(self):
         """
         Creates a networx DiGraph to represent the MedDRA ontology. Each
         node is identified using it's meddra code. Additional attributes are
@@ -42,6 +43,23 @@ class MedDRA(object):
         
         assert networkx.is_directed_acyclic_graph(graph)
         return self.graph        
+    
+    def get_networkx(self):
+        if not hasattr(self, graph):
+            self.create_networkx()
+        return self.graph
+    
+    def annotate_umls(self, version):
+        path = data.version_dir('umls', version)
+        meta = metathesaurus.Metathesaurus(path)
+        meddra_code_to_concept = meta.get_source_code_to_concept('MDR')
+        graph = self.get_networkx()
+        for meddra_code, data in graph.nodes_iter(data=True):
+            concept = meddra_code_to_concept.get(meddra_code)
+            if not concept:
+                continue
+            data['umls_id'] = concept.concept_id
+            data['umls_name'] = concept.name
     
     def read_asc(self, name, fieldnames):
         """

@@ -55,6 +55,24 @@ class NXOntology(object):
     def get_descendents(self, node):
         return set(networkx.dfs_postorder_nodes(self.graph, source=node))
     
+    def initialize_attribute(self, attribute):
+        for node, data in self.get_graph().nodes_iter(data=True):
+            data[attribute] = set()
+
+    
+    def propogate_annotation(self, node, attribute, element):
+        """
+        Add element to the node attribute specified by attribute for 
+        the specified node and all of its descencdants. The node attribute
+        is assumed to be a set.
+        """
+        graph = self.get_graph()
+        descendents = self.get_descendents(node)
+        descendents.add(node)
+        for descendent in descendents:
+            data = graph.node[descendent]
+            data.setdefault(attribute, set()).add(element)
+    
     def write_terms(self, terms, file_name):
         path = os.path.join(self.directory, file_name)
         f = open(path, 'w')

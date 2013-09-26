@@ -4,6 +4,8 @@ import gzip
 
 
 import data
+import metathesaurus
+
 from metathesaurus import Concept
 
 class Drug():
@@ -133,11 +135,12 @@ class SIDER(object):
             drug.meddra_concepts.add(adverse_effect['meddra_concept'])
         
     
-    def annotate_meddra_codes(self):
+    def annotate_meddra_codes(self, umls_version='2011AB'):
         drugs = self.pubchem_to_drug.values()
-        metathesaurus = data.Data().metathesaurus
-        with metathesaurus:
-            id_to_concept = metathesaurus.shelves['concepts']
+        umls_path = data.version_dir('umls', umls_version)
+        meta = metathesaurus.Metathesaurus(umls_path)
+        with meta:
+            id_to_concept = meta.shelves['concepts']
             for drug in drugs:
                 concept_ids = drug.meddra_concepts
                 concepts = set(id_to_concept.get(cui) for cui in concept_ids)
@@ -146,26 +149,6 @@ class SIDER(object):
                             for concept in concepts)
                 codes.discard(None)
                 drug.meddra_codes = codes
-        
-        
-    def get_drug_to_meddra_codes(self):
-        drug_to_meddra_codes = dict()
-        drug_to_meddra_concepts = self.get_drug_to_meddra_concepts()
-        metathesaurus = data.Data().metathesaurus
-        with metathesaurus:
-            id_to_concept = metathesaurus.shelves['concepts']
-            for drug, concept_ids in drug_to_meddra_concepts.iteritems():
-                meddra_codes = set()
-                for concept_id in concept_ids:
-                    concept = id_to_concept.get(concept_id)
-                    if not concept:
-                        continue
-                    meddra_code = concept.source_to_code.get('MDR')
-                    if not meddra_code:
-                        continue
-                    meddra_codes.add(meddra_code)
-                drug_to_meddra_codes[drug] = meddra_codes
-        return drug_to_meddra_codes
         
     def get_drugs(self, exclude_nameless=True):
         drugs = self.pubchem_to_drug.values()

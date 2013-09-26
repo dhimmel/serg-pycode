@@ -68,6 +68,9 @@ def source_data_dir(source):
     """source is the name of the folder containing the desired data resource."""
     return os.path.join(data_dir, source)
 
+def version_dir(source, version):
+    return os.path.join(data_dir, source, version)
+
 def current_path(source, **kwargs):
     path = source_data_dir(source)
     return sorted_dir_content(path, n=0, **kwargs)
