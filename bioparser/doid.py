@@ -7,7 +7,7 @@ import networkx
 import nxobo
 import data
 
-class DO(nxobo.NXOntology):
+class DO(nxobo.NXObo):
     
     def __init__(self, directory=None):
         if directory is None:

@@ -9,6 +9,38 @@ import obo
 
 class NXOntology(object):
     
+    def __init__(self, graph):
+        assert networkx.is_directed_acyclic_graph(graph)
+        self.graph = graph
+
+    def get_id_to_name(self):
+        id_to_name = dict()
+        for node, data in self.graph.nodes_iter(data=True):
+            id_to_name[node] = data['name']
+        return id_to_name
+    
+    def get_descendents(self, node):
+        return set(networkx.dfs_postorder_nodes(self.graph, source=node))
+    
+    def initialize_attribute(self, attribute):
+        for node, data in self.graph.nodes_iter(data=True):
+            data[attribute] = set()
+
+    def propogate_annotation(self, node, attribute, element):
+        """
+        Add element to the node attribute specified by attribute for 
+        the specified node and all of its descencdants. The node attribute
+        is assumed to be a set.
+        """
+        descendents = self.get_descendents(node)
+        descendents.add(node)
+        for descendent in descendents:
+            data = self.graph.node[descendent]
+            data.setdefault(attribute, set()).add(element)
+
+
+class NXObo(object):
+    
     def __init__(self, directory, obo_filename, json_filename, pkl_filename):
         self.directory = directory
         self.obo_path = os.path.join(directory, obo_filename)
@@ -37,7 +69,7 @@ class NXOntology(object):
 
             else:
                 # Write networkx graph to json file
-                self.graph = self.get_graph_from_obo()
+                graph = self.get_graph_from_obo()
                 serialized = networkx.readwrite.json_graph.node_link_data(self.graph)
                 with open(self.graph_json_path, 'w') as json_file:
                     json.dump(serialized, json_file, indent=2)
@@ -45,33 +77,11 @@ class NXOntology(object):
 
         return self.graph
 
-    def get_id_to_name(self):
-        graph = self.get_graph()
-        id_to_name = dict()
-        for node, data in graph.nodes_iter(data=True):
-            id_to_name[node] = data['name']
-        return id_to_name
-    
-    def get_descendents(self, node):
-        return set(networkx.dfs_postorder_nodes(self.graph, source=node))
-    
-    def initialize_attribute(self, attribute):
-        for node, data in self.get_graph().nodes_iter(data=True):
-            data[attribute] = set()
-
-    
-    def propogate_annotation(self, node, attribute, element):
-        """
-        Add element to the node attribute specified by attribute for 
-        the specified node and all of its descencdants. The node attribute
-        is assumed to be a set.
-        """
-        graph = self.get_graph()
-        descendents = self.get_descendents(node)
-        descendents.add(node)
-        for descendent in descendents:
-            data = graph.node[descendent]
-            data.setdefault(attribute, set()).add(element)
+    def get_nx_ontology(self):
+        if not hasattr(self, 'nx_ontology'):
+            graph = self.get_graph()
+            self.nx_ontology = NXOntology(graph)
+        return self.nx_ontology
     
     def write_terms(self, terms, file_name):
         path = os.path.join(self.directory, file_name)

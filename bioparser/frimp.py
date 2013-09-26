@@ -7,12 +7,12 @@ import data
 
 class IMP(object):
     
-    def __init__(self, imp_dir=None):
+    def __init__(self, directory=None):
         """ """
-        if imp_dir is None:
-            imp_dir = data.current_path('imp')
+        if directory is None:
+            directory = data.current_path('imp')
 
-        self.imp_dir = imp_dir
+        self.directory = directory
 
     
     def entrez_to_symbols(self, *args):
@@ -69,13 +69,13 @@ class IMP(object):
 
     def read_predictions(self, prob_cutoff = 0.0, symbol=False):
         """ """
-        dat_path = os.path.join(self.imp_dir, 'originals', 'global_average_prior.dat.gz')
+        dat_path = os.path.join(self.directory, 'originals', 'global_average_prior.dat.gz')
         generator = self.read_dat_subset(dat_path, prob_cutoff=prob_cutoff, symbol=symbol)
         return generator
 
     def read_gold_standard_positives(self, symbol=False):
         """ """
-        dat_path = os.path.join(self.imp_dir, 'originals', 'human_positives.dat.gz')
+        dat_path = os.path.join(self.directory, 'originals', 'human_positives.dat.gz')
         generator = self.read_dat_subset(dat_path, prob_cutoff=0.5, symbol=symbol)
         return generator
     
@@ -121,7 +121,7 @@ class IMP(object):
         return relation_tuples
 
     def process(self):
-        processed_dir = os.path.join(self.imp_dir, 'processed')
+        processed_dir = os.path.join(self.directory, 'processed')
 
         path = os.path.join(processed_dir, 'positives.txt.gz')
         relationships = self.get_relationships(predictions=False, positives=True, symbol=True)
@@ -138,7 +138,7 @@ class IMP(object):
             self.write_dat(path, relationships)
     
     def read_processed_relationships(self, name):
-        path = os.path.join(self.imp_dir, 'processed', name + '.txt.gz')
+        path = os.path.join(self.directory, 'processed', name + '.txt.gz')
         relationships = self.read_dat(path)
         return relationships
 

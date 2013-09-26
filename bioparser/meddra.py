@@ -4,6 +4,7 @@ import csv
 import networkx
 
 import data
+import networkx_ontology
 import metathesaurus
 
 class MedDRA(object):
@@ -44,8 +45,14 @@ class MedDRA(object):
         assert networkx.is_directed_acyclic_graph(graph)
         return self.graph        
     
+    def get_networkx_ontology(self):
+        if not hasattr(self, 'nx_ontology'):
+            graph = self.get_networkx()
+            self.nx_ontology = networkx_ontology.NXOntology(graph)
+        return self.nx_ontology
+    
     def get_networkx(self):
-        if not hasattr(self, graph):
+        if not hasattr(self, 'graph'):
             self.create_networkx()
         return self.graph
     
@@ -54,12 +61,12 @@ class MedDRA(object):
         meta = metathesaurus.Metathesaurus(path)
         meddra_code_to_concept = meta.get_source_code_to_concept('MDR')
         graph = self.get_networkx()
-        for meddra_code, data in graph.nodes_iter(data=True):
+        for meddra_code, node_data in graph.nodes_iter(data=True):
             concept = meddra_code_to_concept.get(meddra_code)
             if not concept:
                 continue
-            data['umls_id'] = concept.concept_id
-            data['umls_name'] = concept.name
+            node_data['umls_id'] = concept.concept_id
+            node_data['umls_name'] = concept.name
     
     def read_asc(self, name, fieldnames):
         """

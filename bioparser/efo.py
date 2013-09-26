@@ -6,7 +6,7 @@ import networkx
 import data
 import nxobo
 
-class EFO(nxobo.NXOntology):
+class EFO(nxobo.NXObo):
     
     def __init__(self, directory=None):
         if directory is None:
@@ -32,11 +32,13 @@ class EFO(nxobo.NXOntology):
     
     def get_diseases(self, root = 'EFO:0000408'):
         'EFO:0000408' # disease
-        return self.get_descendents(root)
+        ontology = self.get_nx_ontology()
+        return ontology.get_descendents(root)
 
     def get_neoplasms(self):
         root = 'EFO:0000616' # neoplasm
-        return self.get_descendents(root)
+        ontology = self.get_nx_ontology()
+        return ontology.get_descendents(root)
     
     def get_non_neoplastic_diseases(self):
         return self.get_diseases() - self.get_neoplasms()

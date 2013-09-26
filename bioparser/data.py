@@ -85,27 +85,33 @@ def preceding_path(source, **kwargs):
 class Data:
     
     def __init__(self):
-        #print 'initializing DataObjects'
-        self.ctd = ctd.CTD(current_path('ctd'))
+        self.ctd = ctd.CTD()
         self.drugbank = drugbank.DrugBank()
         self.doid = doid.DO()
         self.dvd = dvd.DvD()
         self.efo = efo.EFO()
-        self.frimp = frimp.IMP(current_path('imp'))
+        self.frimp = frimp.IMP()
         self.gwas_catalog = gwas_catalog.GwasCatalog()
         self.hgnc = hgnc.HGNC()
         self.iref = iref.iRefIndex()
         self.ipa = ipa.IPA()
-        self.meddra = meddra.MedDRA(current_path('meddra'))
+        self.meddra = meddra.MedDRA()
         self.metathesaurus = metathesaurus.Metathesaurus()
         self.mircat = mircat.MirCat()
         self.morbid_map = omim.MorbidMap()
-        self.omim = omim.OMIM(current_path('omim'))
-        self.nature_predict = nature_predict.NaturePredict(source_data_dir('nature-predict'))
-        self.nci = nci_thesaurus.NCIOntology(current_path('nci', path_type='files'))
+        #self.omim = omim.OMIM()
+        #self.nature_predict = nature_predict.NaturePredict(source_data_dir('nature-predict'))
+        #self.nci = nci_thesaurus.NCIOntology(current_path('nci', path_type='files'))
         self.sider = sider.SIDER()
         self.pdn = pdn.PDN()
         self.tiger = tiger.TIGER()
         self.etiome = etiome.Etiome()
         self.ppitrim = ppitrim.PPITrim()
 
+    def get_versions(self):
+        """ """
+        raise Exception('Incomplete')
+    
+    
+    
+        
