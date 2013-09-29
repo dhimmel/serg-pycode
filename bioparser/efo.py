@@ -4,9 +4,9 @@ import csv
 import networkx
 
 import data
-import nxobo
+import networkx_ontology
 
-class EFO(nxobo.NXObo):
+class EFO(networkx_ontology.NXObo):
     
     def __init__(self, directory=None):
         if directory is None:

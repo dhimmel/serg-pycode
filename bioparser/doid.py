@@ -4,10 +4,10 @@ import re
 
 import networkx
 
-import nxobo
+import networkx_ontology
 import data
 
-class DO(nxobo.NXObo):
+class DO(networkx_ontology.NXObo):
     
     def __init__(self, directory=None):
         if directory is None:
