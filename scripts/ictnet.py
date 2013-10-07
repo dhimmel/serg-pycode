@@ -4,7 +4,7 @@ import os
 
 import bioparser.data
 from bioparser.metathesaurus import Concept
-import mapping.bioportal
+import mapping.manual_reader
 
 
 ictnet_dir = '/home/dhimmels/Documents/serg/ictnet/ictnet-creation/'
@@ -271,15 +271,16 @@ with metathesaurus:
         tb_omim.append(row)
 tb_omim.write()
 
+
 ################################################################################
-############# EFO DOID bioportal mappings
+############# EFO to DOID manual mappings
 tb_efo_doid_map = Table('efo_doid_map', ['efo_id', 'doid_id'])
-efo_doid_mapping_path = '/home/dhimmels/Documents/serg/data-mapping/bioportal/efo_doid/130914/mappings.rdf'
+efo_doid_mapping_path = '/home/dhimmels/Documents/serg/data-mapping/manual/efo_doid/gwas-pairs-editted.tsv'
 add_version('efo_doid_mapping', efo_doid_mapping_path)
 
-for source, target in mapping.bioportal.read_mapping(efo_doid_mapping_path):
-    target = int(target.rsplit(':')[-1])
-    row = {'efo_id': source, 'doid_id': target}
+for mapping_dict in mapping.manual_reader.row_generator(efo_doid_mapping_path):
+    doid_id = int(mapping_dict['doid_id'].rsplit(':')[-1])
+    row = {'efo_id': mapping_dict['efo_id'], 'doid_id': doid_id}
     tb_efo_doid_map.append(row)
 tb_efo_doid_map.write()
 

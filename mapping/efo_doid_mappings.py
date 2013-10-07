@@ -12,7 +12,7 @@ doid_ontology = doid.get_nx_ontology()
 efo_graph = efo_ontology.graph
 doid_graph = doid_ontology.graph
 
-
+"""
 biopartal_mapping_path = '/home/dhimmels/Documents/serg/data-mapping/bioportal/efo_doid/130914/mappings.rdf'
 bioportal_efo_doid_pairs = mapping.bioportal.read_mapping(biopartal_mapping_path)
 bioportal_pairs_rows = list()
@@ -71,7 +71,15 @@ with open(gwas_pairs_path, 'w') as write_file:
     writer = csv.DictWriter(write_file, fieldnames=fieldnames, delimiter='\t')
     writer.writeheader()
     writer.writerows(gwas_pairs_rows)
-
+"""
+gwas_pairs_editted_path = '/home/dhimmels/Documents/serg/data-mapping/manual/efo_doid/gwas-pairs-editted.tsv'
+with open(gwas_pairs_editted_path) as read_file:
+    reader = csv.DictReader(read_file, delimiter='\t')
+    manual_rows = list(reader)
+for row in manual_rows:
+    doid_id = row['doid_id']
+    if doid_id not in doid_graph:
+        print 'not found', doid_id
 
 """
 for efo_id in unmapped_gwas_efos:
