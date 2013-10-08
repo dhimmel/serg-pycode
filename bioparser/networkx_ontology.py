@@ -69,7 +69,7 @@ class NXObo(object):
 
             else:
                 # Write networkx graph to json file
-                graph = self.get_graph_from_obo()
+                self.graph = self.get_graph_from_obo()
                 serialized = networkx.readwrite.json_graph.node_link_data(self.graph)
                 with open(self.graph_json_path, 'w') as json_file:
                     json.dump(serialized, json_file, indent=2)

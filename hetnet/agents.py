@@ -36,8 +36,8 @@ class GraphAgent(object):
         #print datetime.datetime.now().time().isoformat()
 
     def write_additional_formats(self):
-        yaml_path = os.path.join(self.graph_dir, 'graph.yaml.gz')
-        readwrite.graph.write_yaml(self.graph, yaml_path)
+        #yaml_path = os.path.join(self.graph_dir, 'graph.yaml.gz')
+        #readwrite.graph.write_yaml(self.graph, yaml_path)
         json_path = os.path.join(self.graph_dir, 'graph.json.gz')
         readwrite.graph.write_json(self.graph, json_path)
 

@@ -2,6 +2,7 @@ import os
 
 import utilities.omictools
 
+import bto
 import ctd
 import drugbank
 import dvd
@@ -85,6 +86,7 @@ def preceding_path(source, **kwargs):
 class Data:
     
     def __init__(self):
+        self.bto = bto.BTO()
         self.ctd = ctd.CTD()
         self.drugbank = drugbank.DrugBank()
         self.doid = doid.DO()
