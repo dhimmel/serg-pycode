@@ -6,6 +6,7 @@ import collections
 import itertools
 import logging
 import ConfigParser
+import pprint
 
 import bioparser.gxa
 import bioparser.data
@@ -28,26 +29,26 @@ def create_graph():
     metaedge_tuples = [('disease', 'gene', 'association', 'both'),
                        ('gene', 'gene', 'interaction', 'both'),
                        ('gene', 'gene', 'function', 'both'),
-                       ('gene', 'tissue', 'specificity', 'both'),
+                       ('gene', 'tissue', 'expression', 'both'),
                        ('disease', 'tissue', 'pathology', 'both'),
                        ('disease', 'factor', 'involvement', 'both')]
     metagraph = hetnet.MetaGraph.from_edge_tuples(metaedge_tuples)
     graph = hetnet.Graph(metagraph)
     
-    # Add Genes from HGNC
+    # Add genes from HGNC
     logging.info('Adding HGNC gene nodes.')
     for gene in data.hgnc.get_genes():
         node_data = {'name': gene.name}
         graph.add_node(gene.symbol, 'gene', node_data)
     
-    # Add Tissues from BTO
+    # Add tissues from BTO
     logging.info('Adding BTO tissue nodes.')
     bto_graph = data.bto.get_animal_tissue_subgraph()
     for bto_id, nx_data in bto_graph.nodes(data=True):
         node_data = {'name': nx_data['name']}
         graph.add_node(bto_id, 'tissue', node_data)
     
-    # Add disease nodes
+    # Add diseases from DOID
     logging.info('Adding DOID disease nodes.')
     doid_graph = data.doid.get_graph()
     for doid_id, nx_data in doid_graph.nodes(data=True):
@@ -57,18 +58,40 @@ def create_graph():
     # Print metanode counter
     for metanode, nodes in graph.get_metanode_to_nodes().items():
         print metanode, len(nodes)
+
+    # Add (disease, gene, association, both) edges
+    logging.info('Adding GWAS catalog disease-gene associations.')
+    doid_id_to_genes = data.gwas_catalog.get_doid_id_to_genes(
+        fdr_cutoff=0.05, mapped_term_cutoff=1)
+    for doid_id, genes in doid_id_to_genes.iteritems():
+        for gene in genes:
+            symbol = gene.symbol
+            graph.add_edge(doid_id, symbol, 'association', 'both')
+
+    # Add (gene, tissue, expression, both) edges
+    logging.info('Adding BodyMap2 gene-tissue expression.')
+    fpkm_cutoff = 50.0
+    edge_tuples = data.bodymap2.get_edges(fpkm_cutoff)
+    for symbol, tissue, fpkm in edge_tuples:
+        edge_data = {'fpkm': fpkm}
+        graph.add_edge(tissue, symbol, 'expression', 'both', edge_data)
     
+    # Add (gene, gene, interaction, both) edges
+    logging.info('Adding ppiTrim gene-gene interaction.')
+    interactions = data.ppitrim.collapsed_binary_interactions()
+    edge_keys = ['pubmed', 'method_id', 'interaction_type_id']
+    for interaction in interactions:
+        edge_data = {k: v for k, v in interaction.items() if k in edge_keys}
+        source = interaction['source'].symbol
+        target = interaction['target'].symbol
+        graph.add_edge(source, target, 'interaction', 'both', edge_data)
+        
+    
+    # Print metaedge counter
+    for metanode, edges in graph.get_metaedge_to_edges().items():
+        print metanode, len(edges)
+        
     """
-    # Add Disease Nodes
-    section = 'disease'
-    disease_root = config.get(section, 'disease_root')
-    efo_id_to_name = data.efo.get_id_to_name()
-    efo_graph = data.efo.get_graph()
-    disease_terms = data.efo.get_non_neoplastic_diseases()
-    for disease_term in disease_terms:
-        name = efo_id_to_name[disease_term]
-        node_data = {'name': name}
-        graph.add_node(disease_term, 'disease', node_data)
 
     # Add Factor Nodes
     for factor in data.etiome.get_factors():

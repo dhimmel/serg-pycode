@@ -149,7 +149,29 @@ class PPITrim(object):
         binary_interactions = list(binary_interactions)
         
         return complex_interactions, binary_interactions
+    
+    def collapsed_binary_interactions(self,
+            collapse_keys=['pubmed', 'method', 'interaction_type']):
+        complex_to_rows, binary_rows = self.separate_complexes()
+        binary_interactions = self.binary_rows_to_interactions(binary_rows)
+        binary_interactions = self.interaction_hgnc_convert(binary_interactions)
 
+        geneset_to_interaction = dict()
+        for uncollasped in binary_interactions:
+            source = uncollasped['source']
+            target = uncollasped['target']
+            geneset = frozenset([source, target])
+            initial_dict = {'source': source, 'target': target}
+            interaction = geneset_to_interaction.setdefault(geneset, initial_dict)
+            for key in collapse_keys:
+                interaction.setdefault(key, set()).add(uncollasped[key])
+        
+        # convert sets to list. necessary for downstream JSON serialization
+        for interaction in geneset_to_interaction.itervalues():
+            for key in collapse_keys:
+                interaction[key] = list(interaction[key])
+        return geneset_to_interaction.values()
+        
     
 if __name__ =='__main__':
     ppi = PPITrim()

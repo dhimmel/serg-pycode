@@ -460,13 +460,21 @@ class Graph(BaseGraph):
         for dictionary in self.node_dict, self.edge_dict:
             for value in dictionary.itervalues():
                 value.masked = False
-    
+        
     def get_metanode_to_nodes(self):
         metanode_to_nodes = dict()
         for node in self.get_nodes():
             metanode = node.metanode
             metanode_to_nodes.setdefault(metanode, list()).append(node)
         return metanode_to_nodes
+
+    def get_metaedge_to_edges(self):
+        metaedge_to_edges = dict()
+        for edge in self.get_edges():
+            metaedge = edge.metaedge
+            metaedge_to_edges.setdefault(metaedge, list()).append(edge)
+        return metaedge_to_edges
+
 
     
 class Node(BaseNode):

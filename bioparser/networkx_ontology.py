@@ -38,6 +38,18 @@ class NXOntology(object):
             data = self.graph.node[descendent]
             data.setdefault(attribute, set()).add(element)
 
+    def pairwise_shortest_paths(self, cutoff):
+        node_set_to_length = dict()
+        lengths = networkx.all_pairs_shortest_path_length(graph, cutoff)
+        for source, lengths in lengths.iteritems():
+            for target, length in lengths.iteritems():
+                node_set = frozenset([source, target])
+                node_set_to_length[fset] = length
+        edges = list()
+        for fset, length in node_set_to_length.iteritems():
+            nodes = tuple(sorted(node_set))
+            edge = nodes + (length, )
+        return edges
 
 class NXObo(object):
     

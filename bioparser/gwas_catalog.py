@@ -4,7 +4,9 @@ import collections
 import re
 import logging
 
+
 import data
+import mapping.manual_reader
 
 
 def fdr_generator(p_values, num_total_tests):
@@ -197,10 +199,34 @@ class GwasCatalog(object):
                 efo_id_to_genes.setdefault(efo_id, set()).update(row['genes'])
         return efo_id_to_genes
 
+    def get_doid_id_to_genes(self, *args, **kwargs):
+        """
+        Returns a dictionary of doid_id to a set of genes. Genes are gene
+        objects from the hgnc module. Arguments are passed to 
+        get_efo_id_to_genes(); mapping is performed by converting from the
+        GWAS catalog names to EFO terms (using EBI supplied mappings). EFO terms
+        are manually mapped to DOID terms.
+        """
+        symbol_to_gene = data.Data().hgnc.get_symbol_to_gene()
+        efo_doid_mapping_path = '/home/dhimmels/Documents/serg/data-mapping/manual/efo_doid/gwas-pairs-editted.tsv'
+        efo_id_to_doid_ids = mapping.manual_reader.get_mapping_dict(
+            efo_doid_mapping_path, 'efo_id', 'doid_id')
+        efo_id_to_genes = self.get_efo_id_to_genes(*args, **kwargs)
+        doid_id_to_genes = dict()
+        for efo_id, symbols in efo_id_to_genes.items():
+            doid_ids = efo_id_to_doid_ids.get(efo_id)
+            if doid_ids is None:
+                continue
+            hgnc_genes = {symbol_to_gene.get(symbol) for symbol in symbols}
+            hgnc_genes.discard(None)
+            for doid_id in doid_ids:
+                doid_id_to_genes.setdefault(doid_id, set()).update(hgnc_genes)
+                
+        return doid_id_to_genes
+
 if __name__ =='__main__':
     gcat = GwasCatalog()
-    path = '/home/dhimmels/Documents/serg/data-sources/gwas-catalog/GWAS-EFO-Mappings092012.txt'
-    gcat.read_ebi_mappings(path)
+    gcat.read_ebi_mappings()
     #catalog_term_to_efo_ids, mapped_pmids = gcat.read_ebi_mappings(path)
     gcat.get_rows()
     gcat.apply_fdr()
@@ -236,10 +262,12 @@ if __name__ =='__main__':
             continue
         print pmid, trait, date, number_loci
     """
-    efo_id_to_genes = gcat.get_efo_id_to_genes()
-    psoriasis = efo_id_to_genes['EFO_0000676'] # psoriasis
-    ms = efo_id_to_genes['EFO_0003885'] # multiple sclerosis
-    print len(ms), 'MS genes'
-    print len(psoriasis), 'psoriasis genes'
-    print psoriasis & ms
-    print ms
+    doid_id_to_genes = gcat.get_doid_id_to_genes(fdr_cutoff=1.0, mapped_term_cutoff=1)
+    print doid_id_to_genes
+    #efo_id_to_genes = gcat.get_efo_id_to_genes()
+    #psoriasis = efo_id_to_genes['EFO_0000676'] # psoriasis
+    #ms = efo_id_to_genes['EFO_0003885'] # multiple sclerosis
+    #print len(ms), 'MS genes'
+    #print len(psoriasis), 'psoriasis genes'
+    #print psoriasis & ms
+    #print ms

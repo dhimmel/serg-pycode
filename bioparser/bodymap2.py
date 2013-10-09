@@ -3,6 +3,7 @@ import csv
 import collections
 
 import data
+import mapping.manual_reader
 
 class BodyMap2(object):
     
@@ -12,16 +13,24 @@ class BodyMap2(object):
         self.directory = directory
         self.path = os.path.join(directory, 'E-MTAB-513-query-results.tsv')
     
-    def read(self):
+    def read(self, bto_convert=True):
         read_file = open(self.path)
         line = '#'
         while line.startswith('#'):
             line = read_file.next().rstrip()
         fieldnames = line.split('\t')
-        reader = csv.DictReader(read_file, delimiter='\t', fieldnames=fieldnames)
         tissues = list(fieldnames)
         for non_tissue_key in ['Gene name', 'Gene Id']:
             tissues.remove(non_tissue_key)
+
+        if bto_convert:
+            path = os.path.join(self.directory, 'bodymap-bto-mappings.tsv')
+            bodymap_to_bto = mapping.manual_reader.get_mapping_dict(
+                path, 'bodymap_name', 'bto_id', plural=False)
+            tissues = [bodymap_to_bto[tissue] for tissue in tissues]
+            fieldnames = fieldnames[:2] + tissues
+
+        reader = csv.DictReader(read_file, delimiter='\t', fieldnames=fieldnames)
         rows = list()
         for row in reader:
             for tissue in tissues:
@@ -31,8 +40,8 @@ class BodyMap2(object):
         read_file.close()
         return tissues, rows
     
-    def process(self):
-        tissues, rows = self.read()
+    def process(self, bto_convert=True):
+        tissues, rows = self.read(bto_convert)
         #symbol_to_gene = data.Data().hgnc.get_symbol_to_gene()
         ensembl_to_gene = data.Data().hgnc.get_ensembl_to_gene()
         gene_to_rows = dict()
@@ -56,6 +65,7 @@ class BodyMap2(object):
         
         processed_rows.sort(key=lambda row: row['symbol'])
         
+            
         path = os.path.join(self.directory, 'processed.txt')
         with open(path, 'w') as write_file:
             writer = csv.writer(write_file, delimiter='\t')
@@ -64,6 +74,7 @@ class BodyMap2(object):
                 writer.writerow(row.values())
         
         return processed_rows
+    
     
     def read_processed(self):
         path = os.path.join(self.directory, 'processed.txt')
@@ -80,7 +91,7 @@ class BodyMap2(object):
         read_file.close()
         return tissues, rows
 
-    def get_edges(self, fpkm_cutoff = 0):
+    def get_edges(self, fpkm_cutoff = 0.0):
         tissues, rows = self.read_processed()
         for row in rows:
             symbol = row['symbol']
@@ -92,9 +103,12 @@ class BodyMap2(object):
                     continue
                 edge = symbol, tissue, fpkm
                 yield edge
-        
+    
 if __name__ == '__main__':
     bodymap = BodyMap2()
     #bodymap.process()
     edges = list(bodymap.get_edges(100))
     print edges[:100]
+
+
+

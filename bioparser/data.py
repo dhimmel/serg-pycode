@@ -2,6 +2,7 @@ import os
 
 import utilities.omictools
 
+import bodymap2
 import bto
 import ctd
 import drugbank
@@ -86,6 +87,7 @@ def preceding_path(source, **kwargs):
 class Data:
     
     def __init__(self):
+        self.bodymap2 = bodymap2.BodyMap2()
         self.bto = bto.BTO()
         self.ctd = ctd.CTD()
         self.drugbank = drugbank.DrugBank()
