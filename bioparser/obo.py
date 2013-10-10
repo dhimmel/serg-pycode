@@ -1,830 +1,164 @@
-"""\
-obiOntology
------------
-
-Python module for manipulating OBO Ontology files (http://www.obofoundry.org/)
-
-You can construct an ontology from scratch with custom terms ::
-
-    >>> term = OBOObject("Term", id="foo:bar", name="Foo bar")
-    >>> print term
-    [Term]
-    id: foo:bar
-    name: Foo bar
-    
-    >>> ontology = OBOOntology()
-    >>> ontology.add_object(term)
-    >>> ontology.add_header_tag("created-by", "ales") # add a header tag
-    >>> from StringIO import StringIO
-    >>> buffer = StringIO()
-    >>> ontology.dump(buffer) # Save the ontology to a file like object
-    >>> print buffer.getvalue() # Print the contents of the buffer
-    created-by: ales
-    <BLANKLINE>
-    [Term]
-    id: foo:bar
-    name: Foo bar
-    <BLANKLINE>
-    
-To load an ontology from a file pass the file or filename to the OBOOntology
-constructor or call its load method ::
-
-    >>> buffer.seek(0) # rewind
-    >>> ontology = OBOOntology(buffer)
-    >>> # Or
-    >>> buffer.seek(0) # rewind
-    >>> ontology = OBOOntology()
-    >>> ontology.load(buffer)
-    
-See OBOOntology docstring for more details.
-
-"""
-
-from itertools import chain
-from collections import defaultdict
-from StringIO import StringIO
-import itertools
+import json
+import os
 import re
 
-BUILTIN_OBO_OBJECTS = [
-"""[Typedef]
-id: is_a
-name: is_a
-range: OBO:TERM_OR_TYPE
-domain: OBO:TERM_OR_TYPE
-definition: The basic subclassing relationship [OBO:defs]"""
-,
-"""[Typedef]
-id: disjoint_from
-name: disjoint_from
-range: OBO:TERM
-domain: OBO:TERM
-definition: Indicates that two classes are disjoint [OBO:defs]"""
-,
-"""[Typedef]
-id: instance_of
-name: instance_of
-range: OBO:TERM
-domain: OBO:INSTANCE
-definition: Indicates the type of an instance [OBO:defs]"""
-,
-"""[Typedef]
-id: inverse_of
-name: inverse_of
-range: OBO:TYPE
-domain: OBO:TYPE
-definition: Indicates that one relationship type is the inverse of another [OBO:defs]"""
-,
-"""[Typedef]
-id: union_of
-name: union_of
-range: OBO:TERM
-domain: OBO:TERM
-definition: Indicates that a term is the union of several others [OBO:defs]"""
-,
-"""[Typedef]
-id: intersection_of
-name: intersection_of
-range: OBO:TERM
-domain: OBO:TERM
-definition: Indicates that a term is the intersection of several others [OBO:defs]"""
-]
+import networkx
+
+import networkx_ontology
+
+singular_header_tags = ['format-version', 'data-version', 'date', 'saved-by']
+singular_stanza_tags = ['id', 'name', 'is_anonymous', 'def', 'comment',
+                 'is_obsolete', 'replaced_by', 'created_by', 'creation_date']
+plural_stanza_tags = ['alt_id', 'subset', 'synonym', 'xref', 'is_a']
+
+trailing_modifiers_pattern = re.compile(r'\{(.*)\}$')
+
+def parse_tag_value_pair(line):
+    comment_split = line.split(' ! ', 1)
+    tag_value_pair = comment_split[0]
+    comment = comment_split[1] if len(comment_split) == 2 else None
+    tag_value_pair = re.sub(trailing_modifiers_pattern, '', tag_value_pair)
+    tag, value = tag_value_pair.split(': ', 1)
+    return tag, value
     
-def _split_and_strip(string, sep):
-    head, tail = string.split(sep, 1)
-    return head.rstrip(" "), tail.lstrip(" ")
-
-
-class OBOObject(object):
-    """ Represents a generic OBO object (e.g. Term, Typedef, Instance, ...)
-    Example::
-        >>> term = OBOObject(stanza_type="Term", id="FOO:001", name="bar")
+def parse_obo(path):
     """
-    def __init__(self, stanza_type="Term", **kwargs):
-        """ Init from keyword arguments.
-        Example::
-            >>> term = OBOObject(stanza_type="Term", id="FOO:001", name="bar", def_="Example definition { modifier=frob } ! Comment")
-            >>> term = OBOObject(stanza_type="Term", id="FOO:001", name="bar", def_=("Example definition", [("modifier", "frob")], "Comment"))
-            >>> term = OBOObject(stanza_type="Term", id="FOO:001", name="bar", def_=("Example definition", [("modifier", "frob")])) # without the comment
-            >>> term = OBOObject(stanza_type="Term", id="FOO:001", name="bar", def_=("Example definition",)) # without the modifiers and comment
-        """
-        self.stanza_type = stanza_type
-        
-        self.modifiers = []
-        self.comments = []
-        self.tag_values = []
-        self.values = {}
-        
-        sorted_tags = sorted(kwargs.iteritems(), key=lambda key_val: chr(1) if key_val[0] == "id" else key_val[0])
-        for tag, value in sorted_tags:
-            if isinstance(value, basestring):
-                tag, value, modifiers, comment = self.parse_tag_value(self.name_demangle(tag), value)
-            elif isinstance(value, tuple):
-                tag, value, modifiers, comment = ((self.name_demangle(tag),) + value + (None, None))[:4]
-            self.add_tag(tag, value, modifiers, comment)
-        
-        self.related = set()
-#        self.related_to = set()
-            
-    @property
-    def is_annonymous(self):
-        value = self.get_value("is_annonymous")
-        return bool(value)
-    
-    def name_mangle(self, tag):
-        """ Mangle tag name if it conflicts with python keyword
-        Example::
-            >>> term.name_mangle("def"), term.name_mangle("class")
-            ('def_', 'class_')
-        """
-        if tag in ["def", "class", "in", "not"]:
-            return tag + "_"
-        else:
-            return tag
-        
-    def name_demangle(self, tag):
-        """ Reverse of name_mangle
-        """
-        if tag in ["def_", "class_", "in_", "not_"]:
-            return tag[:-1]
-        else:
-            return tag
-        
-    def add_tag(self, tag, value, modifiers=None, comment=None):
-        """ Add `tag`, `value` pair to the object with optional modifiers and
-        comment.
-        Example::
-            >>> term = OBOObject("Term")
-            >>> term.add_tag("id", "FOO:002", comment="This is an id")
-            >>> print term
-            [Term]
-            id: FOO:002 ! This is an id
-             
-        """
-        tag = intern(tag) # a small speed and memory benefit
-        self.tag_values.append((tag, value))
-        self.modifiers.append(modifiers)
-        self.comments.append(comment)
-        self.values.setdefault(tag, []).append(value)
-        
-        #  TODO: fix multiple tags grouping
-        if hasattr(self, tag):
-            if isinstance(getattr(self, tag), list):
-                getattr(self, tag).append(value)
-            else:
-                setattr(self, tag, [getattr(self, tag)] + [value])
-        else:
-            setattr(self, self.name_mangle(tag), value)
-            
-    def update(self, other):
-        """ Update the term with tag value pairs from `other` 
-        (a OBOObject instance). The tag value pairs are appended
-        to the end except for the `id` tag.
-        """ 
-        for (tag, value), modifiers, comment in zip(other.tag_values, other.modifiers, other.comments):
-            if tag != "id":
-                self.add_tag(tag, value, modifiers, comment)
-        
-    def get_value(self, tag, group=True):
-        if group:
-            pairs = [pair for pair in self.tag_values if pair[0] == tag]
-            return pairs
-        else:
-            tag = self.name_mangle(tag)
-            if tag in self.__dict__:
-                return self.__dict__[tag]
-            else:
-                raise ValueError("No value for tag: %s" % tag)
-        
-    def tag_count(self):
-        """ Retrun the number of tags in this object
-        """
-        return len(self.tag_values)
-    
-    def tags(self):
-        """ Retrun an iterator over the (tag, value) pairs.
-        """
-        for i in range(self.tag_count()):
-            yield self.tag_values[i] + (self.modifiers[i], self.comments[i])
-        
-    def format_single_tag(self, index):
-        """Return a formated string representing index-th tag pair value
-        Example::
-            >>> term = OBOObject("Term", id="FOO:001", name="bar", def_="Example definition {modifier=frob} ! Comment")
-            >>> term.format_single_tag(0)
-            'id: FOO:001'
-            >>> term.format_single_tag(1)
-            'def: Example definition { modifier=frob } ! Comment'
-        """
-        tag, value = self.tag_values[index]
-        modifiers = self.modifiers[index]
-        comment = self.comments[index]
-        res = ["%s: %s" % (tag, value)]
-        if modifiers:
-            res.append("{ %s }" % modifiers)
-        if comment:
-            res.append("! " + comment)
-        return " ".join(res)
-    
-    def format_stanza(self):
-        """ Return a string stanza representation of this object 
-        """
-        stanza = ["[%s]" % self.stanza_type]
-        for i in range(self.tag_count()):
-            stanza.append(self.format_single_tag(i))
-        return "\n".join(stanza)
-            
-    @classmethod     
-    def parse_stanza(cls, stanza):
-        r""" Parse and return an OBOObject instance from a single stanza.
-        Example::
-            >>> term = OBOObject.parse_stanza("[Term]\nid: FOO:001\nname:bar")
-            >>> print term.id, term.name
-            FOO:001 bar
-            
-        """
-        lines = stanza.splitlines()
-        stanza_type = lines[0].strip("[]")
-        tag_values = []
-        for line in lines[1:]:
-            if ":" in line:
-                tag_values.append(cls.parse_tag_value(line))
-        
-        obo = OBOObject(stanza_type)
-        for i, (tag, value, modifiers, comment) in enumerate(tag_values):
-#            print tag, value, modifiers, comment
-            obo.add_tag(tag, value, modifiers, comment)
-        return obo
-    
-        
-    @classmethod
-    def parse_tag_value_1(cls, tag_value_pair, *args):
-        """ Parse and return a four-tuple containing a tag, value, a list of modifier pairs, comment.
-        If no modifiers or comments are present the corresponding entries will be None.
-        
-        Example::
-            >>> OBOObject.parse_tag_value("foo: bar {modifier=frob} ! Comment")
-            ('foo', 'bar', 'modifier=frob', 'Comment')
-            >>> OBOObject.parse_tag_value("foo: bar")
-            ('foo', 'bar', None, None)
-            >>> #  Can also pass tag, value pair already split   
-            >>> OBOObject.parse_tag_value("foo", "bar {modifier=frob} ! Comment")
-            ('foo', 'bar', 'modifier=frob', 'Comment')
-        """
-        if args and ":" not in tag_value_pair:
-            tag, rest = tag_value_pair, args[0]
-        else:
-            tag, rest = _split_and_strip(tag_value_pair, ":")
-        value, modifiers, comment = None, None, None
-        
-        if "{" in rest:
-            value, rest = _split_and_strip(rest, "{",)
-            modifiers, rest = _split_and_strip(rest, "}")
-        if "!" in rest:
-            if value is None:
-                value, comment = _split_and_strip(rest, "!")
-            else:
-                _, comment = _split_and_strip(rest, "!")
-        if value is None:
-            value = rest
-            
-        if modifiers is not None:
-            modifiers = modifiers #TODO: split modifiers in a list
-            
-        return tag, value, modifiers, comment
-    
-    _RE_TAG_VALUE = re.compile(r"^(?P<tag>.+?[^\\])\s*:\s*(?P<value>.+?)\s*(?P<modifiers>[^\\]{.+?[^\\]})?\s*(?P<comment>[^\\]!.*)?$")
-    _RE_VALUE = re.compile(r"^\s*(?P<value>.+?)\s*(?P<modifiers>[^\\]{.+?[^\\]})?\s*(?P<comment>[^\\]!.*)?$")
-    
-    @classmethod
-    def parse_tag_value(cls, tag_value_pair, arg=None):
-        """ Parse and return a four-tuple containing a tag, value, a list of modifier pairs, comment.
-        If no modifiers or comments are present the corresponding entries will be None.
-        
-        Example::
-            >>> OBOObject.parse_tag_value("foo: bar {modifier=frob} ! Comment")
-            ('foo', 'bar', 'modifier=frob', 'Comment')
-            >>> OBOObject.parse_tag_value("foo: bar")
-            ('foo', 'bar', None, None)
-            >>> #  Can also pass tag, value pair already split   
-            >>> OBOObject.parse_tag_value("foo", "bar {modifier=frob} ! Comment")
-            ('foo', 'bar', 'modifier=frob', 'Comment')
-            
-        .. warning: This function assumes comment an modifiers are prefixed
-            with a whitespace i.e. 'tag: bla! comment' will be parsed incorrectly!
-        """
-        if arg is not None: # tag_value_pair is actually a tag only
-            tag = tag_value_pair
-            value, modifiers, comment =  cls._RE_VALUE.findall(arg)[0]
-        else:
-            tag, value, modifiers, comment = cls._RE_TAG_VALUE.findall(tag_value_pair)[0]
-        none_if_empyt = lambda val: None if not val.strip() else val.strip()
-        modifiers = modifiers.strip(" {}")
-        comment = comment.lstrip(" !")
-        return (none_if_empyt(tag), none_if_empyt(value),
-                none_if_empyt(modifiers), none_if_empyt(comment))
-         
-    def related_objects(self):
-        """ Return a list of tuple pairs where the first element is relationship (typedef id)
-        is and the second object id whom the relationship applies to.
-        """
-        result = [(type_id, id) for type_id in ["is_a"] for id in self.values.get(type_id, [])] ##TODO add other defined Typedef ids
-        result = result + [tuple(r.split(None, 1)) for r in self.values.get("relationship", [])]
-        return result
-
-    def __repr__(self):
-        """ Return a string representation of the object in OBO format
-        """
-        return self.format_stanza()
-
-    def __iter__(self):
-        """ Iterates over sub terms
-        """
-        for type_id, id in self.related_objects():
-            yield (type_id, id)
-        
-        
-class Term(OBOObject):
-    def __init__(self, *args, **kwargs):
-        OBOObject.__init__(self, "Term", *args, **kwargs)
-
-class Typedef(OBOObject):
-    def __init__(self, *args, **kwargs):
-        OBOObject.__init__(self, "Typedef", *args, **kwargs)
-
-class Instance(OBOObject):
-    def __init__(self, *args, **kwargs):
-        OBOObject.__init__(self, "Instance", *args, **kwargs)
-
-
-import re
-
-class OBOParser(object):
-    r""" A simple parser for .obo files (inspired by xml.dom.pulldom)
-    
-    Example::
-        >>> from StringIO import StringIO
-        >>> file = StringIO("header_tag: header_value\n[Term]\nid: FOO { modifier=bar } ! comment\n\n") 
-        >>> parser = OBOParser(file)
-        >>> for event, value in parser:
-        ...     print event, value
-        ...     
-        HEADER_TAG ['header_tag', 'header_value']
-        START_STANZA Term
-        TAG_VALUE ('id', 'FOO', 'modifier=bar', 'comment')
-        CLOSE_STANZA None
-                
+    http://www.geneontology.org/GO.format.obo-1_2.shtml
     """
-    def __init__(self, file):
-        self.file = file
-        
-    def parse(self, progress_callback=None):
-        """ Parse the file and yield parse events.
-        
-        .. TODO: List events and values
-        """
-        data = self.file.read()
-        header = data[: data.index("\n[")]
-        body = data[data.index("\n[") + 1:]
-        for line in header.splitlines():
-            if line.strip():
-                yield "HEADER_TAG", line.split(": ", 1)
-                
-        current = None
-        #  For speed make these functions local
-        startswith = str.startswith
-        endswith = str.endswith
-        parse_tag_value = OBOObject.parse_tag_value
-        
-        in_stanza = False # Included to fix multiple blank line bug
-        for line in body.splitlines():
-#            line = line.strip()
-#            print line # debugging
-            if startswith(line, "[") and endswith(line, "]"):
-                in_stanza = True
-                yield "START_STANZA", line.strip("[]")
-                current = line
-            elif startswith(line, "!"):
-                yield "COMMENT", line[1:]
-            elif line:
-                yield "TAG_VALUE", parse_tag_value(line)
+    read_file = open(path)
+    
+    skip_line = lambda line: line.startswith('!') or not line
+    
+    # parse header section
+    header = dict() # list of tag-value pairs
+    line = read_file.next().rstrip('\r\n')
+    while not line.startswith('['):
+        line = line.rstrip('\r\n')
+        if not skip_line(line):
+            tag, value = parse_tag_value_pair(line)
+            if tag in singular_header_tags:
+                assert tag not in header
+                header[tag] = value
             else:
-                if in_stanza:
-                    in_stanza = False
-                    yield "CLOSE_STANZA", None
-        if current is not None and in_stanza:
-            in_stanza = False
-            yield "CLOSE_STANZA", None
+                header.setdefault(tag, list()).append(value)
+
+        line = next(read_file, None)
+
+    # parse stanzas
+    stanzas = list()
+    while line is not None:
+        line = line.rstrip('\r\n')
+        stanza_name = line[1: -1]
+        stanza = {'stanza_name': stanza_name}
+        
+        line = next(read_file, None)
+        while line is not None and not line.startswith('['):
+            line = line.rstrip('\r\n')
+            if not skip_line(line):
+                tag, value = parse_tag_value_pair(line)
+                if tag in singular_stanza_tags:
+                    assert tag not in stanza
+                    stanza[tag] = value
+                else:
+                    stanza.setdefault(tag, list()).append(value)
+            line = next(read_file, None)
+        stanzas.append(stanza)
     
-    def __iter__(self):
-        """ Iterate over parse events (same as parse())
-        """
-        return self.parse() 
-        
-        
-class OBOOntology(object):
-    """ The main ontology object.
-    """
-    
-    BUILTINS = BUILTIN_OBO_OBJECTS
-    def __init__(self, file=None):
-        """ Init an ontology instance from a file like object (.obo format)
-        
-        """
-        self.objects = []
-        self.header_tags = []
-        self.id2term = {}
-        self.alt2id = {}
-        self._resolved_imports = []
-        self._invalid_cache_flag = False
-        self._related_to = {}
-        
-        # First load the built in OBO objects
-        builtins = StringIO("\n" + "\n\n".join(self.BUILTINS) + "\n")
-        self.load(builtins)
-        if file:
-            self.load(file)
-        
-    def add_object(self, object):
-        """ Add OBOObject instance to this ontology.
-        """
-        if object.id in self.id2term:
-            #raise ValueError("OBOObject with id: %s already in the ontology" % object.id)
-            print "OBOObject with id: %s already in the ontology" % object.id
-            return
-        self.objects.append(object)
-        self.id2term[object.id] = object
-        self._invalid_cache_flag = True
-        
-    def add_header_tag(self, tag, value):
-        """ Add header tag, value pair to this ontology
-        """
-        self.header_tags.append((tag, value))
-    
-    def load(self, file, progress_callback=None):
-        """ Load terms from a file.
-        """
-        if isinstance(file, basestring):
-            file = open(file, "rb")
-        parser = OBOParser(file)
-        current = None
-        for event, value in parser.parse(progress_callback=progress_callback):
-            if event == "TAG_VALUE":
-                current.add_tag(*value)
-            elif event == "START_STANZA":
-                current = OBOObject(value)
-            elif event == "CLOSE_STANZA":
-                # an error occurs when multiple newlines seprate terms.
-                self.add_object(current)
-                current = None
-            elif event == "HEADER_TAG":
-                self.add_header_tag(*value)
-            elif event != "COMMENT":
-                raise Exception("Parse Error! Unknown parse event {0}".format(event))
+    read_file.close()
+    return header, stanzas
+
+def process_stanzas(stanzas):
+    for stanza in stanzas:
+        if 'relationship' in stanza:
+            relationship_dict = dict()
+            for relationship in stanza['relationship']:
+                type_id, term_id = relationship.split(' ', 1)
+                relationship_dict.setdefault(type_id, list()).append(term_id)
+            stanza['relationship'] = relationship_dict
+    return stanzas
             
-        imports = [value for tag, value, in self.header_tags if tag == "import"]
-        
-        while imports:
-            url = imports.pop(0)
-            if uri not in self._resolved_imports:
-                imported = self.parse_file(open(url, "rb"))
-                ontology.update(imported)
-                self._resolved_imports.append(uri)
-                
-    def dump(self, file):
-        """ Dump the contents of the ontology to a .obo `file`.
-        """
-        if isinstance(file, basestring):
-            file = open(file, "wb")
-            
-        for key, value in self.header_tags:
-            file.write(key + ": " + value + "\n")
-            
-        # Skip the builtins
-        for object in self.objects[len(self.BUILTINS):]:
-            file.write("\n")
-            file.write(object.format_stanza())
-            file.write("\n")
+
+class OBO(object):
     
-    def update(self, other):
-        """ Update this ontology with the terms from another. 
-        """
-        for term in other:
-            if term.id in self:
-                if not term.is_annonymous:
-                    self.term(term.id).update(term)
-                else: #  Do nothing
-                    pass 
-            else:
-                self.add_object(term)
-        self._invalid_cache_flag = True
-        
-    def _cache_validate(self, force=False):
-        """ Update the relations cache if `self._invalid_cache` flag is set. 
-        """
-        if self._invalid_cache_flag or force:
-            self._cache_relations()
-            
-    def _cache_relations(self):
-        """ Collect all relations from parent to a child and store it in
-        `self._related_to` member.
-        
-        """
-        related_to = defaultdict(list)
-        for obj in self.objects:
-            for rel_type, id in self.related_terms(obj):
-                term = self.term(id)
-                related_to[term].append((rel_type, obj))
-                
-        self._related_to = related_to
-        self._invalid_cache_flag = False
-        
-    def term(self, id):
-        """ Return the OBOObject associated with this id.
-        """
-        if isinstance(id, basestring):
-            if id in self.id2term:
-                return self.id2term[id]
-            elif id in self.alt2id:
-                return self.id2term[self.alt2id[id]]
-            else:
-                raise ValueError("Unknown term id: %s" % id)
-        elif isinstance(id, OBOObject):
-            return id
-        
-    def terms(self):
-        """ Return all `Term` instances in the ontology.
-        """
-        return [obj for obj in self.objects if obj.stanza_type == "Term"]
-    
-    def typedefs(self):
-        """ Return all `Typedef` instances in the ontology.
-        """
-        return [obj for obj in self.objects if obj.stanza_type == "Typedef"]
-    
-    def instances(self):
-        """ Return all `Instance` instances in the ontology.
-        """
-        return [obj for obj in self.objects if obj.stanza_type == "Instance"]
-        
-    def related_terms(self, term):
-        """ Return a list of (rel_type, term_id) tuples where rel_type is
-        relationship type (e.g. 'is_a', 'has_part', ...) and term_id is the
-        id of the term in the relationship.
-        
-        """
-        term = self.term(term) if not isinstance(term, OBOObject) else term
-        related = [(tag, value) for tag in ["is_a"] for value in term.values.get(tag, [])] #TODO: add other typedef ids
-        relationships = term.values.get("relationship", [])
-        for rel in relationships:
-            related.append(tuple(rel.split(None, 1)))
-        return related
-        
-    def edge_types(self):
-        """ Return a list of all edge types in the ontology
-        """
-        return [obj.id for obj in self.objects if obj.stanza_type == "Typedef"]
-    
-    def parent_edges(self, term):
-        """ Return a list of (rel_type, parent_term) tuples 
-        """
-        term = self.term(term)
-        parents = []
-        for rel_type, parent in self.related_terms(term):
-            parents.append((rel_type, self.term(parent)))
-        return parents
-        
-    def child_edges(self, term):
-        """ Return a list of (rel_type, source_term) tuples
-        """
-        self._cache_validate()
-        term = self.term(term)
-        return self._related_to.get(term, [])
-        
-        
-    def super_terms(self, term):
-        """ Return a set of all super terms of `term` up to the most general one.
-        """
-        terms = self.parent_terms(term)
-        visited = set()
-        queue = set(terms)
-        while queue:
-            term = queue.pop()
-            visited.add(term)
-            queue.update(self.parent_terms(term) - visited)
-        return visited
-    
-    def sub_terms(self, term):
-        """ Return a set of all sub terms for `term`.
-        """
-        terms = self.child_terms(term)
-        visited = set()
-        queue = set(terms)
-        while queue:
-            term = queue.pop()
-            visited.add(term)
-            queue.update(self.child_terms(term) - visited)
-        return visited
-    
-    def child_terms(self, term):
-        """ Return a set of all child terms for this `term`.
-        """
-        self._cache_validate()
-        term = self.term(term)
-        children = []
-        for rel_type, term in self.child_edges(term):
-            children.append(term)
-        return set(children)
-        
-    def parent_terms(self, term):
-        """ Return a set of all parent terms for this `term`
-        """
-        term = self.term(term)
-        parents = []
-        for rel_type, id in self.parent_edges(term): #term.related_objects():
-            parents.append(self.term(id))
-        return set(parents)
-    
-    def relations(self):
-        """ Return a list of all relations in the ontology.
-        """
-        relations = []
-        for obj in self.objects:
-            for type_id, id in  obj.related:
-                target_term = self.term(id)
-            relations.append((obj, type_id, target_term))
-        return relations
-    
-    def __len__(self):
-        return len(self.objects)
-    
-    def __iter__(self):
-        return iter(self.objects)
-    
-    def __contains__(self, obj):
-        if isinstance(obj, basestring):
-            return obj in self.id2term
+    def __init__(self, directory, obo_filename,
+                 node_attributes=['name']):
+        if obo_filename.endswith('.txt') or obo_filename.endswith('.obo'):
+            name = obo_filename[: -4]
         else:
-            return obj in self.objects
+            name = obo_filename
+        json_filename = '{}.json'.format(name)
+        pkl_filename = '{}.networkx.pkl'.format(name)
+        self.directory = directory
+        self.obo_path = os.path.join(directory, obo_filename)
+        self.graph_json_path = os.path.join(directory, json_filename)
+        self.graph_pkl_path = os.path.join(directory, pkl_filename)
+        self.node_attributes = node_attributes
     
-    def __getitem__(self, key):
-        return self.id2term[key]
-    
-    def has_key(self, key):
-        return self.id2tem.has_key(key)
-        
-    def to_networkx(self, terms=None):
-        """ Return a NetworkX graph of this ontology
+    def to_networkx(self):
         """
-        import networkx
-        graph = networkx.Graph()
-        
-        edge_types = self.edge_types()
-        
-        edge_colors = {"is_a": "red"}
-        
-        if terms is None:
-            terms = self.terms()
-        else:
-            terms = [self.term(term) for term in terms]
-            super_terms = [self.super_terms(term) for term in terms]
-            terms = reduce(set.union, super_terms, set(terms))
-            
-        for term in terms:
-            graph.add_node(term.id, name=term.name)
-            
-        for term in terms:
-            for rel_type, rel_term in self.related_terms(term):
-                rel_term = self.term(rel_term)
-                if rel_term in terms:
-                    graph.add_edge(term.id, rel_term.id, label=rel_type, color=edge_colors.get(rel_type, "blue"))
-                    
-        return graph
-    
-    def to_directed_networkx(self, terms=None, attributes = ['name']):
-        """Daniel Himmelstein
-        Edges start at parent and point to child.
+        Creates a networkx directed multigraph representing the ontology.
         """
-        import networkx
+        header, stanzas = parse_obo(self.obo_path)
+        process_stanzas(stanzas)
+        
+        # create graph
         graph = networkx.MultiDiGraph()
+        graph.graph.update(header)
         
-        edge_types = self.edge_types()
-                
-        if terms is None:
-            terms = self.terms()
-        else:
-            terms = [self.term(term) for term in terms]
-            super_terms = [self.super_terms(term) for term in terms]
-            terms = reduce(set.union, super_terms, set(terms))
-            
-        for term in terms:
-            attr_dict = {attribute: getattr(term, attribute, None)
-                         for attribute in attributes}
-            node = graph.add_node(term.id, **attr_dict)
-            
-        for term in terms:
-            # parents of term
-            for rel_type, rel_term in self.parent_edges(term):
-                rel_term = self.term(rel_term)
-                if rel_term in terms:
-                    graph.add_edge(rel_term.id, term.id, key=rel_type)
-            # children of term
-            for rel_type, rel_term in self.child_edges(term):
-                rel_term = self.term(rel_term)
-                if rel_term in terms:
-                    graph.add_edge(term.id, rel_term.id, key=rel_type)
+        # add nodes
+        for stanza in stanzas:
+            node = stanza['id']
+            node_data = {key: stanza.get(key) for key in self.node_attributes}
+            graph.add_node(node, node_data)
+        
+        # add edges
+        for stanza in stanzas:
+            child = stanza['id']
+            type_to_terms = dict()
+            if 'is_a' in stanza:
+                type_to_terms['is_a'] = stanza['is_a']
+            if 'relationship' in stanza:
+                type_to_terms.update(stanza['relationship'])
+            for key, parents in type_to_terms.items():
+                for parent in parents:
+                    graph.add_edge(parent, child, key=key)
+                    
+        
         
         assert networkx.is_directed_acyclic_graph(graph)
         return graph
-        
-    def to_graphviz(self, terms=None):
-        """ Return an pygraphviz.AGraph representation of the ontology in.
-        If `terms` is not `None` it must be a list of terms in the ontology.
-        The graph will in this case contain only the super graph of those
-        terms.  
-        
-        """
-        import pygraphviz as pgv
-        graph = pgv.AGraph(directed=True, name="ontology")
-        
-        edge_types = self.edge_types()
-        
-        edge_colors = {"is_a": "red"}
-        
-        if terms is None:
-            terms = self.terms()
-        else:
-            terms = [self.term(term) for term in terms]
-            super_terms = [self.super_terms(term) for term in terms]
-            terms = reduce(set.union, super_terms, set(terms))
-            
-        for term in terms:
-            graph.add_node(term.id, name=term.name)
-            
-        for term in terms:
-            for rel_type, rel_term in self.related_terms(term):
-                rel_term = self.term(rel_term)
-                if rel_term in terms:
-                    graph.add_edge(term.id, rel_term.id, label=rel_type, color=edge_colors.get(rel_type, "blue"))
-                    
-        return graph
     
+    def write_graph(self):
+        serialized = networkx.readwrite.json_graph.node_link_data(self.graph)
+        with open(self.graph_json_path, 'w') as json_file:
+            json.dump(serialized, json_file, indent=2)
+        networkx.write_gpickle(self.graph, self.graph_pkl_path)
     
-def load(file):
-    """ Load an ontology from a .obo file
-    """
-    return OBOOntology(file)
+    def read_graph(self):
+        return networkx.read_gpickle(self.graph_pkl_path)
     
-    
-def foundry_ontologies():
-    """ List ontologies available from the OBOFoundry website
-    (`http://www.obofoundry.org/`_) 
-    Example::
-        >>> foundry_ontologies()
-        [('Biological process', 'http://obo.cvs.sourceforge.net/*checkout*/obo/obo/ontology/genomic-proteomic/gene_ontology_edit.obo'), ...
-    
-    """
-    import urllib2, re
-    stream = urllib2.urlopen("http://www.obofoundry.org/")
-    text = stream.read()
-    pattern = r'<td class=".+?">\s*<a href=".+?">(.+?)</a>\s*</td>\s*<td class=".+?">.*?</td>\s*<td class=".+?">.*?</td>\s*?<td class=".+?">\s*<a href="(.+?obo)">.+?</a>'
-    return re.findall(pattern, text)
-    
-    
-if __name__ == "__main__":
-    import doctest
-    stanza = '''[Term]
-id: FOO:001
-name: bar
-'''
-    from StringIO import StringIO
-    seinfeld = StringIO("""
-[Typedef]
-id: parent
+    def get_graph(self):
+        """Returns the networkx graph representation of the EFO."""
+        if not hasattr(self, 'graph'):
+            if os.path.exists(self.graph_pkl_path):
+                self.graph = self.read_graph()
+            else:
+                self.graph = self.to_networkx()
+                self.write_graph()
 
-[Typedef]
-id: child
-inverse_of: parent ! not actually used yet
+        return self.graph
 
-[Term]
-id: 001
-name: George
+    def get_ontology(self):
+        """ """
+        if not hasattr(self, 'ontology'):
+            graph = self.get_graph()
+            self.ontology = networkx_ontology.NXOntology(graph)
+        return self.ontology
 
-[Term]
-id: 002
-name: Estelle
-relationship: parent 001 ! George
 
-[Term]
-id: 003
-name: Frank
-relationship: parent 001 ! George
 
-""") # TODO: fill the ontology with all characters
-    term = OBOObject.parse_stanza(stanza)
-    
-    seinfeld = OBOOntology(seinfeld)
-    print seinfeld.child_edges("001")
-    
-    #doctest.testmod(extraglobs={"stanza": stanza, "term": term}, optionflags=doctest.ELLIPSIS)
-        
+#stanza_name = re.search(r'^\[(.*)\]$', line).group(1)
+if __name__ =='__main__':
+    path = '/home/dhimmels/Documents/serg/data-sources/bto/131007/BrendaTissueOBO.txt'
+    graph = to_networkx(path)
+    print graph.nodes()
