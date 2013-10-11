@@ -3,27 +3,118 @@ import csv
 
 import bioparser.data
 import bioparser.copub
-
+import mapping.manual_reader
 
 data = bioparser.data.Data()
 
 ashg_dir = os.path.expanduser('~/Documents/serg/ashg13/')
+mapping_dir = os.path.join(ashg_dir, 'mappings')
+copub_dir = os.path.join(ashg_dir, 'copub')
 
-def map_efo_to_copub():
-    """ ashg13 module has been removed. function will not work"""
-    efo_id_to_name = data.efo.get_id_to_name()
-    path = os.path.join(ashg_dir, 'efo-to-copub-mappings-auto.txt')
+
+def map_doid_to_copub():
+    """ """
+    bioparser.copub.load_client()
+    
+    path = '/home/dhimmels/Documents/serg/data-mapping/manual/efo_doid/gwas-pairs-editted.tsv'
+    gcat_mapped_doid_rows = list(mapping.manual_reader.row_generator(path))
+    
+    path = os.path.join(mapping_dir, 'doid-to-copub-mappings-auto.txt')
     mapping_file = open(path, 'w')
     writer = csv.writer(mapping_file, delimiter='\t')
-    efo_ids = ashg13.calculate_disease_subset()
-    fieldnames = ['efo_id', 'efo_name', 'bi_id', 'copub_name']
+
+    fieldnames = ['doid_id', 'doid_name', 'bi_id', 'copub_name']
     writer.writerow(fieldnames)
-    for efo_id in efo_ids:
-        efo_name = efo_id_to_name[efo_id]
-        bi_id, copub_name = bioparser.copub.get_top_keyword(efo_name, 'disease')
-        row = [efo_id, efo_name, bi_id, copub_name]
+    for doid_row in gcat_mapped_doid_rows:
+        doid_id = doid_row['doid_id']
+        doid_name = doid_row['doid_name']
+        bi_id, copub_name = bioparser.copub.get_top_keyword(doid_name, 'disease')
+        row = [doid_id, doid_name, bi_id, copub_name]
         writer.writerow(row)
     mapping_file.close()
+
+def read_doid_to_copub():
+    """ """
+    path = os.path.join(mapping_dir, 'doid-to-copub-mappings-manual.txt')
+    mapping_file = open(path)
+    reader = csv.DictReader(mapping_file, delimiter='\t')
+    doid_to_copub = dict()
+    for row in reader:
+        doid_id = row['doid_id']
+        bi_id = int(row['bi_id'])
+        doid_to_copub[doid_id] = bi_id
+    return doid_to_copub
+
+def read_bto_to_copub():
+    """ """
+    path = os.path.join(mapping_dir, 'bto-to-copub-mappings-manual.txt')
+    mapping_file = open(path)
+    reader = csv.DictReader(mapping_file, delimiter='\t')
+    bto_to_copub = dict()
+    for row in reader:
+        bto_id = row['bto_id']
+        bi_id = int(row['bi_id'])
+        bto_to_copub[bto_id] = bi_id
+    return bto_to_copub
+
+
+def compute_doid_bto_cooccurrence():
+    """ """
+    bioparser.copub.load_client()
+    
+    bto_graph = data.bto.get_graph()
+    doid_graph = data.doid.get_graph()
+    
+    
+    bto_to_copub = read_bto_to_copub()
+    doid_to_copub = read_doid_to_copub()
+    copub_to_bto = {v: k for k, v in bto_to_copub.items()}
+    
+    copub_to_doid = {v: k for k, v in doid_to_copub.items()}
+    
+    copub_to_doids = dict()
+    for doid_id, copub_id in doid_to_copub.items():
+        copub_to_doids.setdefault(copub_id, list()).append(doid_id)
+    
+    
+    copub_tissues = copub_to_bto.keys()
+    copub_diseases = copub_to_doids.keys()
+    cooccurrence_gen = bioparser.copub.term_set_cooccurrences(
+        copub_diseases, copub_tissues)
+    rows = list()
+    for copub_disease, copub_tissue, r_scaled in cooccurrence_gen:
+        doid_ids = copub_to_doids[copub_disease]
+        bto_id = copub_to_bto[copub_tissue]
+        bto_name = bto_graph.node[bto_id]['name']
+        for doid_id in doid_ids:
+            doid_name = doid_graph.node[doid_id]['name']
+            row = doid_id, doid_name, bto_id, bto_name, r_scaled
+            rows.append(row)
+            print row
+
+    rows.sort(key=lambda x: (x[1], x[3]))
+    fieldnames = ['doid_id', 'doid_name', 'bto_id', 'bto_name', 'r_scaled']
+    path = os.path.join(copub_dir, 'doid-bto-cooccurrences.txt')
+    write_file = open(path, 'w')
+    writer = csv.writer(write_file, delimiter='\t')
+    writer.writerow(fieldnames)
+    writer.writerows(rows)
+    write_file.close()
+
+
+def doid_bto_cooccurrence_generator():
+    """ """
+    path = os.path.join(copub_dir, 'doid-bto-cooccurrences.txt')
+    read_file = open(path)
+    reader = csv.DictReader(read_file, delimiter='\t')
+    for row in reader:
+        row['r_scaled'] = float(row['r_scaled'])
+        yield row
+    read_file.close()
+
+
+
+
 
 def read_efo_to_copub():
     """ """
@@ -106,7 +197,13 @@ def tiger_efo_cooccurrence_generator():
 
 
 if __name__ == '__main__':
+    
+    compute_doid_bto_cooccurrence()
+    
+    
+    
+    
     #map_tiger_to_copub()
     #print read_tiger_to_copub()
-    compute_tiger_efo_cooccurrence()
+    #compute_tiger_efo_cooccurrence()
 

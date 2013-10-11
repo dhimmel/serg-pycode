@@ -41,6 +41,9 @@ class BodyMap2(object):
         return tissues, rows
     
     def process(self, bto_convert=True):
+        
+        geom_mean = lambda nums: reduce(lambda x, y: x*y, nums) ** (1.0 / len(nums))
+        
         tissues, rows = self.read(bto_convert)
         #symbol_to_gene = data.Data().hgnc.get_symbol_to_gene()
         ensembl_to_gene = data.Data().hgnc.get_ensembl_to_gene()
@@ -59,7 +62,8 @@ class BodyMap2(object):
             processed_row['symbol'] = gene.symbol
             for tissue in tissues:
                 fpkms = [row[tissue] for row in rows if row[tissue] is not None]
-                fpkm = sum(fpkms) / len(fpkms) if fpkms else None
+                #fpkm = sum(fpkms) / len(fpkms) if fpkms else None # mean
+                fpkm = geom_mean(fpkms) if fpkms else None # geometric mean
                 processed_row[tissue] = fpkm
             processed_rows.append(processed_row)
         
@@ -106,7 +110,7 @@ class BodyMap2(object):
     
 if __name__ == '__main__':
     bodymap = BodyMap2()
-    #bodymap.process()
+    bodymap.process()
     edges = list(bodymap.get_edges(100))
     print edges[:100]
 

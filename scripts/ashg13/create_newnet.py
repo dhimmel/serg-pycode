@@ -30,8 +30,8 @@ def create_graph():
                        ('gene', 'gene', 'interaction', 'both'),
                        ('gene', 'gene', 'function', 'both'),
                        ('gene', 'tissue', 'expression', 'both'),
-                       ('disease', 'tissue', 'pathology', 'both'),
-                       ('disease', 'factor', 'involvement', 'both')]
+                       ('disease', 'tissue', 'cooccurrence', 'both'),
+                       ('disease', 'disease', 'similarity', 'both')]
     metagraph = hetnet.MetaGraph.from_edge_tuples(metaedge_tuples)
     graph = hetnet.Graph(metagraph)
     
@@ -50,27 +50,51 @@ def create_graph():
     
     # Add diseases from DOID
     logging.info('Adding DOID disease nodes.')
-    doid_graph = data.doid.get_graph()
-    for doid_id, nx_data in doid_graph.nodes(data=True):
+    doid_onto = data.doid.get_ontology()
+    for doid_id, nx_data in doid_onto.graph.nodes(data=True):
         node_data = {'name': nx_data['name']}
         graph.add_node(doid_id, 'disease', node_data)
     
     # Print metanode counter
+    logging.info('MetaNode Counts')
     for metanode, nodes in graph.get_metanode_to_nodes().items():
-        print metanode, len(nodes)
+        line = '{}: {}'.format(metanode, len(nodes))
+        print line
+        logging.info(line)
 
     # Add (disease, gene, association, both) edges
     logging.info('Adding GWAS catalog disease-gene associations.')
+    fdr_cutoff = 0.05
+    mapped_term_cutoff = 1
+    logging.info('fdr_cutoff: {}'.format(fdr_cutoff))
+    logging.info('mapped_term_cutoff: {}'.format(mapped_term_cutoff))
     doid_id_to_genes = data.gwas_catalog.get_doid_id_to_genes(
-        fdr_cutoff=0.05, mapped_term_cutoff=1)
+        fdr_cutoff=fdr_cutoff, mapped_term_cutoff=mapped_term_cutoff)
     for doid_id, genes in doid_id_to_genes.iteritems():
         for gene in genes:
             symbol = gene.symbol
             graph.add_edge(doid_id, symbol, 'association', 'both')
+    doids_with_associations = [doid_id for doid_id, genes in
+                               doid_id_to_genes.iteritems() if len(genes) > 0]
 
+    # Add (disease, disease, similarity, both)
+    logging.info('Adding Instrinsic Semantic Similarity disease-disease edges.')
+    lin_cutoff = 0.45
+    logging.info('lin_cutoff: {}'.format(lin_cutoff))
+    similarity_generator = doid_onto.pairwise_similarities(doids_with_associations)
+    for similarity in similarity_generator:
+        lin_similarity = similarity['lin_similarity']
+        if lin_similarity < lin_cutoff:
+            continue
+        source = similarity['source']
+        target = similarity['target']
+        edge_data = {'lin_similarity': lin_similarity}
+        graph.add_edge(source, target, 'similarity', 'both', edge_data)
+    
     # Add (gene, tissue, expression, both) edges
     logging.info('Adding BodyMap2 gene-tissue expression.')
-    fpkm_cutoff = 50.0
+    fpkm_cutoff = 75.0
+    logging.info('fpkm_cutoff: {}'.format(fpkm_cutoff))
     edge_tuples = data.bodymap2.get_edges(fpkm_cutoff)
     for symbol, tissue, fpkm in edge_tuples:
         edge_data = {'fpkm': fpkm}
@@ -86,103 +110,20 @@ def create_graph():
         target = interaction['target'].symbol
         graph.add_edge(source, target, 'interaction', 'both', edge_data)
         
-    
-    # Print metaedge counter
-    for metanode, edges in graph.get_metaedge_to_edges().items():
-        print metanode, len(edges)
-        
-    """
-
-    # Add Factor Nodes
-    for factor in data.etiome.get_factors():
-        factor_id = 'factor: ' + factor
-        graph.add_node(factor_id, kind='factor')
-
-    # Add (disease, factor, involvement) edges
-    disease_to_factors = data.etiome.get_disease_to_factors()
-    etiome_to_efo_id = mappings.get_mappings('etiome_name', 'efo_id')
-    for etiome_disease, efo_id in etiome_to_efo_id.items():
-        factors = disease_to_factors[etiome_disease]
-        for factor in factors:
-            factor_id = 'factor: ' + factor
-            graph.add_edge(efo_id, factor_id, 'involvement', 'both')
-
-    # Add (disease, gene, association) edges
-    section = "('disease', 'gene', 'association', 'both')"
-    exclude_pmids = set(ast.literal_eval(config.get(section, 'exclude_pmids')))# {'21833088'}
-    efo_id_to_genes = data.gwas_catalog.get_efo_id_to_genes(
-        fdr_cutoff=config.getfloat(section, 'fdr_cutoff'),
-        mapped_term_cutoff=config.getint(section, 'mapped_term_cutoff'),
-        exclude_pmids=exclude_pmids)
-    for efo_id, gcat_symbols in efo_id_to_genes.iteritems():
-        if efo_id not in graph.node_dict:
-            continue
-        matched_symbols = gcat_symbols & hgnc_symbols
-        for gcat_symbol in matched_symbols:
-            gene_symbol = symbol_to_gene[gcat_symbol].symbol
-            graph.add_edge(efo_id, gene_symbol, 'association', 'both')
-
-    # Add (gene, tissue, specificity) edges
-    gene_to_tissues = data.tiger.get_gene_to_tissues()
-    for symbol, tissues in gene_to_tissues.iteritems():
-        gene = symbol_to_gene.get(symbol)
-        if gene is None:
-            continue
-        hgnc_symbol = gene.symbol
-        for tissue in tissues:
-            graph.add_edge(hgnc_symbol, tissue, 'specificity', 'both')
-
-    # Add (disease, tissue, pathology) edges
-    section = "('disease', 'tissue', 'pathology', 'both')"
-    r_scaled_cutoff = config.getfloat(section, 'r_scaled_cutoff')
-    coocc_gen = copub_analysis.tiger_efo_cooccurrence_generator()
-    for row in coocc_gen:
-        disease = row['efo_disease_id']
-        tissue = row['tiger_tissue']
-        r_scaled = row['r_scaled']
-        if r_scaled < r_scaled_cutoff:
-            continue
-        edge_data = {'r_scaled': r_scaled}
-        graph.add_edge(disease, tissue, 'pathology', 'both', edge_data)
-    
-    
-    # Add (disease, gene, regulation) edges
-    # Add (disease, gene, up-regulation) edges
-    # Add (disease, gene, down-regulation) edges
-    gxa_reader = bioparser.gxa.Reader()
-    for efo_id in disease_terms:
-        genes_tuple = gxa_reader.get_genes(efo_id, p_cutoff=0.05)
-        if genes_tuple is None:
-            continue
-        down_symbols, up_symbols = genes_tuple
-        down_symbols = {symbol_to_gene[gxa_symbol].symbol
-                        for gxa_symbol in down_symbols & hgnc_symbols}
-        up_symbols = {symbol_to_gene[gxa_symbol].symbol
-                      for gxa_symbol in up_symbols & hgnc_symbols}
-        for symbol in down_symbols | up_symbols:
-            assert efo_id in g and g.node[efo_id]['kind'] == 'disease'
-            assert symbol in g and g.node[symbol]['kind'] == 'gene'
-            g.add_edge(efo_id, symbol, key='regulation')
-        for symbol in down_symbols:
-            g.add_edge(efo_id, symbol, key='down-regulation')
-        for symbol in up_symbols:
-            g.add_edge(efo_id, symbol, key='up-regulation')
-
-    # (gene, gene, interaction) information:
-    for interaction in data.iref.get_interactions(min_publications=2):
-        symbol_a, symbol_b = interaction
-        graph.add_edge(symbol_a, symbol_b, 'interaction', 'both')
-
     # (gene, gene, function) information
-    section = "('gene', 'gene', 'function', 'both')"
-    processed_file = config.get(section, 'processed_file')
-    include_positives = config.getboolean(section, 'include_positives')
-    include_predictions = config.getboolean(section, 'include_predictions')
-    probability_cutoff = config.getfloat(section, 'probability_cutoff')
+    logging.info('Adding IMP gene-gene relationships.')
+    processed_file = None #'positives_and_predictions_0.5'
+    include_positives = True
+    include_predictions = True
+    probability_cutoff = 0.5
 
     if processed_file:
+        logging.info('processed_file: {}'.format(processed_file))
         relationships = data.frimp.read_processed_relationships(processed_file)
     else:
+        logging.info('include_positives: {}'.format(include_positives))
+        logging.info('include_predictions: {}'.format(include_predictions))
+        logging.info('probability_cutoff: {}'.format(probability_cutoff))
         relationships = data.frimp.get_relationships(
             predictions = include_predictions,
             positives = include_positives,
@@ -190,7 +131,29 @@ def create_graph():
     for symbol_a, symbol_b, prob in relationships:
         edge_data = {'probability': prob}
         graph.add_edge(symbol_a, symbol_b, 'function', 'both', edge_data)
-    """
+
+    # Add (disease, tissue, cooccurrence, both)
+    logging.info('Adding CoPub disease-tissue cooccurrence.')
+    r_scaled_cutoff = 30.0
+    logging.info('r_scaled_cutoff: {}'.format(r_scaled_cutoff))
+    coocc_gen = copub_analysis.doid_bto_cooccurrence_generator()
+    for row in coocc_gen:
+        doid_id = row['doid_id']
+        bto_id = row['bto_id']
+        r_scaled = row['r_scaled']
+        if r_scaled < r_scaled_cutoff:
+            continue
+        edge_data = {'r_scaled': r_scaled}
+        graph.add_edge(doid_id, bto_id, 'pathology', 'both', edge_data)
+    
+
+    # Print metaedge counter
+    logging.info('MetaEdge Counts')
+    for metaedge, edges in graph.get_metaedge_to_edges().items():
+        line = '{}: {}'.format(metaedge, len(edges))
+        print line
+        logging.info(line)
+    
 
     return graph
 
@@ -201,7 +164,7 @@ if __name__ == '__main__':
     # Parse the arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--network-dir', type=os.path.expanduser, default=
-        '~/Documents/serg/ashg13/131007-1')
+        '~/Documents/serg/ashg13/131010-1')
     parser.add_argument('--config', action='store_true')
     parser.add_argument('--create', action='store_true')
     args = parser.parse_args()
@@ -209,10 +172,7 @@ if __name__ == '__main__':
     graph_agent = hetnet.agents.GraphAgent(network_dir)
     graph_dir = graph_agent.graph_dir
     
-    
-    if args.config:
-        write_config(graph_dir)
-    
+        
     if args.create:
         
         """

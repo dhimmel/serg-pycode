@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import logging
 
 import networkx
 
@@ -8,7 +9,7 @@ import networkx_ontology
 
 singular_header_tags = ['format-version', 'data-version', 'date', 'saved-by']
 singular_stanza_tags = ['id', 'name', 'is_anonymous', 'def', 'comment',
-                 'is_obsolete', 'replaced_by', 'created_by', 'creation_date']
+                 'is_obsolete', 'replaced_by']
 plural_stanza_tags = ['alt_id', 'subset', 'synonym', 'xref', 'is_a']
 
 trailing_modifiers_pattern = re.compile(r'\{(.*)\}$')
@@ -57,7 +58,8 @@ def parse_obo(path):
             if not skip_line(line):
                 tag, value = parse_tag_value_pair(line)
                 if tag in singular_stanza_tags:
-                    assert tag not in stanza
+                    if tag in stanza:
+                        logging.warning('Multiple ' + tag + ' for ' + stanza['id'])
                     stanza[tag] = value
                 else:
                     stanza.setdefault(tag, list()).append(value)
@@ -76,7 +78,17 @@ def process_stanzas(stanzas):
                 relationship_dict.setdefault(type_id, list()).append(term_id)
             stanza['relationship'] = relationship_dict
     return stanzas
-            
+
+def terms_from_stanzas(stanzas):
+    terms = list()
+    for stanza in stanzas:
+        if stanza['stanza_name'] != 'Term':
+            continue
+        if stanza.get('is_obsolete', False):
+            continue
+        terms.append(stanza)
+    return terms
+    
 
 class OBO(object):
     
@@ -100,19 +112,21 @@ class OBO(object):
         """
         header, stanzas = parse_obo(self.obo_path)
         process_stanzas(stanzas)
+        terms = terms_from_stanzas(stanzas)
         
         # create graph
         graph = networkx.MultiDiGraph()
         graph.graph.update(header)
         
         # add nodes
-        for stanza in stanzas:
+        for stanza in terms:
+            
             node = stanza['id']
-            node_data = {key: stanza.get(key) for key in self.node_attributes}
+            node_data = {key: stanza[key] for key in self.node_attributes if key in stanza}
             graph.add_node(node, node_data)
         
         # add edges
-        for stanza in stanzas:
+        for stanza in terms:
             child = stanza['id']
             type_to_terms = dict()
             if 'is_a' in stanza:

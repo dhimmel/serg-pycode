@@ -5,39 +5,26 @@ import networkx
 
 import data
 import networkx_ontology
+import obo
 
-class EFO(networkx_ontology.NXObo):
+class EFO(obo.OBO):
     
     def __init__(self, directory=None):
         if directory is None:
             directory = data.current_path('efo')
         obo_filename = 'efo.obo'
-        json_filename = 'efo.networkx.json'
-        pkl_filename = 'efo.networkx.pkl'
-        self.keep_attributes = ['name', 'def_', 'synonym']
-        super(EFO, self).__init__(directory, obo_filename, json_filename, pkl_filename)
+        keep_attributes = ['name', 'def', 'synonym']
+        super(EFO, self).__init__(directory, obo_filename, keep_attributes)
 
-
-    def get_graph_from_obo(self):
-        """
-        Store a parsed EFO obo file in self.ontology and a directed 
-        networkx multigraph representation in self.graph.
-        Colons are replaced with underscores node ids.
-        """
-        graph = super(EFO, self).get_graph_from_obo()
-        #replace_colon = lambda s: s.replace(':', '_')
-        #mapping = {node: replace_colon(node) for node in graph.nodes()}
-        #networkx.relabel_nodes(graph, mapping, copy=False)
-        return graph
     
     def get_diseases(self, root = 'EFO:0000408'):
         'EFO:0000408' # disease
-        ontology = self.get_nx_ontology()
+        ontology = self.get_ontology()
         return ontology.get_descendents(root)
 
     def get_neoplasms(self):
         root = 'EFO:0000616' # neoplasm
-        ontology = self.get_nx_ontology()
+        ontology = self.get_ontology()
         return ontology.get_descendents(root)
     
     def get_non_neoplastic_diseases(self):
@@ -53,7 +40,7 @@ class EFO(networkx_ontology.NXObo):
         self.get_graph()        
         chemical_compounds = list(networkx.dfs_postorder_nodes(self.graph, source=root)) 
         query_compounds = filter(lambda x: self.graph.out_degree(x) == 0, chemical_compounds)
-        self.write_terms(query_compounds, 'gxa_query_compounds.txt')
+        #self.write_terms(query_compounds, 'gxa_query_compounds.txt')
         #query_compounds = map(replace_colon, query_compounds)
         return query_compounds
     
@@ -83,12 +70,13 @@ class EFO(networkx_ontology.NXObo):
             descendents.remove(node)
             query_diseases -= descendents
         
-        self.write_terms(query_diseases, 'gxa_query_diseases.txt')
+        #self.write_terms(query_diseases, 'gxa_query_diseases.txt')
         #query_diseases = map(replace_colon, query_diseases)
         return query_diseases
 
 
 if __name__ =='__main__':
     efo = EFO()
-    efo.gxa_query_compounds()
-    efo.gxa_query_diseases()
+    efo.get_graph()
+    #efo.gxa_query_compounds()
+    #efo.gxa_query_diseases()

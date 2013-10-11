@@ -8,15 +8,13 @@ import data
 # http://services.nbic.nl/copub5/help/CoPub_web_services.html
 # http://services.nbic.nl/copub5/copub.wsdl.html
 
-"""
-COMMENTED OUT BECAUSE WAS CAUSING BUG BUT CRUCIAL
-SHOULD NOT LOAD BY DEFAULT.
-wsdl_url = 'http://services.nbic.nl/copub5/copub.wsdl'
-client = suds.client.Client(wsdl_url)
-client.service.version()
-categories = map(str, client.service.get_categories('keyword')[0])
-print 'copub4'
-"""
+def load_client():
+    global client
+    global categories
+    wsdl_url = 'http://services.nbic.nl/copub5/copub.wsdl'
+    client = suds.client.Client(wsdl_url)
+    client.service.version()
+    categories = map(str, client.service.get_categories('keyword')[0])
 
 def get_top_keyword(query, category):
     """
@@ -49,7 +47,10 @@ def term_set_cooccurrences(terms_a, terms_b):
         cooccurance_tuple = term_a, term_b, r_scaled_score
         yield cooccurance_tuple
     
-    
+
+if __name__ =='__main__':
+    load_client()
+
 #term_a = get_top_keyword('multiple sclerosis', 'disease')[0]
 #term_b = get_top_keyword('brain', 'tissue')[0]
 #get_r(term_a, term_b)

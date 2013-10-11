@@ -31,7 +31,7 @@ class BTO(obo.OBO):
 if __name__ =='__main__':
     bto = BTO()
     bto_onto = networkx_ontology.NXOntology(bto.get_animal_tissue_subgraph())
-
+    
     bto_onto.annotate_information_content()
     g = bto_onto.graph
     bodymap_tissues = [
@@ -43,4 +43,4 @@ if __name__ =='__main__':
     import itertools
     for n0, n1 in itertools.combinations(bodymap_tissues, 2):
         print g.node[n0]['name'], g.node[n1]['name'], bto_onto.intrinsic_similarity(n0, n1)
-    
+
