@@ -1,4 +1,5 @@
 import collections
+import itertools
 import operator
 import random
 
@@ -225,8 +226,23 @@ def matched_negatives(positives, source_negatives=1, target_negatives=1, seed=0)
     learning_edges = learning_edges.values()
     return learning_edges
 
+def product_learning_edges(graph, metaedge, sources, targets):
+    """ """
+    sources = sorted(sources, key = lambda x: x.id_)
+    targets = sorted(targets, key = lambda x: x.id_)
 
-    
+    learning_edges = list()
+    group = 0
+    for source, target in itertools.product(sources, targets):
+        edge_id = source.id_, target.id_, metaedge.kind, metaedge.direction
+        status = int(edge_id in graph.edge_dict)
+        exclusions = set()
+        learning_edge = collections.OrderedDict((
+        ('status', status), ('group', group),
+        ('edge_id', edge_id), ('exclusions', exclusions)))
+        learning_edges.append(learning_edge)
+        group += 1
+    return learning_edges
 
 if __name__ == '__main__':
 

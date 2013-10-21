@@ -263,7 +263,12 @@ if __name__ =='__main__':
         print pmid, trait, date, number_loci
     """
     doid_id_to_genes = gcat.get_doid_id_to_genes(fdr_cutoff=1.0, mapped_term_cutoff=1)
-    print doid_id_to_genes
+    import doid
+    doid = doid.DO()
+    doid_graph = doid.get_graph()
+    for doid_id, genes in doid_id_to_genes.items():
+        if len(genes) > 0:
+            print '\t'.join([doid_id, doid_graph.node[doid_id]['name'], str(len(genes))])
     #efo_id_to_genes = gcat.get_efo_id_to_genes()
     #psoriasis = efo_id_to_genes['EFO_0000676'] # psoriasis
     #ms = efo_id_to_genes['EFO_0003885'] # multiple sclerosis

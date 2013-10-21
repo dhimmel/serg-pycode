@@ -468,9 +468,9 @@ class Graph(BaseGraph):
             metanode_to_nodes.setdefault(metanode, list()).append(node)
         return metanode_to_nodes
 
-    def get_metaedge_to_edges(self):
+    def get_metaedge_to_edges(self, exclude_inverts=False):
         metaedge_to_edges = dict()
-        for edge in self.get_edges():
+        for edge in self.get_edges(exclude_inverts):
             metaedge = edge.metaedge
             metaedge_to_edges.setdefault(metaedge, list()).append(edge)
         return metaedge_to_edges

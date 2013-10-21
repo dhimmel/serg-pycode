@@ -38,7 +38,7 @@ def create_graph():
     # Add genes from HGNC
     logging.info('Adding HGNC gene nodes.')
     for gene in data.hgnc.get_genes():
-        node_data = {'name': gene.name}
+        node_data = {'name': gene.name, 'locus_group': gene.locus_group}
         graph.add_node(gene.symbol, 'gene', node_data)
     
     # Add tissues from BTO
@@ -64,12 +64,16 @@ def create_graph():
 
     # Add (disease, gene, association, both) edges
     logging.info('Adding GWAS catalog disease-gene associations.')
+    exclude_pmids = {'21833088'}
     fdr_cutoff = 0.05
     mapped_term_cutoff = 1
+    logging.info('excluding pmids: {}'.format(exclude_pmids))
     logging.info('fdr_cutoff: {}'.format(fdr_cutoff))
     logging.info('mapped_term_cutoff: {}'.format(mapped_term_cutoff))
     doid_id_to_genes = data.gwas_catalog.get_doid_id_to_genes(
-        fdr_cutoff=fdr_cutoff, mapped_term_cutoff=mapped_term_cutoff)
+        fdr_cutoff=fdr_cutoff,
+        mapped_term_cutoff=mapped_term_cutoff,
+        exclude_pmids=exclude_pmids)
     for doid_id, genes in doid_id_to_genes.iteritems():
         for gene in genes:
             symbol = gene.symbol
@@ -144,12 +148,12 @@ def create_graph():
         if r_scaled < r_scaled_cutoff:
             continue
         edge_data = {'r_scaled': r_scaled}
-        graph.add_edge(doid_id, bto_id, 'pathology', 'both', edge_data)
+        graph.add_edge(doid_id, bto_id, 'cooccurrence', 'both', edge_data)
     
 
     # Print metaedge counter
     logging.info('MetaEdge Counts')
-    for metaedge, edges in graph.get_metaedge_to_edges().items():
+    for metaedge, edges in graph.get_metaedge_to_edges(exclude_inverts=True).items():
         line = '{}: {}'.format(metaedge, len(edges))
         print line
         logging.info(line)
@@ -164,7 +168,7 @@ if __name__ == '__main__':
     # Parse the arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--network-dir', type=os.path.expanduser, default=
-        '~/Documents/serg/ashg13/131010-1')
+        '~/Documents/serg/ashg13/131014-1')
     parser.add_argument('--config', action='store_true')
     parser.add_argument('--create', action='store_true')
     args = parser.parse_args()
