@@ -24,21 +24,43 @@ class MorbidMap(object):
             yield row
         read_file.close()
     
-    def get_id_to_gene_tuples(self):
-        pattern = re.compile(r"[0-9]{6}")
+    def get_associations(self):
+        """http://www.omim.org/help/faq"""
+        mim_pattern = re.compile(r"[0-9]{6}")
+        association_pattern = re.compile(r"\(([1-4])\)$")
         hgnc = bioparser.data.Data().hgnc
         symbol_to_gene = hgnc.get_symbol_to_gene()
         id_gene_tuples = set()
+        associations = list()
         for row in self.read_morbidmap():
             disease_info = row['disease_info']
-            ids = re.findall(pattern, disease_info)
+            
+            mim_numbers = re.findall(mim_pattern, disease_info)
+            
+            if '[' in disease_info:
+                disease_type = 'nondisease'
+            elif '{' in disease_info:
+                disease_type = 'multifactorial'
+            else:
+                disease_type = 'mendelian'
+
+            confirmed = 0 if '?' in disease_info else 1
+
+            association_type = re.search(association_pattern, disease_info).group(1)
+            
             genes = set(symbol_to_gene.get(symbol) for symbol in row['symbols'])
             genes.discard(None)
-            for id_gene_tuple in itertools.product(ids, genes):
-                id_gene_tuples.add(id_gene_tuple)
+            for mim_number, gene in itertools.product(mim_numbers, genes):
+                association= {'mim_number': mim_number, 'gene': gene,
+                              'association_type': association_type,
+                              'disease_type': disease_type,
+                              'confirmed': confirmed}
+                associations.append(association)
         id_gene_tuples = list(id_gene_tuples)
-        return id_gene_tuples
-    
+        return associations
+
+
+
 class OMIM(object):
     
     def __init__(self, omim_dir=None):

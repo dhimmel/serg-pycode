@@ -13,7 +13,7 @@ class DO(obo.OBO):
     def __init__(self, directory=None):
         if directory is None:
             directory = data.current_path('doid')
-        obo_filename = 'doid.obo'
+        obo_filename = 'HumanDO.obo'
         keep_attributes = ['name', 'xref', 'def', 'synonym']
         super(DO, self).__init__(directory, obo_filename, keep_attributes)
 
@@ -24,12 +24,13 @@ class DO(obo.OBO):
         for node, node_data in graph.nodes_iter(data=True):
             node_data['id_'] = int(node.split(':')[1])
             # takes the first definition although oftentimes multiple exist
-            
+            """
             xref_dict = dict()
             for xref in node_data.get('xref', list()):
                 key, value = xref.split(':')
                 xref_dict.setdefault(key, list()).append(xref)
             node_data['xref_dict'] = xref_dict
+            """
         return graph
 
 

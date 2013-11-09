@@ -77,6 +77,12 @@ def process_stanzas(stanzas):
                 type_id, term_id = relationship.split(' ', 1)
                 relationship_dict.setdefault(type_id, list()).append(term_id)
             stanza['relationship'] = relationship_dict
+        if 'xref' in stanza:
+            xref_dict = dict()
+            for xref in stanza['xref']:
+                key, value = xref.split(':', 1)
+                xref_dict.setdefault(key, list()).append(value)
+            stanza['xref'] = xref_dict
     return stanzas
 
 def terms_from_stanzas(stanzas):
