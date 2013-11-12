@@ -111,24 +111,26 @@ symbol_to_gene = hgnc.get_symbol_to_gene()
 add_version('hgnc', hgnc.directory)
 ################################################################################
 ############# HGNC - Genes
-tb_gene = Table('gene', ['gene_id', 'gene_id', 'symbol', 'name', 'location', 'group_id'])
+tb_gene = Table('gene', ['gene_id', 'gene_id', 'symbol', 'name', 'location', 'group_id', 'type_id'])
 tb_gene_alias = Table('gene_alias', ['gene_id', 'alias'])
 
 genes = hgnc.get_genes()
 for gene in genes:
-    gene_id = gene.id_
+    gene_id = gene.int_id
     row = {'gene_id':gene_id, 'hgnc_id': gene.hgnc_id, 'symbol': gene.symbol,
            'name': gene.name, 'location': gene.chromosome,
-           'group': gene.locus_group}
+           'group': gene.locus_group, 'type': gene.locus_type}
     tb_gene.append(row)
     for alias in gene.synonyms + gene.previous_symbols:
         row = {'gene_id': gene_id, 'alias': alias}
         tb_gene_alias.append(row)
 
 tb_gene_group = factor_table(tb_gene, 'group')
-tb_gene.write()
+tb_gene_type = factor_table(tb_gene, 'type')
 tb_gene_group.write()
+tb_gene_type.write()
 
+tb_gene.write()
 tb_gene_alias.write()
 
 ################################################################################
@@ -143,8 +145,8 @@ complex_interactions = list() # excluded complexes
 for is_complex, ppis in enumerate([binary_interactions, complex_interactions]):
     for ppi in ppis:
         row = ppi.copy()
-        row['source'] = ppi['source'].id_
-        row['target'] = ppi['target'].id_
+        row['source'] = ppi['source'].int_id
+        row['target'] = ppi['target'].int_id
         row['complex'] = is_complex
         tb_ppi.append(row)
 
@@ -247,7 +249,7 @@ for gwas_row in gwas_catalog.get_rows():
     genes = set(symbol_to_gene.get(symbol) for symbol in gwas_row['genes'])
     genes.discard(None)    
     for gene in genes:
-        row = {'efo_id': efo_id, 'gene_id': gene.id_, 
+        row = {'efo_id': efo_id, 'gene_id': gene.int_id, 
                'p-value': gwas_row['p-Value'], 'OR or beta': gwas_row['OR or beta'],
                'SNPs': gwas_row['SNPs'], 'pubmed': gwas_row['PUBMEDID']}
         tb_gene_efo_gwas.append(row)
@@ -265,7 +267,7 @@ omim_associations = morbid_map.get_associations()
 for association in omim_associations:
     row = association.copy()
     row['omim_id'] = row.pop('mim_number')
-    row['gene_id'] = row.pop('gene').id_
+    row['gene_id'] = row.pop('gene').int_id
     tb_gene_omim_morbidmap.append(row)
     omim_ids.add(row['omim_id'])
 
@@ -326,7 +328,7 @@ for target in drugbank.targets:
     if not gene:
         continue
     row = {'drugbank_id': drugank_id_to_int(target['drugbank_id']),
-           'gene_id': gene.id_,
+           'gene_id': gene.int_id,
            'pharmacological': int(target['known_action'] == 'yes'),
            'actions': ', '.join(target.get('actions', []))}
     tb_drug_gene_drugbank.append(row)
@@ -404,7 +406,7 @@ for ixn in ctd.read_chemical2genes():
         organism = 'Unkown'
     id_to_organism[organism_id] = organism
     #row_tuple = mesh_id, gene.symbol, pubmeds, organism_id
-    row = {'mesh_id': mesh_id, 'gene_id': gene.id_, 'pubmeds': pubmeds,
+    row = {'mesh_id': mesh_id, 'gene_id': gene.int_id, 'pubmeds': pubmeds,
            'organism_id': organism_id}
     tb_ctd_gene_ixn.append(row)
 
@@ -428,26 +430,22 @@ for ctd_row in ctd.read_gene2disease():
         continue
     pubmeds = ', '.join(ctd_row['PubMedIDs'])
     omims = ', '.join(ctd_row['OmimIDs'])
-    row = {'gene_id': gene.id_, 'medic_id': ctd_row['DiseaseID'], 'pubmeds': pubmeds}
+    row = {'gene_id': gene.int_id, 'medic_id': ctd_row['DiseaseID'], 'pubmeds': pubmeds}
     tb_gene_medic_ctd.append(row)
 tb_gene_medic_ctd.write()
 
 ###############################################################################
 ### MicroRNA
 mircat = bioparser.data.Data().mircat
-
-tb_mircat = Table('mircat', ['mircat_name', 'sequence', 'location'])
-tb_mircat.rows = list(mircat.read_mirna())
-tb_mircat.write()
-
-tb_gene_mirna = Table('gene_mirna', ['gene_id','mircat_name', 'pubmed'])
-for row in mircat.read_targets():
-    row['gene_id'] = row['gene'].id_
-    tb_gene_mirna.append(row)
+tb_mirna = Table('mirna', ['source_gene_id', 'target_gene_id', 'pubmed'])
+for row in mircat.interaction_generator():
+    row['source_gene_id'] = row['source'].int_id
+    row['target_gene_id'] = row['target'].int_id
+    tb_mirna.append(row)
 # Condensation isn't needed because each interaction has only a single pmid.
 # This seems unlikely and could indicate an upstream bug.
 #tb_gene_mirna.condense(['gene_id','mircat_name'], ['pubmed'])
-tb_gene_mirna.write()
+tb_mirna.write()
 
 #######################
 ## BRENDA Tissue Ontology

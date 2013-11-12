@@ -17,6 +17,7 @@ import ipa
 import iref
 import meddra
 import metathesaurus
+import mirbase
 import mircat
 import nature_predict
 import nci_thesaurus
@@ -101,6 +102,7 @@ class Data:
         self.ipa = ipa.IPA()
         self.meddra = meddra.MedDRA()
         self.metathesaurus = metathesaurus.Metathesaurus()
+        self.mirbase = mirbase.MirBase()
         self.mircat = mircat.MirCat()
         self.morbid_map = omim.MorbidMap()
         #self.omim = omim.OMIM()

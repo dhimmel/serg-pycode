@@ -77,7 +77,7 @@ class HGNC(object):
                 row[key] = value
             gene = Gene(row['symbol'])
             gene.__dict__.update(row)
-            gene.id_ = int(gene.hgnc_id.split(':')[1])
+            gene.int_id = int(gene.hgnc_id.split(':')[1])
             yield gene
         read_file.close()
     
