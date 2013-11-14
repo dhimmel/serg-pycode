@@ -4,8 +4,6 @@ import os
 
 import bioparser.data
 from bioparser.metathesaurus import Concept
-import mapping.manual_reader
-
 
 ictnet_dir = '/home/dhimmels/Documents/serg/ictnet/ictnet-creation/'
 input_dir = os.path.join(ictnet_dir, 'input')
@@ -65,12 +63,6 @@ class Table(object):
             condensed_rows.append(condensed_row)
         self.rows = condensed_rows
 
-"""
-Some chemical-gene ctd interactions don't have an organism? All option?
-Do we want approved symbol included in tb_gene_alias?
-Are we excluding non-protein coding genes?
-Several doid xrefs to omim use IDs not in the UMLS. Can table upload ignore those rows.
-"""
 
 def read_input(name):
     path = os.path.join(ictnet_dir, 'input', name + '.txt')
@@ -257,38 +249,30 @@ tb_gene_efo_gwas.write()
 
 ################################################################################
 ############# diseases - OMIM
-tb_gene_omim_morbidmap_fieldnames = ['gene_id', 'omim_id', 'association_type', 'disease_type_id', 'confirmed']
-tb_gene_omim_morbidmap = Table('gene_omim_morbidmap', tb_gene_omim_morbidmap_fieldnames)
-omim_ids = set()
+
 morbid_map = bioparser.data.Data().morbid_map
 add_version('morbid_map', morbid_map.omim_dir)
 
-omim_associations = morbid_map.get_associations()
-for association in omim_associations:
+
+tb_omim = Table('omim', ['omim_id', 'name', 'type_id'])
+for disorder in morbid_map.get_disorders():
+    row = {'omim_id': disorder['mim_number'],
+           'name': disorder['disorder_name'],
+           'type': disorder['disorder_type']}
+    tb_omim.append(row)
+tb_omim_type = factor_table(tb_omim, 'type')
+tb_omim.write()
+tb_omim_type.write()
+
+
+tb_gene_omim_morbidmap_fieldnames = ['gene_id', 'omim_id', 'association_type', 'confirmed']
+tb_gene_omim_morbidmap = Table('gene_omim_morbidmap', tb_gene_omim_morbidmap_fieldnames)
+for association in morbid_map.get_associations():
     row = association.copy()
     row['omim_id'] = row.pop('mim_number')
     row['gene_id'] = row.pop('gene').int_id
     tb_gene_omim_morbidmap.append(row)
-    omim_ids.add(row['omim_id'])
-
-tb_omim_disease_type = factor_table(tb_gene_omim_morbidmap, 'disease_type')
 tb_gene_omim_morbidmap.write()
-tb_omim_disease_type.write()
-
-
-tb_omim = Table('omim', ['omim_id', 'name'])
-# Use the UMLS metathesaurus to get the name for the OMIM ID
-metathesaurus = bioparser.data.Data().metathesaurus
-add_version('umls_for_omim_names', metathesaurus.directory)
-
-with metathesaurus:
-    omim_to_concept = metathesaurus.get_source_code_to_concept('OMIM')
-    for omim_id in omim_ids:
-        concept = omim_to_concept.get(omim_id)
-        omim_name = concept.source_to_name['OMIM'] if concept else None
-        row = {'omim_id': omim_id, 'name': omim_name}
-        tb_omim.append(row)
-tb_omim.write()
 
 
 ################################################################################
