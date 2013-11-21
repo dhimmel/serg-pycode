@@ -22,7 +22,7 @@ class DO(obo.OBO):
         """
         graph = super(DO, self).get_graph()
         for node, node_data in graph.nodes_iter(data=True):
-            node_data['id_'] = int(node.split(':')[1])
+            node_data['int_id'] = int(node.split(':')[1])
             # takes the first definition although oftentimes multiple exist
             """
             xref_dict = dict()

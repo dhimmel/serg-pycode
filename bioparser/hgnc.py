@@ -87,18 +87,51 @@ class HGNC(object):
             gene_generator = self.gene_generator()
             self.genes = list(gene_generator)
         return self.genes
-    
+
+
+
     def get_symbol_to_gene(self):
-        """ """
+        """
+        The approved symbol for a gene points to that gene. Previous symbols point to their
+        gene if the previous symbol is not an approved symbol and symbol is not a previous
+        symbol for multiple genes. Synonyms point to their gene if the synonym is not an approved
+        or previous symbol and if the symbol is not a synonym for multiple genes.
+        """
         if self.symbol_to_gene:
             return self.symbol_to_gene
         genes = self.get_genes()
+
+        approved_symbol_to_gene = dict()
+        previous_symbol_to_genes = dict()
+        synonyms_to_genes = dict()
         for gene in genes:
-            keys = [gene.symbol]
-            keys.extend(gene.synonyms)
-            keys.extend(gene.previous_symbols)
-            #keys.append(gene.name)
-            self.symbol_to_gene.update(dict.fromkeys(keys, gene))
+            approved_symbol_to_gene[gene.symbol] = gene
+            for previous_symbol in gene.previous_symbols:
+                previous_symbol_to_genes.setdefault(previous_symbol, set()).add(gene)
+            for synonym in gene.synonyms:
+                synonyms_to_genes.setdefault(synonym, set()).add(gene)
+
+        symbol_to_gene = approved_symbol_to_gene.copy()
+
+        previous_symbols = set(previous_symbol_to_genes) - set(approved_symbol_to_gene)
+        for previous_symbol in previous_symbols:
+            genes = previous_symbol_to_genes[previous_symbol]
+            try:
+                gene, = genes
+                symbol_to_gene[previous_symbol] = gene
+            except ValueError:
+                pass
+
+        synonyms = set(synonyms_to_genes) - (set(approved_symbol_to_gene) | set(previous_symbol_to_genes))
+        for synonym in synonyms:
+            genes = synonyms_to_genes[synonym]
+            try:
+                gene, = genes
+                symbol_to_gene[synonym] = gene
+            except ValueError:
+                pass
+
+        self.symbol_to_gene = symbol_to_gene
         return self.symbol_to_gene
 
     def get_entrez_to_gene(self):
@@ -121,8 +154,9 @@ class HGNC(object):
 
 
 if __name__ == '__main__':
-    hugu = HGNC()
-    gene_number = len(hugu.get_genes())
-    symbol_number = len(hugu.get_symbol_to_gene())
-    print symbol_number, 'symbols representing', gene_number, 'genes'
+    hgnc = HGNC()
+    hgnc.get_symbol_to_gene()
+    #gene_number = len(hgnc.get_genes())
+    #symbol_number = len(hgnc.get_symbol_to_gene())
+    #print symbol_number, 'symbols representing', gene_number, 'genes'
     

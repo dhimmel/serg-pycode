@@ -167,13 +167,13 @@ do_graph = doid.get_graph()
 add_version('doid', doid.directory)
 
 for node, data in do_graph.nodes(data=True):
-    doid_id = data['id_']
+    doid_id = data['int_id']
     row = {'doid_id': doid_id, 'doid_code': node,
            'name': data['name']}
     tb_doid.append(row)
     for parent, child in do_graph.out_edges(node):
-        parent_id = do_graph.node[parent]['id_']
-        child_id = do_graph.node[child]['id_']
+        parent_id = do_graph.node[parent]['int_id']
+        child_id = do_graph.node[child]['int_id']
         tb_doid_ontology.append({'parent': parent_id, 'child': child_id})
     
     xref = data.get('xref', dict())
@@ -453,11 +453,13 @@ tb_bto.write()
 tb_bto_ontology.write()
 tb_bto_relationship.write()
 
-#######################
-## Ricardo Tissues
-tissues = read_input('tissue-to-bto')
-tissue_to_bto_id = {row['tissue_name']: row['bto_id'] for row in tissues}
-
+#########################
+## GNF Gene Atlas - Gene Expression by Tissue
+tb_gnf = Table('gnf', ['gene_id', 'bto_id', 'expr', 'log_expr'])
+for expression in bioparser.data.Data().gnf.expression_generator():
+    expression['gene_id'] = expression['gene'].int_id
+    tb_gnf.append(expression)
+tb_gnf.write()
 
 #######################
 ## disease to tissue mappings
@@ -474,7 +476,7 @@ for pair in tissue_doid_pairs:
 
 tb_doid_bto = Table('doid_bto', ['doid_id', 'bto_id'])
 for node, data in disease_ontology.graph.nodes_iter(data=True):
-    doid_id = data['id_']
+    doid_id = data['int_id']
     for bto_id in data['tissues']:
         row = {'doid_id': doid_id, 'bto_id': bto_id}
         tb_doid_bto.append(row)

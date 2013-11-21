@@ -11,6 +11,7 @@ import doid
 import efo
 import etiome
 import frimp
+import gnf
 import gwas_catalog
 import hgnc
 import ipa
@@ -96,6 +97,7 @@ class Data:
         self.dvd = dvd.DvD()
         self.efo = efo.EFO()
         self.frimp = frimp.IMP()
+        self.gnf = gnf.GNF()
         self.gwas_catalog = gwas_catalog.GwasCatalog()
         self.hgnc = hgnc.HGNC()
         self.iref = iref.iRefIndex()
