@@ -40,9 +40,69 @@ class NXOntology(object):
             data = self.graph.node[descendent]
             data.setdefault(attribute, set()).add(element)
 
+    def get_roots(self):
+        roots = set()
+        for node in self.graph.nodes_iter():
+            if not(self.graph.in_edges(node)):
+                roots.add(node)
+        return roots
+
+    def most_specific_superior_annotations(self, attribute, new_attribute):
+        """
+        For each paths from a node to a root, find the most specific annotated node and consider
+        those annotations as members of the most_specific_superior_annotations new_attribute.
+        """
+        self.initialize_attribute(new_attribute)
+        memo_dict = dict()
+        roots = self.get_roots()
+
+        for node, data in self.graph.nodes_iter(data=True):
+            superior_annotation = set()
+            for root in roots:
+                paths = self.all_paths(node, root, memo_dict)
+                for path in paths:
+                    direct_annotation = set()
+                    for elem in reversed(path):
+                        direct_annotation = self.graph.node[elem][attribute]
+                        if direct_annotation:
+                            break
+                    superior_annotation.update(direct_annotation)
+            data[new_attribute] = superior_annotation
+
+
+    def all_paths(self, inferior_node, superior_node, memo_dict = None):
+        if memo_dict is None:
+            # putting {}, or any other mutable object
+            # as the default argument is wrong
+            memo_dict = dict()
+
+        if inferior_node == superior_node: # Don't memoize trivial case
+            return frozenset([(inferior_node,)])
+        else:
+            pair = (inferior_node, superior_node)
+            if pair in memo_dict: # Is answer memoized already?
+                return memo_dict[pair]
+            else:
+                result = set()
+                for new_source in self.graph.predecessors(inferior_node):
+                    paths = self.all_paths(new_source, superior_node, memo_dict)
+                    for path in paths:
+                        path = (inferior_node,) + path
+                        result.add(path)
+                result = frozenset(result)
+                # Memoize answer
+                memo_dict[(inferior_node, superior_node)] = result
+                return result
+
+
     def pairwise_shortest_paths(self, cutoff):
+        """
+        Calculates node pairs with a shortest path distance less than or equal to cutoff.
+        A list of tuples is returned where each tuple represents a node pair
+        and is formatted (node_1, node_2, distance).
+        """
         node_set_to_length = dict()
-        lengths = networkx.all_pairs_shortest_path_length(graph, cutoff)
+        lengths = networkx.all_pairs_shortest_path_length(self.graph, cutoff)
         for source, lengths in lengths.iteritems():
             for target, length in lengths.iteritems():
                 node_set = frozenset([source, target])

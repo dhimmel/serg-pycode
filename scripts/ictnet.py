@@ -1,6 +1,8 @@
 import datetime
 import csv
+import collections
 import os
+import pprint
 
 import bioparser.data
 from bioparser.metathesaurus import Concept
@@ -8,6 +10,7 @@ from bioparser.metathesaurus import Concept
 ictnet_dir = '/home/dhimmels/Documents/serg/ictnet/ictnet-creation/'
 input_dir = os.path.join(ictnet_dir, 'input')
 
+tables = list()
 
 class Table(object):
     
@@ -17,6 +20,7 @@ class Table(object):
         self.path = os.path.join(ictnet_dir, 'tables', self.file_name)
         self.rows = list()
         self.fieldnames = fieldnames
+        tables.append(self)
     
     def sort_rows(self):
         self.rows.sort(key=lambda row: [row[key] for key in self.fieldnames])
@@ -63,9 +67,37 @@ class Table(object):
             condensed_rows.append(condensed_row)
         self.rows = condensed_rows
 
+    def schema(self):
+        field_to_type = collections.OrderedDict()
+        for fieldname in self.fieldnames:
+            values = [row[fieldname] for row in self.rows]
+            # strings
+            if isinstance(values[0], str):
+                str_lens = {0 if s is None else len(s) for s in values}
+                try:
+                    length, = str_lens
+                    sql_type = 'CHAR({})'.format(length)
+                except ValueError:
+                    length = max(str_lens)
+                    sql_type = 'VARCHAR({})'.format(length)
 
-def read_input(name):
-    path = os.path.join(ictnet_dir, 'input', name + '.txt')
+            # integers
+            elif isinstance(values[0], int):
+                sql_type = 'INT({}, {})'.format(min(values), max(values))
+
+            # floats
+            elif isinstance(values[0], float):
+                sql_type = 'DECIMAL({}, {})'.format(min(values), max(values))
+
+            else:
+                print type(values[0])
+                raise ValueError('unknown type for mySQL conversion')
+
+            field_to_type[fieldname] = sql_type
+        return field_to_type
+
+def read_input(file_name):
+    path = os.path.join(ictnet_dir, 'input', file_name)
     with open(path) as read_file:
         reader = csv.DictReader(read_file, delimiter='\t')
         rows = list(reader)
@@ -103,7 +135,8 @@ symbol_to_gene = hgnc.get_symbol_to_gene()
 add_version('hgnc', hgnc.directory)
 ################################################################################
 ############# HGNC - Genes
-tb_gene = Table('gene', ['gene_id', 'gene_id', 'symbol', 'name', 'location', 'group_id', 'type_id'])
+
+tb_gene = Table('gene', ['gene_id', 'hgnc_id', 'symbol', 'name', 'location', 'group_id', 'type_id'])
 tb_gene_alias = Table('gene_alias', ['gene_id', 'alias'])
 
 genes = hgnc.get_genes()
@@ -275,6 +308,7 @@ for association in morbid_map.get_associations():
 tb_gene_omim_morbidmap.write()
 
 
+
 ################################################################################
 ############# Drugbank
 tb_drugbank = Table('drugbank', ['drugbank_id', 'name', 'cas_number', 'type', 'groups'])
@@ -371,6 +405,7 @@ for therapy in ctd.read_chemical2diseases():
     tb_ctd_medic_therapy.append(row)
 tb_ctd_medic_therapy.write()
 
+
 tb_ctd_gene_ixn = Table('ctd_gene_ixn',
     ['mesh_id', 'gene_id', 'organism_id', 'pubmeds'])
 id_to_organism = dict()
@@ -388,6 +423,8 @@ for ixn in ctd.read_chemical2genes():
     if not organism_id:
         organism_id = 0
         organism = 'Unkown'
+    else:
+        organism_id = int(organism_id)
     id_to_organism[organism_id] = organism
     #row_tuple = mesh_id, gene.symbol, pubmeds, organism_id
     row = {'mesh_id': mesh_id, 'gene_id': gene.int_id, 'pubmeds': pubmeds,
@@ -461,18 +498,20 @@ for expression in bioparser.data.Data().gnf.expression_generator():
     tb_gnf.append(expression)
 tb_gnf.write()
 
+
 #######################
 ## disease to tissue mappings
-
 doid = bioparser.data.Data().doid
 disease_ontology = doid.get_ontology()
 
-disease_ontology.initialize_attribute('tissues')
-tissue_doid_pairs = read_input('bto-to-doid')
+disease_ontology.initialize_attribute('direct_tissue_mapping')
+tissue_doid_pairs = read_input('Tissue Mappings - BTO-DOID.tsv')
 for pair in tissue_doid_pairs:
     disease_id = pair['doid_code']
     tissue_id = pair['bto_id']
-    disease_ontology.propogate_annotation(disease_id, 'tissues', tissue_id)
+    disease_ontology.graph.node[disease_id]['direct_tissue_mapping'].add(tissue_id)
+disease_ontology.most_specific_superior_annotations('direct_tissue_mapping', 'tissues')
+
 
 tb_doid_bto = Table('doid_bto', ['doid_id', 'bto_id'])
 for node, data in disease_ontology.graph.nodes_iter(data=True):
@@ -504,11 +543,12 @@ tb_side_effect.write()
 ## Meddra Side Effect to Tissue
 tb_side_effect_bto = Table('side_effect_bto', ['umls_id', 'bto_id'])
 
-meddra_ontology.initialize_attribute('tissues')
-for tissue_mapping in read_input('bto-to-meddra'):
+meddra_ontology.initialize_attribute('direct_tissue_mapping')
+for tissue_mapping in read_input('Tissue Mappings - BTO-MedDRA.tsv'):
     bto_id = tissue_mapping['bto_id']
     meddra_code = tissue_mapping['meddra_code']
-    meddra_ontology.propogate_annotation(meddra_code, 'tissues', bto_id)
+    meddra_ontology.graph.node[meddra_code]['direct_tissue_mapping'].add(bto_id)
+meddra_ontology.most_specific_superior_annotations('direct_tissue_mapping', 'tissues')
 
 for node, data in meddra_ontology.graph.nodes_iter(data=True):
     umls_id = data.get('umls_id')
@@ -567,3 +607,14 @@ for sider_drug, mesh_id in sider_mesh_id_tuples:
 tb_ctd_side_effect.write()
 
 tb_resource_version.write()
+
+
+doc_path = os.path.join(ictnet_dir, 'table_documentation.txt')
+doc_file = open(doc_path, 'w')
+for table in tables:
+    doc_file.write(table.file_name + '\n')
+    for fieldname, sql_type in table.schema().items():
+        line = '{}: {}\n'.format(fieldname, sql_type)
+        doc_file.write(line)
+    doc_file.write('\n')
+doc_file.close()
