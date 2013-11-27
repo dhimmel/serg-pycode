@@ -523,7 +523,8 @@ tb_doid_bto.write()
 
 #######################
 ## Side Effects - meddra
-tb_side_effect = Table('side_effect', ['umls_id', 'umls_name', 'meddra_code', 'meddra_name'])
+tb_side_effect = Table('side_effect', ['umls_id', 'umls_name'])
+#tb_side_effect = Table('side_effect', ['umls_id', 'umls_name', 'meddra_code', 'meddra_name'])
 
 meddra = bioparser.data.Data().meddra
 meddra.annotate_umls(version='2011AB')
