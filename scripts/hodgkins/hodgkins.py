@@ -9,23 +9,9 @@ import numpy.linalg
 import bioparser.data
 
 import random_walk
+import vegas_reader
 
 
-
-def read_vegas(path):
-    symbol_to_gene = bioparser.data.Data().hgnc.get_symbol_to_gene()
-    read_file = open(path)
-    reader = csv.DictReader(read_file, delimiter='\t')
-    gene_to_vegasp = dict()
-    for row in reader:
-        vegas_gene = row['Gene']
-        gene = symbol_to_gene.get(vegas_gene)
-        if not gene:
-            continue
-        #assert gene not in gene_to_vegasp
-        gene_to_vegasp[gene] = float(row['Pvalue'])
-    read_file.close()
-    return gene_to_vegasp
 
 
 def get_overlap(set_0, set_1):
@@ -40,15 +26,17 @@ def get_overlap(set_0, set_1):
 gwas_catalog = bioparser.data.Data().gwas_catalog
 doid_id_to_genes = gwas_catalog.get_doid_id_to_genes(p_cutoff=None, fdr_cutoff=None, mapped_term_cutoff=1, exclude_pmids=set())
 
+doid = bioparser.data.Data().doid
+doid.annotate_categories()
 doid_ontology = bioparser.data.Data().doid.get_ontology()
 #doid_ontology.graph
 
 diseasome = networkx.Graph()
 
 for doid_id, genes in doid_id_to_genes.items():
-    doid_data = doid_ontology.graph.node[doid_id]
-    data = {'name': doid_data['name']}
+    data = doid_ontology.graph.node[doid_id].copy()
     data['genes'] = genes
+    data['random_walk'] = dict()
     diseasome.add_node(doid_id, data)
 
 for node_0, node_1 in itertools.combinations(diseasome, 2):
@@ -70,41 +58,48 @@ for node in diseasome:
 diseasome = diseasome.subgraph(keep_nodes)
 
 hodgkin_dir = '/home/dhimmels/Documents/serg/hodgkins/'
-vegas_path = os.path.join(hodgkin_dir, 'vegas', 'meta_USC_UC_IARC_updated_all.hg19_vegas_results')
-gene_to_vegasp = read_vegas(vegas_path)
-vegas_cutoff = 0.01
-vegas_genes = set()
-for gene, vegas_p in gene_to_vegasp.iteritems():
-    if vegas_p <= vegas_cutoff:
-        vegas_genes.add(gene)
+vegas_dir = os.path.join(hodgkin_dir, 'vegas')
+disease_to_genes = vegas_reader.genes_from_directory(vegas_dir, fdr_cutoff=0.8)
 
-for node, data in diseasome.nodes(data=True):
-    node_genes = data['genes']
-    overlap = get_overlap(node_genes, vegas_genes)
-    data['overlap'] = overlap
+for hl_subtype, genes in disease_to_genes.iteritems():
+    for node, data in diseasome.nodes(data=True):
+        node_genes = data['genes']
+        overlap = get_overlap(node_genes, genes)
+        data['random_walk'][hl_subtype] = overlap
 
-gml_path = os.path.join(hodgkin_dir, 'diseasome-all.gml')
-networkx.write_gml(diseasome, gml_path)
+#gml_path = os.path.join(hodgkin_dir, 'diseasome-all.gml')
+#networkx.write_gml(diseasome, gml_path)
 
-jaccard_seed = numpy.array([data['overlap']['jaccard'] for data in diseasome.node.values()])
 jaccard_matrix = networkx.adjacency_matrix(diseasome, weight='jaccard')
 
+resolvable_subtypes = list()
+for hl_subtype in disease_to_genes.keys():
+    jaccard_seed = numpy.array([data['random_walk'][hl_subtype]['jaccard'] for data in diseasome.node.values()])
+    if not sum(jaccard_seed):
+        print 'Skipping {} because all zero seeds'.format(hl_subtype)
+        continue
+    else:
+        resolvable_subtypes.append(hl_subtype)
+    jaccard_proximity, steps = random_walk.random_walk(r=0.2, seed_vector=jaccard_seed, adj_matrix=jaccard_matrix)
+    jaccard_proximity = jaccard_proximity.T.tolist()[0]
+    for node, jaccard_rw_proximity in zip(diseasome, jaccard_proximity):
+        diseasome.node[node]['random_walk'][hl_subtype]['jaccard_proximity'] = jaccard_rw_proximity
+    print hl_subtype, 'total steps', steps
 
-jaccard_proximity, steps = random_walk.random_walk(r=0.2, seed_vector=jaccard_seed, adj_matrix=jaccard_matrix)
-jaccard_proximity = jaccard_proximity.T.tolist()[0]
-print 'total steps', steps
 
-write_path = os.path.join(hodgkin_dir, 'proximity-all.txt')
+write_path = os.path.join(hodgkin_dir, 'proximity.txt')
 write_file = open(write_path, 'w')
-fieldnames = ['doid_code', 'name', 'jaccard_overlap', 'jaccard_rw_proximity']
+
+fieldnames = ['doid_code', 'name', 'categories'] + resolvable_subtypes
 writer = csv.DictWriter(write_file, fieldnames=fieldnames, delimiter='\t')
 writer.writeheader()
 for node, jaccard_rw_proximity in zip(diseasome, jaccard_proximity):
     data = diseasome.node[node]
     name = data['name']
-    jaccard_overlap = data['overlap']['jaccard']
-    row = {'doid_code': node, 'name': name,
-           'jaccard_overlap': jaccard_overlap, 'jaccard_rw_proximity':jaccard_rw_proximity}
+    categories = '; '.join(data['category_names'])
+    row = {'doid_code': node, 'name': name, 'categories': categories}
+    for subtype in resolvable_subtypes:
+        row[subtype] = data['random_walk'][subtype]['jaccard_proximity']
     writer.writerow(row)
 write_file.close()
 

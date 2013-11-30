@@ -33,6 +33,22 @@ class DO(obo.OBO):
             """
         return graph
 
+    def annotate_categories(self):
+        """
+        annotate nodes attributes to include category_codes and category_names.
+        """
+        graph = self.get_graph()
+        category_codes = set()
+        category_codes |= set(graph.successors('DOID:7')) # disease of anatomical entity
+        category_codes.add('DOID:14566') # disease of cellular proliferation
+        category_codes.add('DOID:150') # disease of mental health
+        category_codes.add('DOID:0014667') # disease of metabolism
+        for node, node_data in graph.nodes_iter(data=True):
+            node_category_codes = category_codes & networkx.ancestors(graph, node)
+            node_category_names = {graph.node[code]['name'] for code in node_category_codes}
+            node_data['category_codes'] = node_category_codes
+            node_data['category_names'] = node_category_names
+
 
 if __name__ =='__main__':
     do = DO()

@@ -20,7 +20,7 @@ def random_walk(r, seed_vector, adj_matrix, iteration_cutoff = 10e-10):
         #l1_norm_t1 = numpy.linalg.norm(pt1, 1)
         change = max(abs(pt1 - pt))
         #change = abs(l1_norm_t - l1_norm_t1)
-        print change
+        #print change
         pt = pt1
         #l1_norm_t = l1_norm_t1
         steps += 1
