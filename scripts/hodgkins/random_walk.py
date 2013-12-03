@@ -25,7 +25,7 @@ def random_walk(r, seed_vector, adj_matrix, iteration_cutoff = 10e-10):
         #l1_norm_t = l1_norm_t1
         steps += 1
         if change < iteration_cutoff:
-            return pt, steps
+            return pt[:, 0], steps
 
 
 def random_walk_step(r, p0, W, pt):
