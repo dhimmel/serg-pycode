@@ -12,20 +12,21 @@ def random_walk(r, seed_vector, adj_matrix, iteration_cutoff = 10e-10):
     p0 = seed_vector / sum(seed_vector)
     p0 = p0[:, None]
     pt = p0
-    #l1_norm_t = numpy.linalg.norm(pt, 1)
+    #l1_norm_t = numpy.linalg.norm(numpy.array(pt)[:, 0], 1)
     pt1 = None
     steps = 0
     while True:
         pt1 = random_walk_step(r, p0, W, pt)
-        #l1_norm_t1 = numpy.linalg.norm(pt1, 1)
+        l1_norm_t1 = numpy.linalg.norm(numpy.array(pt1)[:, 0], 1)
         change = max(abs(pt1 - pt))
-        #change = abs(l1_norm_t - l1_norm_t1)
+        #print abs(l1_norm_t - l1_norm_t1)
         #print change
         pt = pt1
         #l1_norm_t = l1_norm_t1
         steps += 1
         if change < iteration_cutoff:
-            return pt[:, 0], steps
+            pt = numpy.array(pt)[:, 0]
+            return pt, steps
 
 
 def random_walk_step(r, p0, W, pt):

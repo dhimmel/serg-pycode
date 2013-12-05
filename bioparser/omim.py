@@ -32,7 +32,6 @@ class MorbidMap(object):
         association_pattern = re.compile(r"\(([1-4])\)$")
         hgnc = bioparser.data.Data().hgnc
         symbol_to_gene = hgnc.get_symbol_to_gene()
-        id_gene_tuples = set()
         associations = list()
         for row in self.read_morbidmap():
             disorder_info = row['disorder_info']
@@ -55,13 +54,13 @@ class MorbidMap(object):
             genes = set(symbol_to_gene.get(symbol) for symbol in row['symbols'])
             genes.discard(None)
             for gene in genes:
-                association= {'mim_number': mim_number, 'gene': gene,
-                              'disorder_name': disorder_name,
-                              'disorder_type': disorder_type,
-                              'association_type': association_type,
-                              'confirmed': confirmed}
+                association = {'mim_number': mim_number, 'gene': gene,
+                               'disorder_name': disorder_name,
+                               'disorder_type': disorder_type,
+                               'association_type': association_type,
+                               'confirmed': confirmed}
                 associations.append(association)
-        id_gene_tuples = list(id_gene_tuples)
+
         return associations
 
     def get_disorders(self):

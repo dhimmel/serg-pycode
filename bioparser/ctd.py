@@ -13,6 +13,7 @@ def open_ext(path, *args, **kwargs):
 class CTDReader(csv.DictReader):
     
     def __init__(self, path, plural_fields=list()):
+        self.heading_lines = list()
         self.path = path
         self.plural_fields = set(plural_fields)
         read_file = open_ext(path)
@@ -26,18 +27,22 @@ class CTDReader(csv.DictReader):
         csv.DictReader.__init__(self, read_file, delimiter='\t', fieldnames=fieldnames)
     
     def next(self):
-        row = csv.DictReader.next(self)
-        for field, value in row.items():
-            if field in self.plural_fields:
-                row[field] = value.split('|') if value else list()
-            else:
-                if not value:
-                    row[field] = None
-        return row
-        
+        try:
+            row = csv.DictReader.next(self)
+            for field, value in row.items():
+                if field in self.plural_fields:
+                    row[field] = value.split('|') if value else list()
+                else:
+                    if not value:
+                        row[field] = None
+            return row
+        except StopIteration:
+            self.close()
+            raise StopIteration
+
+
     def close(self):
         self.read_file.close()
-
 
 
 
@@ -50,14 +55,30 @@ class CTD(object):
         if not directory:
             directory = data.current_path('ctd')
         self.directory = directory
-    
-    
+
+    def filter_ctd(self, ctd_reader, output_name, keep_row):
+        """
+        keep_row is a function
+        """
+        output_path = os.path.join(self.directory, output_name)
+        plural_fields = ctd_reader.plural_fields
+        write_file = gzip.open(output_path, 'w')
+        write_file.write('# Fields:\n# ')
+        writer = csv.DictWriter(write_file, delimiter='\t', fieldnames=ctd_reader.fieldnames)
+        writer.writeheader()
+        for row in ctd_reader:
+            if not keep_row(row):
+                continue
+            row = {k: '|'.join(v) if k in plural_fields else v for k, v in row.items()}
+            writer.writerow(row)
+        write_file.close()
+
     def read_file(self, file_name, plural_fields):
         path = os.path.join(self.directory, file_name)
-        reader = CTDReader(path, plural_fields)
-        for row in reader:
-            yield row
-        reader.close()
+        return CTDReader(path, plural_fields)
+        #for row in reader:
+        #    yield row
+        #reader.close()
     
     def read_chemicals(self):
         plural_fields = ['ParentIDs', 'TreeNumbers', 'ParentTreeNumbers', 
@@ -95,31 +116,24 @@ class CTD(object):
         plural_fields = ['DirectEvidence', 'OmimIDs', 'PubMedIDs']
         return self.read_file('CTD_chemicals_diseases.tsv.gz', plural_fields)
 
-    def read_gene2disease(self):
+    def read_gene2disease(self, filename='CTD_genes_diseases.tsv.gz'):
         plural_fields = ['DirectEvidence', 'OmimIDs', 'PubMedIDs']
-        return self.read_file('CTD_genes_diseases.tsv.gz', plural_fields)
+        return self.read_file(filename, plural_fields)
 
-    
+    def read_gene2disease_filtered(self):
+        filtered_filename = 'CTD_genes_diseases-filtered.tsv.gz'
+        return self.read_gene2disease(filtered_filename)
+
+
+    def write_filtered_datasets(self):
+        self.filter_gene2disease()
+
+    def filter_gene2disease(self):
+        filtered_filename = 'CTD_genes_diseases-filtered.tsv.gz'
+        ctd_reader = self.read_gene2disease()
+        keep_row = lambda row: 'marker/mechanism' in row['DirectEvidence']
+        self.filter_ctd(ctd_reader, filtered_filename, keep_row)
+
 if __name__ == '__main__':
     ctd = CTD()
-    therapy_rows = ctd.read_chemical2diseases()
-    disease_ids = set()
-    for i, row in enumerate(therapy_rows):
-        if 'therapeutic' not in row['DirectEvidence']:
-            continue
-        disease_ids.add(row['DiseaseID'])
-        """
-        print '{ChemicalName}\t{DiseaseName}\t{DiseaseID}\t{OmimIDs}'.format(**row)
-        #print row['ChemicalName'], row['DiseaseName'], row['OmimIDs'], row['DirectEvidence']
-        if i > 1000:
-            break
-        """
-    
-    for disease_id in disease_ids:
-        if not disease_id.startswith('MESH:'):
-            print disease_id
-    
-    
-    
-    
-        
+    #ctd.write_filtered_datasets()
