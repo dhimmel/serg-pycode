@@ -107,19 +107,27 @@ results_dir = os.path.join(hodgkin_dir, 'results')
 if not os.path.exists(results_dir):
     os.mkdir(results_dir)
 
-diseasome_maker = DiseasomeMaker()
-diseasome_maker.set_defaults()
 
 # Create diseasome with all diseases with over gene_minimum genes forcing HL inclusion
 doid_exclusions = {'DOID:0050589', # inflammatory bowel disease because of (UC and Crohn's)
-                   'DOID:1520', # colon carcinoma
                     #'DOID:557', # kidney disease because of DOID:784 (chronic kidney failure)
                     #'DOID:3620', # central nervous system cancer
                     'DOID:2914'} # immune system disease
 doid_include = {'DOID:8567'} # Hodgkin's lymphoma
 
+doid_goto_doid = {'DOID:1612': 'DOID:3459', # breast cancer --> breast carcinoma
+                  'DOID:9256': 'DOID:1520', # colorectal cancer --> colon carcinoma
+                  'DOID:10283': 'DOID:10286' # prostate cancer --> prostate carcinoma
+                 }
+
+diseasome_maker = DiseasomeMaker()
+diseasome_maker.set_gene_annotations(doid_goto_doid)
+
+
 diseasome_maker.node_to_genes['DOID:8567'] |= get_hodgkin_genes() # Add additional hodgkin genes
-diseasome = diseasome_maker.get_graph(gene_minimum=gene_minimum, exclude=doid_exclusions, include=doid_include)
+diseasome = diseasome_maker.get_graph(gene_minimum=gene_minimum,
+                                      exclude=doid_exclusions,
+                                      include=doid_include)
 DiseasomeMaker.connect(diseasome)
 DiseasomeMaker.add_node_attribute(diseasome, 'category', node_to_category)
 

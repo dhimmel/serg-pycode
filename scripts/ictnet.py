@@ -96,6 +96,11 @@ class Table(object):
             field_to_type[fieldname] = sql_type
         return field_to_type
 
+    def remove_invalid_references(self, other, fieldname):
+        valid_refs = {row[fieldname] for row in other}
+        self.rows = [row for row in self if row[fieldname] in valid_refs]
+
+
 def read_input(file_name):
     path = os.path.join(ictnet_dir, 'input', file_name)
     with open(path) as read_file:
@@ -233,9 +238,6 @@ for node, data in do_graph.nodes(data=True):
 
 tb_doid.write()
 tb_doid_ontology.write()
-tb_doid_omim_map.write()
-tb_doid_medic_map.write()
-tb_doid_efo_map.write()
 
 ################################################################################
 ############# diseases - EFO
@@ -379,7 +381,6 @@ for chemical in ctd.read_chemicals():
     
 tb_ctd.write()
 tb_ctd_alias.write()
-tb_ctd_drugbank_map.write()
 
 tb_medic = Table('medic', ['medic_id', 'name'])
 for disease in ctd.read_diseases():
@@ -399,7 +400,7 @@ for therapy in ctd.read_chemical2diseases():
     if 'therapeutic' not in therapy['DirectEvidence']:
         continue
     pubmeds = ', '.join(therapy['PubMedIDs'])
-    row = {'mesh_id': therapy['ChemicalID'],
+    row = {'mesh_id': 'MESH:' + therapy['ChemicalID'],
            'medic_id': therapy['DiseaseID'],
            'pubmeds': pubmeds}
     tb_ctd_medic_therapy.append(row)
@@ -442,7 +443,7 @@ tb_organism.write()
 
 
 tb_gene_medic_ctd = Table('gene_medic_ctd', ['gene_id', 'medic_id', 'pubmeds'])
-for ctd_row in ctd.read_gene2disease():
+for ctd_row in ctd.read_gene2disease_filtered():
     if 'marker/mechanism' not in ctd_row['DirectEvidence']:
         continue
     symbol = ctd_row['GeneSymbol']
@@ -607,7 +608,24 @@ for sider_drug, mesh_id in sider_mesh_id_tuples:
         tb_ctd_side_effect.append(row)
 tb_ctd_side_effect.write()
 
+
+# Write tables
 tb_resource_version.write()
+
+tb_doid_omim_map.remove_invalid_references(tb_omim, 'omim_id')
+tb_doid_omim_map.write()
+
+tb_doid_medic_map.remove_invalid_references(tb_medic, 'medic_id')
+tb_doid_medic_map.write()
+
+tb_doid_efo_map.remove_invalid_references(tb_efo, 'efo_id')
+tb_doid_efo_map.write()
+
+
+
+tb_ctd_drugbank_map.remove_invalid_references(tb_drugbank, 'drugbank_id')
+tb_ctd_drugbank_map.write()
+
 
 
 doc_path = os.path.join(ictnet_dir, 'table_documentation.txt')
