@@ -12,7 +12,7 @@ from diseasome import DiseasomeMaker
 
 hodgkin_dir = '/home/dhimmels/Documents/serg/hodgkins/'
 
-def read_file(name, directory=hodgkin_dir):
+def read_file(name, directory=os.path.join(hodgkin_dir, 'input')):
     path = os.path.join(directory, name)
     read_file = open(path)
     reader = csv.DictReader(read_file, delimiter='\t')
@@ -20,9 +20,6 @@ def read_file(name, directory=hodgkin_dir):
         yield row
     read_file.close()
 
-
-
-node_to_category = {row['doid_code']: row['category'] for row in read_file('doid-categories.txt')}
 
 def write_proximity_table(path, graph, proximity_dict):
     write_file = open(path, 'w')
@@ -82,6 +79,22 @@ def multiple_seed_proximities(diseasome, disease_to_genes, path):
 
     write_proximity_table(path, diseasome, disease_to_proximity)
 
+def get_hodgkin_genes():
+    symbol_to_gene = bioparser.data.Data().hgnc.get_symbol_to_gene()
+    hodgkin_genes = {symbol_to_gene.get(row['gene']) for row in read_file('hodgkin-genes.txt')}
+    hodgkin_genes.discard(None)
+    return hodgkin_genes
+
+def write_disease_to_genes(disease_to_genes, path):
+    write_file = open(path, 'w')
+    writer = csv.writer(write_file, delimiter='\t')
+    writer.writerow(['disease', 'gene'])
+    for disease, genes in disease_to_genes.items():
+        genes_str = '|'.join(sorted(gene.symbol for gene in genes))
+        writer.writerow([disease, genes_str])
+    write_file.close()
+
+
 
 
 
@@ -89,55 +102,49 @@ def multiple_seed_proximities(diseasome, disease_to_genes, path):
 ################# main ############################
 gene_minimum = 10
 
+node_to_category = {row['doid_code']: row['category'] for row in read_file('doid-categories.txt')}
+results_dir = os.path.join(hodgkin_dir, 'results')
+if not os.path.exists(results_dir):
+    os.mkdir(results_dir)
 
+diseasome_maker = DiseasomeMaker()
+diseasome_maker.set_defaults()
 
-symbol_to_gene = bioparser.data.Data().hgnc.get_symbol_to_gene()
-hodgkin_genes = {symbol_to_gene.get(row['gene']) for row in read_file('hodgkin-genes.txt')}
-hodgkin_genes.discard(None)
-
+# Create diseasome with all diseases with over gene_minimum genes forcing HL inclusion
 doid_exclusions = {'DOID:0050589', # inflammatory bowel disease because of (UC and Crohn's)
+                   'DOID:1520', # colon carcinoma
                     #'DOID:557', # kidney disease because of DOID:784 (chronic kidney failure)
                     #'DOID:3620', # central nervous system cancer
                     'DOID:2914'} # immune system disease
 doid_include = {'DOID:8567'} # Hodgkin's lymphoma
 
-diseasome_maker = DiseasomeMaker()
-diseasome_maker.set_defaults()
-diseasome_maker.node_to_genes['DOID:8567'] |= hodgkin_genes # Add additional hodgkin genes
+diseasome_maker.node_to_genes['DOID:8567'] |= get_hodgkin_genes() # Add additional hodgkin genes
 diseasome = diseasome_maker.get_graph(gene_minimum=gene_minimum, exclude=doid_exclusions, include=doid_include)
 DiseasomeMaker.connect(diseasome)
 DiseasomeMaker.add_node_attribute(diseasome, 'category', node_to_category)
 
+# save network
+gml_path = os.path.join(results_dir, 'diseasome.gml')
+DiseasomeMaker.save_as_gml(diseasome, gml_path)
+txt_path = os.path.join(results_dir, 'diseasome-flat.txt')
+DiseasomeMaker.save_flat_txt(diseasome, txt_path)
+
 ## remove_one_proximities
-path = os.path.join(hodgkin_dir, 'pairwise-proximities.txt')
+path = os.path.join(results_dir, 'pairwise-proximities.txt')
 remove_one_proximities(diseasome, path)
 
 
 ## multiple_seed_proximities for hodgkings
-"""
-vegas_dir = os.path.join(hodgkin_dir, 'vegas')
+vegas_dir = os.path.join(hodgkin_dir, 'input', 'vegas')
 hltype_to_genes = vegas_reader.genes_from_directory(vegas_dir,
     method=vegas_reader.get_nominal_genes, cutoff=0.001)
-hltype_to_genes['all']
+hltype_to_genes_path = os.path.join(hodgkin_dir, 'results', 'hl-subtype-vegas-genes.txt')
+write_disease_to_genes(hltype_to_genes, hltype_to_genes_path)
 
-path = os.path.join(hodgkin_dir, 'hlsubset-proximity-nominal-0.01.txt')
-multiple_seed_proximities(diseasome, hltype_to_genes, path)
-"""
+diseasome_nohl = diseasome_maker.get_graph(gene_minimum=gene_minimum, exclude=doid_exclusions | {'DOID:8567'})
+DiseasomeMaker.connect(diseasome_nohl)
+DiseasomeMaker.add_node_attribute(diseasome_nohl, 'category', node_to_category)
 
-
-
-
-
-#### Write diseasome with added HL-all
-diseasome = diseasome_maker.get_graph(gene_minimum=gene_minimum, exclude=doid_exclusions, include=doid_include)
-diseasome_maker.connect(diseasome)
-diseasome_maker.add_node_attribute(diseasome, 'category', node_to_category, default='')
-doid_code_to_name = dict()
-for node, data in diseasome.nodes_iter(data=True):
-    data['genes'] = ', '.join(gene.symbol for gene in data['genes'])
-    data['doid_code'] = node
-    doid_code_to_name[node] = data['name']
-networkx.relabel_nodes(diseasome, doid_code_to_name, copy=False)
-gml_path = os.path.join(hodgkin_dir, 'diseasome.gml')
-networkx.write_gml(diseasome, gml_path)
+path = os.path.join(results_dir, 'hlsubset-proximity.txt')
+multiple_seed_proximities(diseasome_nohl, hltype_to_genes, path)
 
