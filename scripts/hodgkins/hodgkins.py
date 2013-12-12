@@ -130,6 +130,7 @@ diseasome = diseasome_maker.get_graph(gene_minimum=gene_minimum,
                                       include=doid_include)
 DiseasomeMaker.connect(diseasome)
 DiseasomeMaker.add_node_attribute(diseasome, 'category', node_to_category)
+DiseasomeMaker.get_stats(diseasome)
 
 # save network
 gml_path = os.path.join(results_dir, 'diseasome.gml')

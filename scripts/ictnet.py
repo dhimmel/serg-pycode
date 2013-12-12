@@ -63,7 +63,7 @@ class Table(object):
             condensed_row = rows[0].copy()
             for combine_key in combine_keys:
                 joined_value = sep.join([row[combine_key] for row in rows])
-            condensed_row[combine_key] = joined_value
+                condensed_row[combine_key] = joined_value
             condensed_rows.append(condensed_row)
         self.rows = condensed_rows
 
@@ -280,7 +280,6 @@ for gwas_row in gwas_catalog.get_rows():
                'p-value': gwas_row['p-Value'], 'OR or beta': gwas_row['OR or beta'],
                'SNPs': gwas_row['SNPs'], 'pubmed': gwas_row['PUBMEDID']}
         tb_gene_efo_gwas.append(row)
-tb_gene_efo_gwas.write()
 
 ################################################################################
 ############# diseases - OMIM
@@ -408,38 +407,23 @@ tb_ctd_medic_therapy.write()
 
 
 tb_ctd_gene_ixn = Table('ctd_gene_ixn',
-    ['mesh_id', 'gene_id', 'organism_id', 'pubmeds'])
-id_to_organism = dict()
+    ['mesh_id', 'gene_id', 'pubmeds'])
 for ixn in ctd.read_chemical2genes():
-    mesh_id = ixn['ChemicalID']
+    mesh_id = 'MESH:' + ixn['ChemicalID']
     symbol = ixn['GeneSymbol']
     gene = symbol_to_gene.get(symbol)
     if not gene:
         continue
     pubmeds = ', '.join(ixn['PubMedIDs'])
     organism_id = ixn['OrganismID']
-    organism = ixn['Organism']
-    
-    # Some chemical-gene ctd interactions don't have an organism 
-    if not organism_id:
-        organism_id = 0
-        organism = 'Unkown'
-    else:
-        organism_id = int(organism_id)
-    id_to_organism[organism_id] = organism
-    #row_tuple = mesh_id, gene.symbol, pubmeds, organism_id
-    row = {'mesh_id': mesh_id, 'gene_id': gene.int_id, 'pubmeds': pubmeds,
-           'organism_id': organism_id}
+    if organism_id != '9606':
+        continue
+    row = {'mesh_id': mesh_id, 'gene_id': gene.int_id, 'pubmeds': pubmeds}
     tb_ctd_gene_ixn.append(row)
 
 tb_ctd_gene_ixn.remove_duplicates(tb_ctd_gene_ixn.fieldnames)
-tb_ctd_gene_ixn.condense(['mesh_id', 'gene_id', 'organism_id'], ['pubmeds'])
+tb_ctd_gene_ixn.condense(['mesh_id', 'gene_id'], ['pubmeds'])
 tb_ctd_gene_ixn.write()
-
-tb_organism = Table('organism', ['organism_id', 'name'])
-for id_, name in id_to_organism.iteritems():
-    tb_organism.append({'organism_id': int(id_), 'name': name})
-tb_organism.write()
 
 
 tb_gene_medic_ctd = Table('gene_medic_ctd', ['gene_id', 'medic_id', 'pubmeds'])
@@ -606,10 +590,9 @@ for sider_drug, mesh_id in sider_mesh_id_tuples:
     for umls_id in sider_drug.meddra_concepts:
         row = {'mesh_id': mesh_id, 'umls_id': umls_id}
         tb_ctd_side_effect.append(row)
-tb_ctd_side_effect.write()
 
 
-# Write tables
+# Write holdout tables
 tb_resource_version.write()
 
 tb_doid_omim_map.remove_invalid_references(tb_omim, 'omim_id')
@@ -621,12 +604,15 @@ tb_doid_medic_map.write()
 tb_doid_efo_map.remove_invalid_references(tb_efo, 'efo_id')
 tb_doid_efo_map.write()
 
+tb_gene_efo_gwas.remove_invalid_references(tb_efo, 'efo_id')
+tb_gene_efo_gwas.write()
 
 
 tb_ctd_drugbank_map.remove_invalid_references(tb_drugbank, 'drugbank_id')
 tb_ctd_drugbank_map.write()
 
-
+tb_ctd_side_effect.remove_invalid_references(tb_side_effect, 'umls_id') # meddra version should be changed to SIDER version
+tb_ctd_side_effect.write()
 
 doc_path = os.path.join(ictnet_dir, 'table_documentation.txt')
 doc_file = open(doc_path, 'w')

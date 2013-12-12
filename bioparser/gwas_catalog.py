@@ -194,6 +194,7 @@ class GwasCatalog(object):
                 continue
             efo_ids = row['efo_ids']
             if mapped_term_cutoff is not None and len(efo_ids) > mapped_term_cutoff:
+                #print row['Disease/Trait']
                 continue
             for efo_id in efo_ids:
                 efo_id_to_genes.setdefault(efo_id, set()).update(row['genes'])
@@ -227,10 +228,11 @@ class GwasCatalog(object):
 if __name__ =='__main__':
     gcat = GwasCatalog()
     gcat.read_ebi_mappings()
+    gcat.get_efo_id_to_genes(mapped_term_cutoff=1)
     #catalog_term_to_efo_ids, mapped_pmids = gcat.read_ebi_mappings(path)
-    gcat.get_rows()
-    gcat.apply_fdr()
-    rows = gcat.get_rows()
+    #gcat.get_rows()
+    #gcat.apply_fdr()
+    #rows = gcat.get_rows()
     
     """
     print 'SNPs passing 0.05 P-value -', sum(row['p-Value'] <= 0.05 for row in rows if row['p-Value'])
