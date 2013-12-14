@@ -196,9 +196,8 @@ class DrugBank(object):
         return {partner['id']: partner for partner in self.partners}
 
 if __name__ == "__main__":
-    drugbank_dir
-    db = drugbank.DrugBank()
+    db = DrugBank()
     db.read()
-    self.drugs
+    db.drugs
     
 

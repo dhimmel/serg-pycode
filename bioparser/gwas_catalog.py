@@ -70,7 +70,7 @@ class GwasCatalog(object):
                 genes -= invalid_genes
                 row['genes'] = genes
                 
-                # Extract the number of SNPs assesed. None for Not Reported
+                # Extract the number of SNPs assessed. None for Not Reported
                 snp_num = row['Platform [SNPs passing QC]']
                 try:
                     snp_num = re.search(r"\[.*?\]", snp_num).group(0)
