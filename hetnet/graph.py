@@ -416,19 +416,26 @@ class Graph(BaseGraph):
         head_leaves = filter(head_leaves, lambda leaf: leaf.value in intersecting_leaf_values)
         tail_leaves = filter(tail_leaves, lambda leaf: leaf.value in intersecting_leaf_values)
 
+        def traverse_path(leaf):
+            path_nodes = [leaf.value]
+            parent = leaf.parent
+            while parent is not None:
+                path_nodes.append(parent.value)
+                parent = leaf.parent
+            path_nodes.reverse()
+            return path_nodes
+
+
 
         head_dict = dict()
-        for path in paths_head:
-            path_target = path.target()
-            if path_target in node_intersect:
-                head_dict.setdefault(path_target, list()).append(path)
+        for leaf in head_leaves:
+            path_nodes = traverse_path(leaf)
+            head_dict.setdefault(leaf.value, list()).append()
 
         tail_dict = dict()
-        for path in paths_tail:
-            path_target = path.target()
-            if path_target in node_intersect:
-                path = Path(path.inverse_edges())
-                tail_dict.setdefault(path_target, list()).append(path)
+        for leaf in tail_leaves:
+            tail_dict.setdefault(leaf.value, list()).append(traverse_path(leaf))
+
 
         paths = list()
         for node in node_intersect:
@@ -620,7 +627,14 @@ class Path(BasePath):
     def __init__(self, edges):
         """potentially metapath should be an input although it can be calculated"""
         BasePath.__init__(self, edges)
-    
+
+    @staticmethod
+    def from_nodes_and_metaedges(nodes, metaedges):
+        """
+        """
+        assert len(nodes) == len(metaedges) + 1
+
+
     def __repr__(self):
         s = ''
         for edge in self:
