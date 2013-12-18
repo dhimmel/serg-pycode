@@ -309,6 +309,26 @@ class MetaPath(BasePath):
         return s
 
 
+class Tree(object):
+
+    __slots__ = ('parent', 'edge', 'data') #, 'is_root', 'path_to_root')
+
+    def __init__(self, parent, edge, data={}):
+        self.parent = parent
+        self.edge = edge
+        self.data = data
+
+    def path_to_root(self):
+        path_edges = [self.edge]
+        parent = self.parent
+        while parent is not None:
+            path_edges.append(parent.edge)
+            parent = parent.parent
+        path_edges = tuple(reversed(path_edges))
+        path = Path(path_edges)
+        return path
+
+
 class Graph(BaseGraph):
     
     def __init__(self, metagraph, data=dict()):
@@ -348,9 +368,8 @@ class Graph(BaseGraph):
                    duplicates=False, masked=True,
                    exclude_nodes=set(), exclude_edges=set()):
         """
-        tree = (parent_tree, value, data_dict)
+        TODO
         """
-        Tree = collections.namedtuple('Tree', ['parent', 'value', 'data'])
 
         if not isinstance(source, Node):
             source = self.node_dict[source]
@@ -361,30 +380,41 @@ class Graph(BaseGraph):
         if source in exclude_nodes:
             return None
 
-        tree_data = {'path_members': {source}}
-        root = Tree._make(parent=None, value=source, data=tree_data)
-        leaves = [root]
-        for metaedge in metapath:
+        leaves = list()
+        for edge in source.edges[metapath[0]]:
+            edge_target = edge.target
+            if not duplicates and source == edge_target:
+                continue
+            if edge_target in exclude_nodes or edge in exclude_edges:
+                continue
+            if not masked and (edge_target.masked or edge.masked):
+                continue
+            tree_data = {'path_members': {source, edge_target}}
+            tree = Tree(parent=None, edge=edge, data=tree_data)
+            leaves.append(tree)
+
+        for metaedge in metapath[1:]:
             new_leaves = list()
             for parent in leaves:
-                edges = parent.value.edges[metaedge]
+                edges = parent.edge.target.edges[metaedge]
                 path_members = parent.data['path_members']
                 for edge in edges:
-                    child_value = edge.target
+                    edge_target = edge.target
+                    if not duplicates and edge_target in path_members:
+                        continue
+                    if edge_target in exclude_nodes or edge in exclude_edges:
+                        continue
+                    if not masked and (edge_target.masked or edge.masked):
+                        continue
 
-                    if not duplicates and child_value in path_members:
-                        continue
-                    if child_value in exclude_nodes or edge in exclude_edges:
-                        continue
-                    if not masked and (child_value.masked or edge.masked):
-                        continue
-
-                    child_path_members = path_members | {child_value}
+                    child_path_members = path_members | {edge_target}
                     tree_data = {'path_members': child_path_members}
-                    tree = Tree._make(parent=parent, value=child_value, data=tree_data)
+                    tree = Tree(parent=parent, edge=edge, data=tree_data)
                     new_leaves.append(tree)
-                parent.data['path_members'] = None
+                del parent.data['path_members']
             leaves = new_leaves
+            if not leaves:
+                break
 
         return leaves
 
@@ -409,36 +439,26 @@ class Graph(BaseGraph):
         head_leaves = self.paths_tree(source, metapath_head, duplicates, masked, exclude_nodes, exclude_edges)
         tail_leaves = self.paths_tree(target, metapath_tail, duplicates, masked, exclude_nodes, exclude_edges)
 
-        head_leaf_values = {head_leaf.value for head_leaf in head_leaves}
-        tail_leaf_values = {tail_leaf.value for tail_leaf in tail_leaves}
-        intersecting_leaf_values = head_leaf_values & tail_leaf_values
+        head_leaf_targets = {head_leaf.edge.target for head_leaf in head_leaves}
+        tail_leaf_targets = {tail_leaf.edge.target for tail_leaf in tail_leaves}
+        intersecting_leaf_targets = head_leaf_targets & tail_leaf_targets
 
-        head_leaves = filter(head_leaves, lambda leaf: leaf.value in intersecting_leaf_values)
-        tail_leaves = filter(tail_leaves, lambda leaf: leaf.value in intersecting_leaf_values)
-
-        def traverse_path(leaf):
-            path_nodes = [leaf.value]
-            parent = leaf.parent
-            while parent is not None:
-                path_nodes.append(parent.value)
-                parent = leaf.parent
-            path_nodes.reverse()
-            return path_nodes
-
+        head_leaves = filter(lambda leaf: leaf.edge.target in intersecting_leaf_targets, head_leaves)
+        tail_leaves = filter(lambda leaf: leaf.edge.target in intersecting_leaf_targets, tail_leaves)
 
 
         head_dict = dict()
         for leaf in head_leaves:
-            path_nodes = traverse_path(leaf)
-            head_dict.setdefault(leaf.value, list()).append()
+            path = leaf.path_to_root()
+            head_dict.setdefault(leaf.edge.target, list()).append(path)
 
         tail_dict = dict()
         for leaf in tail_leaves:
-            tail_dict.setdefault(leaf.value, list()).append(traverse_path(leaf))
-
+            path = leaf.path_to_root()
+            tail_dict.setdefault(leaf.edge.target, list()).append(path)
 
         paths = list()
-        for node in node_intersect:
+        for node in intersecting_leaf_targets:
             heads = head_dict[node]
             tails = tail_dict[node]
             for head, tail in itertools.product(heads, tails):
@@ -627,13 +647,6 @@ class Path(BasePath):
     def __init__(self, edges):
         """potentially metapath should be an input although it can be calculated"""
         BasePath.__init__(self, edges)
-
-    @staticmethod
-    def from_nodes_and_metaedges(nodes, metaedges):
-        """
-        """
-        assert len(nodes) == len(metaedges) + 1
-
 
     def __repr__(self):
         s = ''
