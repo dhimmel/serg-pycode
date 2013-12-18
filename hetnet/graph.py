@@ -1,5 +1,6 @@
 # daniel.himmelstein@gmail.com
 import itertools
+import collections
 
 import readwrite
 
@@ -342,6 +343,108 @@ class Graph(BaseGraph):
         inverse.inverse = edge
         
         return edge, inverse
+
+    def paths_tree(self, source, metapath,
+                   duplicates=False, masked=True,
+                   exclude_nodes=set(), exclude_edges=set()):
+        """
+        tree = (parent_tree, value, data_dict)
+        """
+        Tree = collections.namedtuple('Tree', ['parent', 'value', 'data'])
+
+        if not isinstance(source, Node):
+            source = self.node_dict[source]
+
+        if masked and source.masked:
+            return None
+
+        if source in exclude_nodes:
+            return None
+
+        tree_data = {'path_members': {source}}
+        root = Tree._make(parent=None, value=source, data=tree_data)
+        leaves = [root]
+        for metaedge in metapath:
+            new_leaves = list()
+            for parent in leaves:
+                edges = parent.value.edges[metaedge]
+                path_members = parent.data['path_members']
+                for edge in edges:
+                    child_value = edge.target
+
+                    if not duplicates and child_value in path_members:
+                        continue
+                    if child_value in exclude_nodes or edge in exclude_edges:
+                        continue
+                    if not masked and (child_value.masked or edge.masked):
+                        continue
+
+                    child_path_members = path_members | {child_value}
+                    tree_data = {'path_members': child_path_members}
+                    tree = Tree._make(parent=parent, value=child_value, data=tree_data)
+                    new_leaves.append(tree)
+                parent.data['path_members'] = None
+            leaves = new_leaves
+
+        return leaves
+
+    def paths_between_tree(self, source, target, metapath,
+                      duplicates=False, masked=True,
+                      exclude_nodes=set(), exclude_edges=set()):
+        """
+        Retreive the paths starting with the node source and ending on the
+        node target. Future implementations should split the metapath, computing
+        paths_from the source and target and look for the intersection at the
+        intermediary Node position.
+        """
+        if len(metapath) <= 1:
+            return None
+
+
+        split_index = len(metapath) / 2
+
+        get_metapath = self.metagraph.get_metapath
+        metapath_head = get_metapath(metapath[:split_index])
+        metapath_tail = get_metapath(tuple(mp.inverse for mp in reversed(metapath[split_index:])))
+        head_leaves = self.paths_tree(source, metapath_head, duplicates, masked, exclude_nodes, exclude_edges)
+        tail_leaves = self.paths_tree(target, metapath_tail, duplicates, masked, exclude_nodes, exclude_edges)
+
+        head_leaf_values = {head_leaf.value for head_leaf in head_leaves}
+        tail_leaf_values = {tail_leaf.value for tail_leaf in tail_leaves}
+        intersecting_leaf_values = head_leaf_values & tail_leaf_values
+
+        head_leaves = filter(head_leaves, lambda leaf: leaf.value in intersecting_leaf_values)
+        tail_leaves = filter(tail_leaves, lambda leaf: leaf.value in intersecting_leaf_values)
+
+
+        head_dict = dict()
+        for path in paths_head:
+            path_target = path.target()
+            if path_target in node_intersect:
+                head_dict.setdefault(path_target, list()).append(path)
+
+        tail_dict = dict()
+        for path in paths_tail:
+            path_target = path.target()
+            if path_target in node_intersect:
+                path = Path(path.inverse_edges())
+                tail_dict.setdefault(path_target, list()).append(path)
+
+        paths = list()
+        for node in node_intersect:
+            heads = head_dict[node]
+            tails = tail_dict[node]
+            for head, tail in itertools.product(heads, tails):
+                path = Path(head.edges + tail.edges)
+                if not duplicates:
+                    nodes = path.get_nodes()
+                    if len(set(nodes)) < len(nodes):
+                        continue
+                paths.append(path)
+
+        return paths
+
+
 
     def paths_from(self, source, metapath,
                    duplicates=False, masked=True,

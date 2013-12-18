@@ -152,6 +152,19 @@ class HGNC(object):
         self.ensembl_to_gene.update({gene.ensembl_id_ensembl_mapped: gene for gene in genes})
         return self.ensembl_to_gene        
 
+    def identifiers_to_genes(self, identifiers, id_type='symbol'):
+        if id_type == 'symbol':
+            id_to_gene = self.get_symbol_to_gene()
+        elif id_type == 'entrez':
+            id_to_gene = self.get_entrez_to_gene()
+        elif id_type == 'ensembl':
+            id_to_gene = self.get_ensembl_to_gene()
+        else:
+            raise ValueError('id_type unkown')
+        genes = {id_to_gene.get(identifier) for identifier in identifiers}
+        genes.discard(None)
+        return genes
+
 
 if __name__ == '__main__':
     hgnc = HGNC()
