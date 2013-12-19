@@ -103,17 +103,8 @@ def paths_between(graph, source, target, metapath, path_types, exclude_edges):
             paths['paths_st'] = [hetnet.Path(path.inverse_edges) for path in paths_ts]
             
         else:
-            t0 = datetime.datetime.now()
-            paths_st_nontree = graph.paths_between(source, target, metapath, exclude_edges=exclude_edges)
-            t1 = datetime.datetime.now()
-            paths_st_tree = graph.paths_between_tree(source, target, metapath, exclude_edges=exclude_edges)
-            t2 = datetime.datetime.now()
-            print 'Nontree: {}, Tree: {}'.format(t1 - t0, t2 - t1)
-            assert len(paths_st_nontree) == len(paths_st_tree)
-            paths['paths_st'] = paths_st_tree
-            #paths['paths_st'] = graph.paths_between(source, target, metapath, exclude_edges=exclude_edges)
-            #paths['paths_st'] = graph.paths_between_tree(source, target, metapath, exclude_edges=exclude_edges)
-        
+            paths['paths_st'] = graph.paths_between_tree(source, target, metapath, exclude_edges=exclude_edges)
+
     return paths
 
 def get_features():

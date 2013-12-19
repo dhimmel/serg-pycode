@@ -311,12 +311,11 @@ class MetaPath(BasePath):
 
 class Tree(object):
 
-    __slots__ = ('parent', 'edge', 'data') #, 'is_root', 'path_to_root')
+    __slots__ = ('parent', 'edge') #, 'is_root', 'path_to_root')
 
-    def __init__(self, parent, edge, data={}):
+    def __init__(self, parent, edge):
         self.parent = parent
         self.edge = edge
-        self.data = data
 
     def path_to_root(self):
         path_edges = [self.edge]
@@ -327,6 +326,14 @@ class Tree(object):
         path_edges = tuple(reversed(path_edges))
         path = Path(path_edges)
         return path
+
+    def nodes_to_root(self):
+        nodes = [self.edge.target, self.edge.source]
+        parent = self.parent
+        while parent is not None:
+            nodes.append(parent.edge.source)
+            parent = parent.parent
+        return nodes
 
 
 class Graph(BaseGraph):
@@ -389,15 +396,14 @@ class Graph(BaseGraph):
                 continue
             if not masked and (edge_target.masked or edge.masked):
                 continue
-            tree_data = {'path_members': {source, edge_target}}
-            tree = Tree(parent=None, edge=edge, data=tree_data)
+            tree = Tree(parent=None, edge=edge)
             leaves.append(tree)
 
         for metaedge in metapath[1:]:
             new_leaves = list()
             for parent in leaves:
                 edges = parent.edge.target.edges[metaedge]
-                path_members = parent.data['path_members']
+                path_members = set(parent.nodes_to_root())
                 for edge in edges:
                     edge_target = edge.target
                     if not duplicates and edge_target in path_members:
@@ -407,11 +413,8 @@ class Graph(BaseGraph):
                     if not masked and (edge_target.masked or edge.masked):
                         continue
 
-                    child_path_members = path_members | {edge_target}
-                    tree_data = {'path_members': child_path_members}
-                    tree = Tree(parent=parent, edge=edge, data=tree_data)
+                    tree = Tree(parent=parent, edge=edge)
                     new_leaves.append(tree)
-                del parent.data['path_members']
             leaves = new_leaves
             if not leaves:
                 break
@@ -427,8 +430,12 @@ class Graph(BaseGraph):
         paths_from the source and target and look for the intersection at the
         intermediary Node position.
         """
-        if len(metapath) <= 1:
-            return None
+        split_threshold = 2
+        if len(metapath) <= split_threshold:
+            leaves = self.paths_tree(source, metapath, duplicates, masked, exclude_nodes, exclude_edges)
+            leaves = filter(lambda leaf: leaf.edge.target == target, leaves)
+            paths = [leaf.path_to_root() for leaf in leaves]
+            return paths
 
 
         split_index = len(metapath) / 2
