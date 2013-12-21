@@ -167,7 +167,7 @@ class MetaGraph(BaseGraph):
                 if abbrev in duplicates:
                     abbrev += kind[len(abbrev)]
                     kind_to_abbrev[kind] = abbrev
-            duplicates = Schema.get_duplicates(kind_to_abbrev.values())
+            duplicates = MetaGraph.get_duplicates(kind_to_abbrev.values())
         return kind_to_abbrev
 
     def create_abbreviations(self):

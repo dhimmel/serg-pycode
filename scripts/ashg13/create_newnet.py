@@ -20,21 +20,21 @@ import mappings
 
 def create_graph():
     data = bioparser.data.Data()
-    
-    symbol_to_gene = data.hgnc.get_symbol_to_gene()
-    hgnc_symbols = set(symbol_to_gene)
-    
-    
+
+    msigdb = bioparser.data.Data().msigdb
+    msig_set_types = msigdb.abbrev_to_name.keys()
+
     # Define and initialize networkx graph
     metaedge_tuples = [('disease', 'gene', 'association', 'both'),
                        ('gene', 'gene', 'interaction', 'both'),
-                       ('gene', 'gene', 'function', 'both'),
+                       #('gene', 'gene', 'function', 'both'),
                        ('gene', 'tissue', 'expression', 'both'),
                        ('disease', 'tissue', 'cooccurrence', 'both'),
                        ('disease', 'disease', 'similarity', 'both')]
+    metaedge_tuples.extend([('gene', set_type, 'membership', 'both') for set_type in msig_set_types])
     metagraph = hetnet.MetaGraph.from_edge_tuples(metaedge_tuples)
     graph = hetnet.Graph(metagraph)
-    
+
     # Add genes from HGNC
     logging.info('Adding HGNC gene nodes.')
     for gene in data.hgnc.get_genes():
@@ -54,17 +54,10 @@ def create_graph():
     for doid_id, nx_data in doid_onto.graph.nodes(data=True):
         node_data = {'name': nx_data['name']}
         graph.add_node(doid_id, 'disease', node_data)
-    
-    # Print metanode counter
-    logging.info('MetaNode Counts')
-    for metanode, nodes in graph.get_metanode_to_nodes().items():
-        line = '{}: {}'.format(metanode, len(nodes))
-        print line
-        logging.info(line)
 
     # Add (disease, gene, association, both) edges
     logging.info('Adding GWAS catalog disease-gene associations.')
-    exclude_pmids = {'21833088'}
+    exclude_pmids = set() #{'21833088'}
     fdr_cutoff = 0.05
     mapped_term_cutoff = 1
     logging.info('excluding pmids: {}'.format(exclude_pmids))
@@ -113,7 +106,8 @@ def create_graph():
         source = interaction['source'].symbol
         target = interaction['target'].symbol
         graph.add_edge(source, target, 'interaction', 'both', edge_data)
-        
+
+    """
     # (gene, gene, function) information
     logging.info('Adding IMP gene-gene relationships.')
     processed_file = None #'positives_and_predictions_0.5'
@@ -135,6 +129,7 @@ def create_graph():
     for symbol_a, symbol_b, prob in relationships:
         edge_data = {'probability': prob}
         graph.add_edge(symbol_a, symbol_b, 'function', 'both', edge_data)
+    """
 
     # Add (disease, tissue, cooccurrence, both)
     logging.info('Adding CoPub disease-tissue cooccurrence.')
@@ -149,7 +144,23 @@ def create_graph():
             continue
         edge_data = {'r_scaled': r_scaled}
         graph.add_edge(doid_id, bto_id, 'cooccurrence', 'both', edge_data)
-    
+
+
+    # Add MSigDB gene sets
+    for set_type in msig_set_types:
+        for name, description, genes in msigdb.gene_set_generator(set_type):
+            unique_name = 'MSigDB_{}:{}'.format(set_type, name)
+            node_data = {'description': description}
+            graph.add_node(unique_name, set_type, node_data)
+            for gene in genes:
+                graph.add_edge(gene.symbol, unique_name, 'membership', 'both')
+
+    # Print metanode counter
+    logging.info('MetaNode Counts')
+    for metanode, nodes in graph.get_metanode_to_nodes().items():
+        line = '{}: {}'.format(metanode, len(nodes))
+        print line
+        logging.info(line)
 
     # Print metaedge counter
     logging.info('MetaEdge Counts')
@@ -157,7 +168,6 @@ def create_graph():
         line = '{}: {}'.format(metaedge, len(edges))
         print line
         logging.info(line)
-    
 
     return graph
 
@@ -168,7 +178,7 @@ if __name__ == '__main__':
     # Parse the arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--network-dir', type=os.path.expanduser, default=
-        '~/Documents/serg/ashg13/131014-1')
+        '~/Documents/serg/ashg13/131219-1')
     parser.add_argument('--config', action='store_true')
     parser.add_argument('--create', action='store_true')
     args = parser.parse_args()
@@ -178,13 +188,6 @@ if __name__ == '__main__':
     
         
     if args.create:
-        
-        """
-        # Read configuration file
-        config = ConfigParser.SafeConfigParser()
-        config_path = os.path.join(graph_dir, 'graph.cfg')
-        config.read(config_path)
-        """
         
         # Create the graph
         log_path = os.path.join(graph_dir, 'creation.log')

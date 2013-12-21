@@ -17,28 +17,36 @@ class DiseasomeMaker(object):
     def __init__(self):
         self.ontology = self.get_ontology()
 
-    def set_gene_annotations(self, node_goto_node=dict()):
-        node_to_genes = dict()
-
-        gene_dicts = [self.get_gwas_catalog_annotations(),
-                      self.get_omim_annotations(),
-                      #self.get_ctd_annotations()
-                      ]
-
-        nodes = reduce(lambda x, y: set.union(set(x), set(y)), gene_dicts)
-        node_to_genes = dict()
-        for node in nodes:
-            for gene_dict in gene_dicts:
-                genes = gene_dict.get(node, set())
-                node_to_genes.setdefault(node, set()).update(genes)
-
+    @staticmethod
+    def transfer_annotations(node_to_genes, node_goto_node):
         for source_node, sink_node in node_goto_node.items():
             genes = node_to_genes.pop(source_node, set())
             node_to_genes.setdefault(sink_node, set()).update(genes)
-        # More efficient, does not enable printing.
-        #for node_to_genes_part in node_to_genes_parts:
-        #    for key, value in node_to_genes_part.iteritems():
-        #        node_to_genes.setdefault(key, set()).update(value)
+        return node_to_genes
+
+    def set_gene_annotations(self, node_goto_node=dict()):
+        """
+        Transfers gene annotations from the key node to the
+        value node.
+        """
+        node_to_genes = dict()
+
+        gene_dicts = {'GWAS': self.get_gwas_catalog_annotations(),
+                      #'CTD': self.get_ctd_annotations(),
+                      'OMIM': self.get_omim_annotations()
+                     }
+
+        for gene_dict in gene_dicts.values():
+            DiseasomeMaker.transfer_annotations(gene_dict, node_goto_node)
+
+        nodes = reduce(lambda x, y: set.union(set(x), set(y)), gene_dicts.values())
+        node_to_genes = dict()
+        for node in nodes:
+            for gene_dict in gene_dicts.values():
+                genes = gene_dict.get(node, set())
+                node_to_genes.setdefault(node, set()).update(genes)
+
+        self.gene_dicts = gene_dicts
         self.node_to_genes = node_to_genes
         return node_to_genes
 
@@ -219,9 +227,10 @@ class DiseasomeMaker(object):
         networkx.write_gml(diseasome, path)
 
     @staticmethod
-    def save_flat_txt(diseasome, path):
+    def save_flat_txt(diseasome, gene_dicts, path):
         write_file = open(path, 'w')
-        fieldnames = ['doid_code', 'name', 'category', 'n_genes', 'genes']
+        fieldnames = ['doid_code', 'name', 'category', 'n_genes', 'genes'] + gene_dicts.keys()
+
         writer = csv.DictWriter(write_file, delimiter='\t', fieldnames=fieldnames)
         writer.writeheader()
         for node, data in diseasome.nodes_iter(data=True):
@@ -229,6 +238,9 @@ class DiseasomeMaker(object):
             row = {'doid_code': node, 'name': data['name'],
                    'category': data['category'], 'n_genes': len(genes),
                    'genes': '|'.join(sorted(gene.symbol for gene in genes))}
+            for resource, node_to_genes in gene_dicts.items():
+                gene_subset = node_to_genes.get(node, list())
+                row[resource] = '|'.join(sorted(gene.symbol for gene in gene_subset))
             writer.writerow(row)
         write_file.close()
 

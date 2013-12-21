@@ -136,4 +136,4 @@ class CTD(object):
 
 if __name__ == '__main__':
     ctd = CTD()
-    #ctd.write_filtered_datasets()
+    ctd.write_filtered_datasets()

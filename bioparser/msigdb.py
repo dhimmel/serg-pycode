@@ -8,7 +8,7 @@ abbrev_to_name = {
     'c1.all': 'positional gene sets',
     'c2.all': 'all curated gene sets',
     'c2.cgp': 'chemical and genetic perturbations',
-    'c2.cp': 'all canonical pathways',
+    'c2.cp.all': 'all canonical pathways',
     'c2.cp.biocarta': 'BioCarta gene sets',
     'c2.cp.kegg': 'KEGG gene sets',
     'c2.cp.reactome': 'Reactome gene sets',

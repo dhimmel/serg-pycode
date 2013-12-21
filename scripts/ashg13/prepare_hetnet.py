@@ -4,7 +4,7 @@ import hetnet
 import hetnet.agents
 import hetnet.algorithms
 
-network_dir = '/home/dhimmels/Documents/serg/ashg13/131010-1'
+network_dir = '/home/dhimmels/Documents/serg/ashg13/131219-1'
 graph_agent = hetnet.agents.GraphAgent(network_dir)
 
 # Load graph
@@ -22,15 +22,16 @@ metaedge = graph.metagraph.get_edge(('gene', 'disease', 'association', 'both'))
 metaedge_agent.set(metaedge)
 metaedge = metaedge_agent.get()
 
-"""
+
 # MetaPathsAgent
-for cutoff in range(2, 5):
+for cutoff in range(2, 4):
     identifier = 'length-{}-cutoff'.format(cutoff)
     metapaths_agent = hetnet.agents.MetaPathsAgent(metaedge_agent, identifier)
     metapaths = metagraph.extract_metapaths('gene', 'disease', cutoff)
     metapaths_agent.set(metapaths)
     metapaths = metapaths_agent.get()
-    
+
+"""
 # Create LearningEdges
 metaedge_to_edges = graph.get_metaedge_to_edges()
 positives = metaedge_to_edges[metaedge]

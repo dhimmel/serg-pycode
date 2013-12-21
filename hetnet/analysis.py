@@ -60,7 +60,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--network-dir', type=os.path.expanduser, default=
-        '~/Documents/serg/ashg13/131010-1')
+        '~/Documents/serg/ashg13/131219-1')
     parser.add_argument('--metaedge-id', default='GaD-both')
     parser.add_argument('--identifier', required=True)
     parser.add_argument('--config', action='store_true')

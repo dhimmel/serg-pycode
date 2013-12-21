@@ -20,6 +20,7 @@ import meddra
 import metathesaurus
 import mirbase
 import mircat
+import msigdb
 import nature_predict
 import nci_thesaurus
 import omim
@@ -107,6 +108,7 @@ class Data:
         self.mirbase = mirbase.MirBase()
         self.mircat = mircat.MirCat()
         self.morbid_map = omim.MorbidMap()
+        self.msigdb = msigdb.MSigDB()
         #self.omim = omim.OMIM()
         #self.nature_predict = nature_predict.NaturePredict(source_data_dir('nature-predict'))
         #self.nci = nci_thesaurus.NCIOntology(current_path('nci', path_type='files'))

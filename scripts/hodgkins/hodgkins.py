@@ -69,7 +69,7 @@ def multiple_seed_proximities(diseasome, disease_to_genes, path):
         adjacency_matrix = DiseasomeMaker.get_adjacency_matrix(diseasome)
         seed_vector = DiseasomeMaker.get_seed_distance(diseasome, genes)
         if not sum(seed_vector):
-            print 'Skipping {} because all zero seeds'.format(hltype)
+            print 'Skipping {} because all zero seeds'.format(disease)
             continue
         rw_proximity, steps = random_walk.random_walk(r=0.2,
             seed_vector=seed_vector, adj_matrix=adjacency_matrix)
@@ -103,7 +103,7 @@ def write_disease_to_genes(disease_to_genes, path):
 gene_minimum = 10
 
 node_to_category = {row['doid_code']: row['category'] for row in read_file('doid-categories.txt')}
-results_dir = os.path.join(hodgkin_dir, 'results')
+results_dir = os.path.join(hodgkin_dir, 'results-131220-nohla')
 if not os.path.exists(results_dir):
     os.mkdir(results_dir)
 
@@ -125,6 +125,13 @@ diseasome_maker.set_gene_annotations(doid_goto_doid)
 
 
 diseasome_maker.node_to_genes['DOID:8567'] |= get_hodgkin_genes() # Add additional hodgkin genes
+
+# Remove HLA region
+for disease, genes in diseasome_maker.node_to_genes.iteritems():
+    hla_genes = {gene for gene in genes if gene.chromosome.startswith('6p21.3') or gene.chromosome.startswith('6p22.1')}
+    print disease, '|'.join(gene.symbol for gene in hla_genes)
+    genes -= hla_genes
+
 diseasome = diseasome_maker.get_graph(gene_minimum=gene_minimum,
                                       exclude=doid_exclusions,
                                       include=doid_include)
@@ -136,7 +143,7 @@ DiseasomeMaker.get_stats(diseasome)
 gml_path = os.path.join(results_dir, 'diseasome.gml')
 DiseasomeMaker.save_as_gml(diseasome, gml_path)
 txt_path = os.path.join(results_dir, 'diseasome-flat.txt')
-DiseasomeMaker.save_flat_txt(diseasome, txt_path)
+DiseasomeMaker.save_flat_txt(diseasome, diseasome_maker.gene_dicts, txt_path)
 
 ## remove_one_proximities
 path = os.path.join(results_dir, 'pairwise-proximities.txt')
@@ -147,7 +154,7 @@ remove_one_proximities(diseasome, path)
 vegas_dir = os.path.join(hodgkin_dir, 'input', 'vegas')
 hltype_to_genes = vegas_reader.genes_from_directory(vegas_dir,
     method=vegas_reader.get_nominal_genes, cutoff=0.001)
-hltype_to_genes_path = os.path.join(hodgkin_dir, 'results', 'hl-subtype-vegas-genes.txt')
+hltype_to_genes_path = os.path.join(results_dir, 'hl-subtype-vegas-genes.txt')
 write_disease_to_genes(hltype_to_genes, hltype_to_genes_path)
 
 diseasome_nohl = diseasome_maker.get_graph(gene_minimum=gene_minimum, exclude=doid_exclusions | {'DOID:8567'})
