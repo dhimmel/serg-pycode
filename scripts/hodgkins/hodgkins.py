@@ -94,6 +94,15 @@ def write_disease_to_genes(disease_to_genes, path):
         writer.writerow([disease, genes_str])
     write_file.close()
 
+def remove_hla_genes(genes):
+    """
+    Genes is a set of genes. Removal applied to genes and removed genes are returned.
+    """
+    regions = ['6p21.3', '6p22.1']
+    hla_genes = {gene for gene in genes if
+                 any(gene.chromosome.startswith(region) for region in regions)}
+    genes -= hla_genes
+    return hla_genes
 
 
 
@@ -101,9 +110,10 @@ def write_disease_to_genes(disease_to_genes, path):
 ##################################################################################################
 ################# main ############################
 gene_minimum = 10
+remove_hla = False
 
 node_to_category = {row['doid_code']: row['category'] for row in read_file('doid-categories.txt')}
-results_dir = os.path.join(hodgkin_dir, 'results-131220-nohla')
+results_dir = os.path.join(hodgkin_dir, 'results-131223')
 if not os.path.exists(results_dir):
     os.mkdir(results_dir)
 
@@ -126,11 +136,12 @@ diseasome_maker.set_gene_annotations(doid_goto_doid)
 
 diseasome_maker.node_to_genes['DOID:8567'] |= get_hodgkin_genes() # Add additional hodgkin genes
 
-# Remove HLA region
-for disease, genes in diseasome_maker.node_to_genes.iteritems():
-    hla_genes = {gene for gene in genes if gene.chromosome.startswith('6p21.3') or gene.chromosome.startswith('6p22.1')}
-    print disease, '|'.join(gene.symbol for gene in hla_genes)
-    genes -= hla_genes
+if remove_hla:
+    # Remove HLA region
+    for disease, genes in diseasome_maker.node_to_genes.iteritems():
+        hla_genes = remove_hla_genes(genes)
+        if hla_genes:
+            print disease, '|'.join(gene.symbol for gene in hla_genes)
 
 diseasome = diseasome_maker.get_graph(gene_minimum=gene_minimum,
                                       exclude=doid_exclusions,
@@ -154,6 +165,14 @@ remove_one_proximities(diseasome, path)
 vegas_dir = os.path.join(hodgkin_dir, 'input', 'vegas')
 hltype_to_genes = vegas_reader.genes_from_directory(vegas_dir,
     method=vegas_reader.get_nominal_genes, cutoff=0.001)
+
+if remove_hla:
+    # Remove HLA region
+    for disease, genes in hltype_to_genes.iteritems():
+        hla_genes = remove_hla_genes(genes)
+        assert not (hla_genes & genes)
+        print disease, '|'.join(gene.symbol for gene in hla_genes)
+
 hltype_to_genes_path = os.path.join(results_dir, 'hl-subtype-vegas-genes.txt')
 write_disease_to_genes(hltype_to_genes, hltype_to_genes_path)
 
