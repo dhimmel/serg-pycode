@@ -107,7 +107,7 @@ def genes_from_directory(vegas_dir, method=get_nominal_genes, cutoff=0.05):
 
 if __name__ == '__main__':
     hodgkin_dir = '/home/dhimmels/Documents/serg/hodgkins/'
-    vegas_dir = os.path.join(hodgkin_dir, 'vegas')
-    disease_to_genes = genes_from_directory(vegas_dir, get_nominal_genes, 0.001)
+    vegas_dir = os.path.join(hodgkin_dir, 'input', 'vegas')
+    disease_to_genes = genes_from_directory(vegas_dir, get_fdr_genes, 0.1)
     import pprint
     pprint.pprint(disease_to_genes)

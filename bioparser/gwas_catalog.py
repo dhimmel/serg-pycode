@@ -51,7 +51,7 @@ class GwasCatalog(object):
         
     def row_generator(self, path=None):
         """ """
-        invalid_genes = set(['Intergenic', 'NR'])
+        invalid_genes = set(['Intergenic', 'NR', 'Pending'])
         if not path:
             path = os.path.join(self.gwas_dir, 'gwascatalog.txt')
         with open(path) as f:
