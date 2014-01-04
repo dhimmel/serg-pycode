@@ -9,16 +9,18 @@ import bioparser
 
 class ScreenReader(object):
 
-    def __init__(self, directory):
+    def __init__(self, directory=None):
+        if not directory:
+            directory = '/home/dhimmels/Documents/serg/remyelination/screen'
         self.directory = directory
 
-    def get_rows(self):
+    def get_raw_rows(self):
         """
         MBP - Measures differentiation
 
         """
-        if hasattr(self, 'rows'):
-            return self.rows
+        if hasattr(self, 'raw_rows'):
+            return self.raw_rows
         path = os.path.join(self.directory, 'selleck-screening-results.txt')
         read_file = open(path)
         reader = csv.DictReader(read_file, delimiter='\t')
@@ -48,11 +50,11 @@ class ScreenReader(object):
             rows.append(row)
 
         read_file.close()
-        self.rows = rows
+        self.raw_rows = rows
         return rows
 
     def add_canonical_smiles(self):
-        for row in self.get_rows():
+        for row in self.get_raw_rows():
             smiles = ScreenReader.canonical_smiles_from_row(row)
             row['canonical_smiles'] = smiles
             if not smiles:
@@ -60,6 +62,9 @@ class ScreenReader(object):
 
     @staticmethod
     def canonical_smiles_from_row(row):
+        """
+        Returns None if no match is found. Otherwise return the smiles
+        """
 
         try:
             catalog_number = row['catalog_number']
@@ -84,6 +89,57 @@ class ScreenReader(object):
 
         return None
 
+    def get_screened_compounds(self):
+
+        if hasattr(self, 'compounds'):
+            return self.compounds
+        path = os.path.join(self.directory, 'screened_compounds_smiles_results.tdt')
+        read_file = open(path)
+        reader = csv.DictReader(read_file, delimiter='\t')
+        float_fields = ['mean_PDGFR', 'mean_MBP', 'SEM_PDGFR', 'SEM_MBP']
+        rows = list()
+        for row in reader:
+            # Set empty fields to None
+            row = {k: v or None for k, v in row.items()}
+
+            # Convert fields to floats
+            for field in float_fields:
+                value = row[field]
+                if value is None:
+                    continue
+                row[field] = float(value)
+
+            rows.append(row)
+
+        read_file.close()
+        self.compounds = rows
+        return rows
+
+    def SEA_generator(self):
+        float_fields = ['Affinity Threshold (nM)', 'p-value', 'Max Tc']
+        path = os.path.join(self.directory, 'screened_compounds_predictions.chembl17.ecfp4.csv')
+        read_file = open(path)
+        reader = csv.DictReader(read_file)
+        for row in reader:
+            # Convert fields to floats
+            for field in float_fields:
+                value = row[field]
+                if value is None:
+                    continue
+                row[field] = float(value)
+            yield row
+        read_file.close()
+
+    def SEA_condenser(self):
+        previous_target_id = ''
+        previous_rows = list()
+        for row in self.SEA_generator():
+            target_id = row['Target ID']
+            if previous_target_id != target_id:
+                yield previous_rows # best of
+
+
+            rows = list()
 
 
 
@@ -91,25 +147,26 @@ class ScreenReader(object):
         """
         Assumes the control is the last row
         """
-        rows = self.read_screening_results()
-        control_row = rows.pop(-1)
-        print control_row
+        raw_rows = self.get_raw_rows()
+        control_row = raw_rows[-1]
         assert control_row['name'] == 'ctl(15)'
         control_mean = control_row['mean_{}'.format(protein)]
         control_sem = control_row['SEM_{}'.format(protein)]
         negatives, positives, omitted = list(), list(), list()
-        for row in rows:
-            value_mean = row['mean_{}'.format(protein)]
-            value_sem = row['SEM_{}'.format(protein)]
+
+
+        for compound in self.get_screened_compounds():
+            value_mean = compound['mean_{}'.format(protein)]
+            value_sem = compound['SEM_{}'.format(protein)]
             if value_mean > control_mean + control_sem:
-                positives.append(row)
-                row['status'] = 1
+                positives.append(compound)
+                compound['status'] = 1
             elif value_mean <= control_mean - control_sem:
-                negatives.append(row)
-                row['status'] = 0
+                negatives.append(compound)
+                compound['status'] = 0
             else:
-                omitted.append(row)
-                row['status'] = None
+                omitted.append(compound)
+                compound['status'] = None
         summary = 'Positives: {}, Negatives: {}, Omissions: {}'.format(*map(len, (positives, negatives, omitted)))
         print summary
         self.positives = positives
@@ -150,9 +207,11 @@ def add_drugbank():
 
 
 
+
+
 if __name__ == '__main__':
 
-    directory = '/home/dhimmels/Documents/serg/remyelination/'
+
     reader = ScreenReader(directory)
     reader.get_rows()
     reader.add_canonical_smiles()
