@@ -131,15 +131,19 @@ class ScreenReader(object):
         read_file.close()
 
     def SEA_condenser(self):
-        previous_target_id = ''
-        previous_rows = list()
+        previous_target = 'BEGIN'
+        rows = list()
         for row in self.SEA_generator():
-            target_id = row['Target ID']
-            if previous_target_id != target_id:
-                yield previous_rows # best of
+            current_target = row['Target ID']
+            if previous_target == 'BEGIN' or current_target == previous_target:
+                rows.append(row)
+            else:
+                yield min(rows, key=lambda row: row['p-value'])
+                rows = [row]
+            previous_target = current_target
 
+        yield min(rows, key=lambda row: row['p-value'])
 
-            rows = list()
 
 
 
@@ -210,11 +214,12 @@ def add_drugbank():
 
 
 if __name__ == '__main__':
+    import pprint
 
-
-    reader = ScreenReader(directory)
-    reader.get_rows()
-    reader.add_canonical_smiles()
-    reader.save()
+    reader = ScreenReader()
+    pprint.pprint(list(reader.SEA_condenser())[0:5])
+    #reader.get_rows()
+    #reader.add_canonical_smiles()
+    #reader.save()
     #reader.summarize()
     #reader.save()
