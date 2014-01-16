@@ -375,7 +375,11 @@ class Graph(BaseGraph):
                    duplicates=False, masked=True,
                    exclude_nodes=set(), exclude_edges=set()):
         """
-        TODO
+        Return a list of Paths starting with source and following metapath.
+        Setting duplicates False disallows paths with repeated nodes.
+        Setting masked False disallows paths which traverse a masked node or edge.
+        exclude_nodes and exclude_edges allow specification of additional nodes
+        and edges beyond (or independent of) masked nodes and edges.
         """
 
         if not isinstance(source, Node):

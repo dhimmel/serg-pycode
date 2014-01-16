@@ -130,20 +130,41 @@ class ScreenReader(object):
             yield row
         read_file.close()
 
-    def SEA_condenser(self):
-        previous_target = 'BEGIN'
-        rows = list()
+    def get_SEA_interactions(self):
+        if hasattr(self, 'interactions'):
+            return self.interactions
+        best_row = lambda rows: min(rows, key=lambda row: row['p-value'])
+        query_to_rows = dict()
         for row in self.SEA_generator():
-            current_target = row['Target ID']
-            if previous_target == 'BEGIN' or current_target == previous_target:
-                rows.append(row)
-            else:
-                yield min(rows, key=lambda row: row['p-value'])
-                rows = [row]
-            previous_target = current_target
+            target_id = row['Target ID']
+            query_id = row['Query ID']
+            query_target_id = query_id, target_id
+            query_to_rows.setdefault(query_target_id, list()).append(row)
+        query_to_row = {k: best_row(v) for k, v in query_to_rows.iteritems()}
+        interactions = query_to_row.values()
+        self.interactions = interactions
+        return self.interactions
 
-        yield min(rows, key=lambda row: row['p-value'])
+    def get_SEA_targets(self):
+        """
+        Returns tuples of targets in the form:
+        (target_id, target_name, target_description)
+        """
+        targets = set()
+        keys = ['Target ID', 'Target Name/UNIPROT', 'Target Description']
+        interactions = self.get_SEA_interactions()
+        for interaction in interactions:
+            target = tuple(interaction[key] for key in keys)
+            targets.add(target)
+        return targets
 
+    def write_targets(self):
+        path = os.path.join(self.directory, 'targets-chembl17.txt')
+        write_file = open(path, 'w')
+        writer = csv.writer(write_file, delimiter='\t')
+        writer.writerow(['target_id', 'name', 'description'])
+        writer.writerows(self.get_SEA_targets())
+        write_file.close()
 
 
 
@@ -217,7 +238,9 @@ if __name__ == '__main__':
     import pprint
 
     reader = ScreenReader()
-    pprint.pprint(list(reader.SEA_condenser())[0:5])
+    #reader.write_targets()
+
+    #pprint.pprint(reader.SEA_condenser().items()[0:5])
     #reader.get_rows()
     #reader.add_canonical_smiles()
     #reader.save()

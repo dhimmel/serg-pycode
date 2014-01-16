@@ -58,23 +58,24 @@ algorithm_to_function = {
     'DWPC': DWPC}
     
 
-def features_betweens(graph, source, target, metapaths, features, exclude_edges=set()):
+def features_betweens(graph, source, target, metapaths, features, duplicates=False, masked=False, exclude_nodes=set(), exclude_edges=set()):
     results = collections.OrderedDict()
     for metapath in metapaths:
-        feature_dict = features_between(graph, source, target, metapath, features, exclude_edges)
+        feature_dict = features_between(graph, source, target, metapath, features, duplicates, masked, exclude_nodes, exclude_edges)
         for name, value in feature_dict.iteritems():
             key = '{}:{}'.format(name, metapath)
             results[key] = value
     return results
 
-def features_between(graph, source, target, metapath, features, exclude_edges=set()):
+def features_between(graph, source, target, metapath, features,
+                     duplicates, masked, exclude_nodes, exclude_edges):
     path_types = set()
     
     for feature in features:
         algorithm = feature['algorithm']
         path_types |= algorithm_to_path_types[algorithm]
         
-    paths = paths_between(graph, source, target, metapath, path_types, exclude_edges)
+    paths = paths_between(graph, source, target, metapath, path_types, duplicates, masked, exclude_nodes, exclude_edges)
     
     results = collections.OrderedDict()
     for feature in features:
@@ -82,16 +83,14 @@ def features_between(graph, source, target, metapath, features, exclude_edges=se
         results[feature['name']] = function(paths, **feature['arguments'])
     return results
 
-import datetime
-
-def paths_between(graph, source, target, metapath, path_types, exclude_edges):
+def paths_between(graph, source, target, metapath, path_types, duplicates, masked, exclude_nodes, exclude_edges):
     paths = dict()
     
     if 'paths_s' in path_types:
-        paths['paths_s'] = graph.paths_from(source, metapath, exclude_edges=exclude_edges)
+        paths['paths_s'] = graph.paths_from(source, metapath, duplicates, masked, exclude_nodes, exclude_edges)
         
     if 'paths_t' in path_types:
-        paths['paths_t'] = graph.paths_from(target, metapath.inverse, exclude_edges=exclude_edges)
+        paths['paths_t'] = graph.paths_from(target, metapath.inverse, duplicates, masked, exclude_nodes, exclude_edges)
     
     if 'paths_st' in path_types:
         
@@ -103,7 +102,7 @@ def paths_between(graph, source, target, metapath, path_types, exclude_edges):
             paths['paths_st'] = [hetnet.Path(path.inverse_edges) for path in paths_ts]
             
         else:
-            paths['paths_st'] = graph.paths_between_tree(source, target, metapath, exclude_edges=exclude_edges)
+            paths['paths_st'] = graph.paths_between_tree(source, target, metapath, duplicates, masked, exclude_nodes, exclude_edges)
 
     return paths
 

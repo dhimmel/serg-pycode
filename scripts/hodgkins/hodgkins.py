@@ -110,10 +110,10 @@ def remove_hla_genes(genes):
 ##################################################################################################
 ################# main ############################
 gene_minimum = 10
-remove_hla = False
+remove_hla = True
 
 node_to_category = {row['doid_code']: row['category'] for row in read_file('doid-categories.txt')}
-results_dir = os.path.join(hodgkin_dir, 'results-131223')
+results_dir = os.path.join(hodgkin_dir, 'results-140109-nohla')
 if not os.path.exists(results_dir):
     os.mkdir(results_dir)
 
