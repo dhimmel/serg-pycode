@@ -20,6 +20,24 @@ def path_degree_product(path, damping_exponent, exclude_masked=True):
     degree_product = reduce(operator.mul, damped_degrees)
     return degree_product
 
+def edge_weighted_path_degree_product(path, damping_exponent, exclude_masked=True):
+    """
+    http://en.wikipedia.org/wiki/Poisson_binomial_distribution
+    """
+    raise Exception
+    degrees = list()
+    for edge in path:
+        source_edges = edge.source.get_edges(edge.metaedge, exclude_masked)
+        target_edges = edge.target.get_edges(edge.metaedge.inverse, exclude_masked)
+        source_degree = sum(e.data['probability'] for e in source_edges)
+        target_degree = sum(e.data['probability'] for e in target_edges)
+        degrees.append(source_degree)
+        degrees.append(target_degree)
+
+    damped_degrees = [degree ** damping_exponent for degree in degrees]
+    degree_product = reduce(operator.mul, damped_degrees)
+    return degree_product
+
 def PCs(paths):
     return len(paths['paths_s'])
 
@@ -43,19 +61,34 @@ def DWPC(paths, damping_exponent):
     dwpc = sum(path_weights)
     return dwpc
 
+def PWPC(paths, probability_key='probability'):
+    """
+    probability weighted path count
+    """
+    paths = paths['paths_st']
+    path_probs = list()
+    for path in paths:
+        probabilities = [edge.data[probability_key] for edge in path]
+        path_probs.append(reduce(operator.mul, probabilities))
+    pwpc = sum(path_probs)
+    return pwpc
+
+
 algorithm_to_path_types = {
     'PCs': {'paths_s'},
     'PCt': {'paths_t'},
     'PC': {'paths_st'},
     'NPC': {'paths_st', 'paths_s', 'paths_t'},
-    'DWPC': {'paths_st'}}
+    'DWPC': {'paths_st'},
+    'PWPC': {'paths_st'}}
 
 algorithm_to_function = {
     'PCs': PCs,
     'PCt': PCt,
     'PC': PC,
     'NPC': NPC,
-    'DWPC': DWPC}
+    'DWPC': DWPC,
+    'PWPC': PWPC}
     
 
 def features_betweens(graph, source, target, metapaths, features, duplicates=False, masked=False, exclude_nodes=set(), exclude_edges=set()):

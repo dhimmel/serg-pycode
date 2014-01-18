@@ -55,6 +55,7 @@ class HGNC(object):
                            'Entrez Gene ID': 'entrez_id',
                            'Ensembl Gene ID': 'ensembl_id',
                            'RefSeq IDs': 'refseq_ids',
+                           'UniProt ID (supplied by UniProt)': 'uniprot_id',
                            'Entrez Gene ID (supplied by NCBI)': 'entrez_id_ncbi_mapped',
                            'Ensembl ID (supplied by Ensembl)': 'ensembl_id_ensembl_mapped',
                            'OMIM ID (supplied by NCBI)': 'omim_id'}

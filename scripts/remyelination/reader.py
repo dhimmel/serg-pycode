@@ -115,6 +115,9 @@ class ScreenReader(object):
         self.compounds = rows
         return rows
 
+    def get_smiles_to_compound(self):
+        return {compound['canonical_smiles']: compound for compound in self.get_screened_compounds()}
+
     def SEA_generator(self):
         float_fields = ['Affinity Threshold (nM)', 'p-value', 'Max Tc']
         path = os.path.join(self.directory, 'screened_compounds_predictions.chembl17.ecfp4.csv')
@@ -167,31 +170,34 @@ class ScreenReader(object):
         write_file.close()
 
 
-
-    def summarize(self, protein='MBP'):
+    def binarize_screen(self, protein='MBP'):
         """
         Assumes the control is the last row
         """
-        raw_rows = self.get_raw_rows()
-        control_row = raw_rows[-1]
-        assert control_row['name'] == 'ctl(15)'
-        control_mean = control_row['mean_{}'.format(protein)]
-        control_sem = control_row['SEM_{}'.format(protein)]
+        control_mean = 10.667
+        control_sem = 1.96
         negatives, positives, omitted = list(), list(), list()
 
-
+        PDGFR_threshold = 15.0
+        MBP_threshold = 5.0
         for compound in self.get_screened_compounds():
             value_mean = compound['mean_{}'.format(protein)]
             value_sem = compound['SEM_{}'.format(protein)]
-            if value_mean > control_mean + control_sem:
+            if compound['mean_PDGFR'] < PDGFR_threshold and compound['mean_MBP'] < MBP_threshold:
+                omitted.append(compound)
+                compound['status'] = -1
+            elif value_mean > control_mean + control_sem:
                 positives.append(compound)
                 compound['status'] = 1
-            elif value_mean <= control_mean - control_sem:
+            elif value_mean <= control_mean + control_sem:
                 negatives.append(compound)
                 compound['status'] = 0
             else:
                 omitted.append(compound)
-                compound['status'] = None
+                compound['status'] = -1
+
+
+
         summary = 'Positives: {}, Negatives: {}, Omissions: {}'.format(*map(len, (positives, negatives, omitted)))
         print summary
         self.positives = positives
