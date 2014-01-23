@@ -183,9 +183,12 @@ class ScreenReader(object):
         for compound in self.get_screened_compounds():
             value_mean = compound['mean_{}'.format(protein)]
             value_sem = compound['SEM_{}'.format(protein)]
-            if compound['mean_PDGFR'] < PDGFR_threshold and compound['mean_MBP'] < MBP_threshold:
+            if value_mean is None:
                 omitted.append(compound)
                 compound['status'] = -1
+            elif compound['mean_PDGFR'] < PDGFR_threshold and compound['mean_MBP'] < MBP_threshold:
+                omitted.append(compound)
+                compound['status'] = -2
             elif value_mean > control_mean + control_sem:
                 positives.append(compound)
                 compound['status'] = 1
@@ -194,7 +197,7 @@ class ScreenReader(object):
                 compound['status'] = 0
             else:
                 omitted.append(compound)
-                compound['status'] = -1
+                compound['status'] = -3
 
 
 

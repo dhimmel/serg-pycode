@@ -20,9 +20,13 @@ def ppa_from_pvalue(p_value, prior):
 
 msigdb = bioparser.data.Data().msigdb
 #msig_set_types = msigdb.abbrev_to_name.keys()
-msig_set_types = ['c2.all', 'c5.all', 'c7.all']
+#msig_set_types = ['c2.all', 'c5.all', 'c7.all']
+msig_set_types = ['c2.cp.all', 'c3.all', 'c5.all']
+
 
 metaedge_tuples = [('drug', 'protein', 'target', 'both'),
+                   ('drug', 'family', 'target', 'both'),
+                   ('drug', 'complex', 'target', 'both'),
                    ('protein', 'gene', 'product', 'both'),
                    ('gene', 'gene', 'interaction', 'both')]
                    #('gene', 'gene', 'function', 'both'),
@@ -46,11 +50,23 @@ uniprot_to_protein = dict()
 for target in targets:
     identifier, name, description = target
     node_data = {'name': name, 'description': description}
-    graph.add_node(identifier, 'protein', node_data)
-    if not identifier.startswith('sp_'):
-        continue
-    uniprot_id = identifier[3:]
-    uniprot_to_protein[uniprot_id] = identifier
+    if identifier.startswith('sp_'):
+        uniprot_species = name.split('_', 1)[1]
+        node_data['species'] = uniprot_species
+        if uniprot_species != 'HUMAN':
+            continue
+        node_kind = 'protein'
+        uniprot_id = identifier[3:]
+        uniprot_to_protein[uniprot_id] = identifier
+    elif identifier.startswith('pc_'):
+        node_kind = 'complex'
+    elif identifier.startswith('pf_'):
+        node_kind = 'family'
+    else:
+        print identifier, name, description
+        raise Exception('Unknown protein target type')
+    graph.add_node(identifier, node_kind, node_data)
+
 
 # Add genes from HGNC
 gene_protein_edges = list()
@@ -73,8 +89,10 @@ sea_p_cutoff = 1.0 / math.e
 target_prior = 0.005
 interactions = screen_reader.get_SEA_interactions()
 for interaction in interactions:
-    smiles = interaction['Query Smiles']
     target = interaction['Target ID']
+    if target not in graph.node_dict:
+        continue
+    smiles = interaction['Query Smiles']
     p_val = interaction['p-value']
     if p_val > sea_p_cutoff:
         continue
@@ -83,6 +101,7 @@ for interaction in interactions:
     edge_data = {'p_value': p_val, 'max_tc': interaction['Max Tc'],
                  'affinity': interaction['Affinity Threshold (nM)'],
                  'probability': probability, 'log_p_value': math.log10(p_val)}
+
     graph.add_edge(smiles, target, 'target', 'both', edge_data)
 
 
@@ -124,7 +143,7 @@ for metaedge, edges in graph.get_metaedge_to_edges(exclude_inverts=True).items()
     line = '{}: {}'.format(metaedge, len(edges))
     print line
 
-network_dir = '/home/dhimmels/Documents/serg/remyelination/networks/140117'
+network_dir = '/home/dhimmels/Documents/serg/remyelination/networks/140122-human'
 graph_agent = hetnet.agents.GraphAgent(network_dir)
 graph_agent.set(graph)
 graph_agent.write_additional_formats()
