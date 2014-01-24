@@ -1,6 +1,7 @@
 import collections
 import pprint
 
+import pandas
 import numpy
 import sklearn
 import sklearn.svm
@@ -14,24 +15,31 @@ import sklearn.neighbors
 
 import feature_reader
 
-path = '/home/dhimmels/Documents/serg/remyelination/networks/140106/Anon-DWPC_0.5-SEA-pval-cutoff-1e-05.txt'
-#path = '/home/dhimmels/Documents/serg/remyelination/networks/140106/Anon-PC-SEA-pval-cutoff-1e-05.txt'
+
+feature_directory = '/home/dhimmels/Documents/serg/remyelination/networks/140122-human/features'
+X_filename = 'SEA-pval-cutoff-1e-04.txt.gz'
+triformat = feature_reader.read_triformat(feature_directory, X_filename)
+
+triformat = feature_reader.compound_subset(triformat, triformat['compounds'].status >= 0)
+triformat = feature_reader.feature_subset(triformat, triformat['features'].metapath == 'D-t-P')
 
 
-#XY = numpy.loadtxt(path, delimiter='\t', skiprows=1)
-#y = XY[:, 0].astype(int) - 1
-#X = XY[:, 1:]
-#X_full = X
-
-column_prefixes = ['DWPC_0.5|D-t-P|', 'DWPC_0.5|D-t-P-p-G-m-C2|']
-compounds, column_names, X_full, y = feature_reader.produce_data(column_prefixes=column_prefixes)
-X = X_full
+X = triformat['X']
+compounds = triformat['compounds']
+features = triformat['features']
 print 'X shape', X.shape
+y = numpy.array(compounds.status)
 
 names_known0 = ['DWPC_0.5|D-t-P|sp_P10827', 'DWPC_0.5|D-t-P|sp_P10828', 'DWPC_0.5|D-t-P|sp_Q92731']
 names_known1 = ['DWPC_0.5|D-t-P|sp_P11229', 'DWPC_0.5|D-t-P|sp_P10827', 'DWPC_0.5|D-t-P|sp_P10828', 'DWPC_0.5|D-t-P|sp_Q92731']
-indices_known0 = numpy.where(numpy.in1d(column_names, names_known0))[0]
-indices_known1 = numpy.where(numpy.in1d(column_names, names_known1))[0]
+indices_known0 = numpy.where(numpy.in1d(features.identifier, names_known0))[0]
+indices_known1 = numpy.where(numpy.in1d(features.identifier, names_known1))[0]
+
+
+
+
+
+
 
 """
 keep_names = ['DWPC_0.5|D-t-P|sp_P11229', 'DWPC_0.5|D-t-P|sp_P10827', 'DWPC_0.5|D-t-P|sp_P10828', 'DWPC_0.5|D-t-P|sp_Q92731']
@@ -57,7 +65,7 @@ X = X_full[:, indices]
 
 sk_folds = sklearn.cross_validation.StratifiedKFold(y=y, n_folds=7)
 
-feature_select = True
+feature_select = False
 if feature_select:
     feature_counter = collections.Counter()
     feature_counter_RLR = collections.Counter()
@@ -78,13 +86,13 @@ for train_index, test_index in sk_folds:
         randomized_logistic = sklearn.linear_model.RandomizedLogisticRegression(C=feature_selection_C)
         randomized_logistic.fit(X_train, y_train)
         rlr_indices = numpy.where(randomized_logistic.scores_ != 0)[0]
-        feature_counter_RLR.update(column_names[rlr_indices])
+        feature_counter_RLR.update(features.identifier[rlr_indices])
         selected_indices = numpy.array(sorted(set(rlr_indices) | set(indices_known1)))
-        features = column_names[selected_indices]
-        feature_counter.update(features)
-        cv_features.append(features)
+        feature_ids = features.identifier[selected_indices]
+        feature_counter.update(feature_ids)
+        cv_features.append(feature_ids)
         X_train = X_train[:, selected_indices]
-        print '{} Selected Features'.format(len(features))
+        print '{} Selected Features'.format(len(feature_ids))
         X_test = X_test[:, selected_indices]
     #clf = sklearn.svm.SVC(C=0.0001, kernel='linear', class_weight='auto')
     clf = sklearn.svm.LinearSVC(C=0.5, class_weight='auto')

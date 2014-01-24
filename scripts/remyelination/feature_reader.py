@@ -1,13 +1,57 @@
 import os
 import csv
 
+import pandas
+import pandas.io.parsers
 import numpy
 import numpy.core.defchararray
 
 import reader
 
+
+def csv_dict_rows(path, delimiter='\t', **kwargs):
+    read_file = open(path)
+    reader = csv.DictReader(read_file, delimiter=delimiter, **kwargs)
+    rows = list(reader)
+    read_file.close()
+    return rows
+
+
 def read_triformat(directory, x_filename):
-    pass
+    """
+    X - 2d numpy array with rows representing compounds and columns represnting features
+    compounds - pandas DataFrame with compound information
+    features - pandas DataFrame with features information
+    """
+    features_path = os.path.join(directory, 'features.txt')
+    features = pandas.io.parsers.read_table(features_path)
+
+    compounds_path = os.path.join(directory, 'compounds.txt')
+    compounds = pandas.io.parsers.read_table(compounds_path)
+
+    x_path = os.path.join(directory, x_filename)
+    X = numpy.loadtxt(x_path, delimiter='\t')
+
+    triformat = {'X': X, 'compounds': compounds, 'features': features}
+    return triformat
+
+def compound_subset(triformat, bool_select):
+    bool_select = numpy.array(bool_select)
+    subset = dict()
+    subset['X'] = triformat['X'][bool_select, :]
+    subset['compounds'] = triformat['compounds'].loc[bool_select, :]
+    subset['features'] = triformat['features']
+    return subset
+
+def feature_subset(triformat, bool_select):
+    bool_select = numpy.array(bool_select)
+    subset = dict()
+    subset['X'] = triformat['X'][:, bool_select]
+    subset['features'] = triformat['features'].loc[bool_select, :]
+    subset['compounds'] = triformat['compounds']
+    return subset
+
+
 
 def read_features(path):
     read_file = open(path)
@@ -31,7 +75,6 @@ def produce_data(
         column_prefixes=None):
 
     # Read features
-
     row_names, column_names, X = read_features(feature_path)
     # Filter columns
     if column_prefixes:
