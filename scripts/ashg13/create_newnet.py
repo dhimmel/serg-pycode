@@ -22,12 +22,16 @@ def create_graph():
     data = bioparser.data.Data()
 
     msigdb = bioparser.data.Data().msigdb
-    msig_set_types = msigdb.abbrev_to_name.keys()
+    #msig_set_types = msigdb.abbrev_to_name.keys()
+    # http://www.broadinstitute.org/gsea/msigdb/collections.jsp
+    #msig_set_types = ['c1.all', 'c2.cgp', 'c2.cp.all', 'c3.mir', 'c3.tft',
+    #                  'c4.cgn', 'c4.cm', 'c5.bp', 'c5.cc', 'c5.mf', 'c6.all', 'c7.all']
+    msig_set_types = list()
 
     # Define and initialize networkx graph
     metaedge_tuples = [('disease', 'gene', 'association', 'both'),
                        ('gene', 'gene', 'interaction', 'both'),
-                       #('gene', 'gene', 'function', 'both'),
+                       ('gene', 'gene', 'function', 'both'),
                        ('gene', 'tissue', 'expression', 'both'),
                        ('disease', 'tissue', 'cooccurrence', 'both'),
                        ('disease', 'disease', 'similarity', 'both')]
@@ -57,13 +61,16 @@ def create_graph():
 
     # Add (disease, gene, association, both) edges
     logging.info('Adding GWAS catalog disease-gene associations.')
+    coding_only = True
     exclude_pmids = set() #{'21833088'}
     fdr_cutoff = 0.05
     mapped_term_cutoff = 1
+    logging.info('coding genes only: {}'.format(coding_only))
     logging.info('excluding pmids: {}'.format(exclude_pmids))
     logging.info('fdr_cutoff: {}'.format(fdr_cutoff))
     logging.info('mapped_term_cutoff: {}'.format(mapped_term_cutoff))
     doid_id_to_genes = data.gwas_catalog.get_doid_id_to_genes(
+        coding=coding_only,
         fdr_cutoff=fdr_cutoff,
         mapped_term_cutoff=mapped_term_cutoff,
         exclude_pmids=exclude_pmids)
@@ -75,8 +82,8 @@ def create_graph():
                                doid_id_to_genes.iteritems() if len(genes) > 0]
 
     # Add (disease, disease, similarity, both)
-    logging.info('Adding Instrinsic Semantic Similarity disease-disease edges.')
-    lin_cutoff = 0.45
+    logging.info('Adding Intrinsic Semantic Similarity disease-disease edges.')
+    lin_cutoff = 0.1
     logging.info('lin_cutoff: {}'.format(lin_cutoff))
     similarity_generator = doid_onto.pairwise_similarities(doids_with_associations)
     for similarity in similarity_generator:
@@ -87,7 +94,8 @@ def create_graph():
         target = similarity['target']
         edge_data = {'lin_similarity': lin_similarity}
         graph.add_edge(source, target, 'similarity', 'both', edge_data)
-    
+
+    """
     # Add (gene, tissue, expression, both) edges
     logging.info('Adding BodyMap2 gene-tissue expression.')
     fpkm_cutoff = 75.0
@@ -96,7 +104,20 @@ def create_graph():
     for symbol, tissue, fpkm in edge_tuples:
         edge_data = {'fpkm': fpkm}
         graph.add_edge(tissue, symbol, 'expression', 'both', edge_data)
-    
+    """
+
+    # Add (gene, tissue, expression, both) edges
+    logging.info('Adding GNF gene-tissue expression.')
+    log10_expr_cutoff = 1.0
+    logging.info('log10_expression_cutoff: {}'.format(log10_expr_cutoff))
+    expressions = data.gnf.expression_generator()
+    for expression in expressions:
+        if expression['log10_expr'] < log10_expr_cutoff:
+            continue
+        edge_data = {'log10_expr': expression['log10_expr']}
+        graph.add_edge(expression['bto_id'], expression['gene'].symbol, 'expression', 'both', edge_data)
+
+
     # Add (gene, gene, interaction, both) edges
     logging.info('Adding ppiTrim gene-gene interaction.')
     interactions = data.ppitrim.collapsed_binary_interactions()
@@ -107,13 +128,13 @@ def create_graph():
         target = interaction['target'].symbol
         graph.add_edge(source, target, 'interaction', 'both', edge_data)
 
-    """
+
     # (gene, gene, function) information
     logging.info('Adding IMP gene-gene relationships.')
     processed_file = None #'positives_and_predictions_0.5'
     include_positives = True
     include_predictions = True
-    probability_cutoff = 0.5
+    probability_cutoff = 0.2
 
     if processed_file:
         logging.info('processed_file: {}'.format(processed_file))
@@ -129,11 +150,11 @@ def create_graph():
     for symbol_a, symbol_b, prob in relationships:
         edge_data = {'probability': prob}
         graph.add_edge(symbol_a, symbol_b, 'function', 'both', edge_data)
-    """
+
 
     # Add (disease, tissue, cooccurrence, both)
     logging.info('Adding CoPub disease-tissue cooccurrence.')
-    r_scaled_cutoff = 30.0
+    r_scaled_cutoff = 15
     logging.info('r_scaled_cutoff: {}'.format(r_scaled_cutoff))
     coocc_gen = copub_analysis.doid_bto_cooccurrence_generator()
     for row in coocc_gen:
@@ -178,7 +199,7 @@ if __name__ == '__main__':
     # Parse the arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--network-dir', type=os.path.expanduser, default=
-        '~/Documents/serg/ashg13/131219-1')
+        '~/Documents/serg/ashg13/140205-parsweep')
     parser.add_argument('--config', action='store_true')
     parser.add_argument('--create', action='store_true')
     args = parser.parse_args()

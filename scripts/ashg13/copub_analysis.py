@@ -12,6 +12,34 @@ mapping_dir = os.path.join(ashg_dir, 'mappings')
 copub_dir = os.path.join(ashg_dir, 'copub')
 
 
+def automap_bto_to_copub_gnf():
+    """ """
+
+    gnf_tissues = set(x['bto_id'] for x in data.gnf.expression_generator())
+    animal_tissues = set(data.bto.get_animal_tissues())
+    gnf_animal_tissues = gnf_tissues & animal_tissues
+
+
+    gnf_animal_tissues = sorted(gnf_animal_tissues)
+
+    bto_graph = data.bto.get_graph()
+
+    bioparser.copub.load_client()
+
+    path = os.path.join(mapping_dir, 'bto-to-copub-mappings-gnf-auto.txt')
+    mapping_file = open(path, 'w')
+    writer = csv.writer(mapping_file, delimiter='\t')
+
+    fieldnames = ['bto_id', 'bto_name', 'bi_id', 'copub_name']
+    writer.writerow(fieldnames)
+    for bto_id in gnf_animal_tissues:
+        bto_name = bto_graph.node[bto_id]['name']
+        bi_id, copub_name = bioparser.copub.get_top_keyword(bto_name, 'tissue')
+        row = [bto_id, bto_name, bi_id, copub_name]
+        writer.writerow(row)
+    mapping_file.close()
+
+
 def map_doid_to_copub():
     """ """
     bioparser.copub.load_client()
@@ -47,13 +75,16 @@ def read_doid_to_copub():
 
 def read_bto_to_copub():
     """ """
-    path = os.path.join(mapping_dir, 'bto-to-copub-mappings-manual.txt')
+    path = os.path.join(mapping_dir, 'bto-to-copub-mappings-gnf-manual.txt')
     mapping_file = open(path)
     reader = csv.DictReader(mapping_file, delimiter='\t')
     bto_to_copub = dict()
     for row in reader:
         bto_id = row['bto_id']
-        bi_id = int(row['bi_id'])
+        bi_id = row['bi_id']
+        if not bi_id:
+            continue
+        bi_id = int(bi_id)
         bto_to_copub[bto_id] = bi_id
     return bto_to_copub
 
@@ -64,8 +95,7 @@ def compute_doid_bto_cooccurrence():
     
     bto_graph = data.bto.get_graph()
     doid_graph = data.doid.get_graph()
-    
-    
+
     bto_to_copub = read_bto_to_copub()
     doid_to_copub = read_doid_to_copub()
     copub_to_bto = {v: k for k, v in bto_to_copub.items()}
@@ -104,7 +134,7 @@ def compute_doid_bto_cooccurrence():
 
 def doid_bto_cooccurrence_generator():
     """ """
-    path = os.path.join(copub_dir, 'doid-bto-cooccurrences.txt')
+    path = os.path.join(copub_dir, 'doid-bto-cooccurrences-gnf-tissues.txt')
     read_file = open(path)
     reader = csv.DictReader(read_file, delimiter='\t')
     for row in reader:
@@ -200,9 +230,7 @@ if __name__ == '__main__':
     
     compute_doid_bto_cooccurrence()
     
-    
-    
-    
+    #automap_bto_to_copub_gnf()
     #map_tiger_to_copub()
     #print read_tiger_to_copub()
     #compute_tiger_efo_cooccurrence()

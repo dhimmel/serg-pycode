@@ -31,7 +31,13 @@ class BTO(obo.OBO):
 if __name__ =='__main__':
     bto = BTO()
     bto_onto = networkx_ontology.NXOntology(bto.get_animal_tissue_subgraph())
-    
+
+    import gnf
+    gnf_tissues = set(x['bto_id'] for x in gnf.GNF().expression_generator())
+
+
+
+
     bto_onto.annotate_information_content()
     g = bto_onto.graph
     bodymap_tissues = [

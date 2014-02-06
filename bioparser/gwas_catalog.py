@@ -200,7 +200,7 @@ class GwasCatalog(object):
                 efo_id_to_genes.setdefault(efo_id, set()).update(row['genes'])
         return efo_id_to_genes
 
-    def get_doid_id_to_genes(self, *args, **kwargs):
+    def get_doid_id_to_genes(self, coding=False, *args, **kwargs):
         """
         Returns a dictionary of doid_id to a set of genes. Genes are gene
         objects from the hgnc module. Arguments are passed to 
@@ -218,8 +218,7 @@ class GwasCatalog(object):
             doid_ids = efo_id_to_doid_ids.get(efo_id)
             if doid_ids is None:
                 continue
-            hgnc_genes = {symbol_to_gene.get(symbol) for symbol in symbols}
-            hgnc_genes.discard(None)
+            hgnc_genes = data.Data().hgnc.identifiers_to_genes(symbols, 'symbol', coding)
             for doid_id in doid_ids:
                 doid_id_to_genes.setdefault(doid_id, set()).update(hgnc_genes)
                 
@@ -264,12 +263,12 @@ if __name__ =='__main__':
             continue
         print pmid, trait, date, number_loci
     """
-    doid_id_to_genes = gcat.get_doid_id_to_genes(fdr_cutoff=1.0, mapped_term_cutoff=1)
+    doid_id_to_genes = gcat.get_doid_id_to_genes(coding=True, fdr_cutoff=0.05, mapped_term_cutoff=1)
     import doid
     doid = doid.DO()
     doid_graph = doid.get_graph()
     for doid_id, genes in doid_id_to_genes.items():
-        if len(genes) > 0:
+        if len(genes) > 10:
             print '\t'.join([doid_id, doid_graph.node[doid_id]['name'], str(len(genes))])
     #efo_id_to_genes = gcat.get_efo_id_to_genes()
     #psoriasis = efo_id_to_genes['EFO_0000676'] # psoriasis
