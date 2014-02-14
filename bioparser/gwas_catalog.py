@@ -52,12 +52,15 @@ class GwasCatalog(object):
     def row_generator(self, path=None):
         """ """
         invalid_genes = set(['Intergenic', 'NR', 'Pending'])
+        rsid_pattern = re.compile(r"rs[0-9]+")
         if not path:
             path = os.path.join(self.gwas_dir, 'gwascatalog.txt')
         with open(path) as f:
             reader = csv.DictReader(f, delimiter='\t')
             for row in reader:
-                
+
+                row['snp_list'] = re.findall(rsid_pattern, row['SNPs'])
+
                 # Convert the p-value to a float
                 try:
                     row['p-Value'] = float(row['p-Value'])
@@ -224,15 +227,48 @@ class GwasCatalog(object):
                 
         return doid_id_to_genes
 
+    def write_all_snps(self):
+        """
+        """
+        all_snps = set()
+        for row in self.get_rows():
+            #if row['p-Value'] is None or row['p-Value'] > 10e-8:
+            #    continue
+            chromosome = row['Chr_id']
+            if not chromosome:
+                continue
+            chromosome = int(chromosome)
+            all_snps |= {(snp, chromosome) for snp in row['snp_list']}
+        all_snps = sorted(all_snps, key=lambda x: (x[1], x[0]))
+        path = os.path.join(self.gwas_dir, 'all-SNPs.txt')
+        with open(path, 'w') as write_file:
+            write_file.write('\n'.join('{}\t{}'.format(*snp) for snp in all_snps))
+
+        """
+        snp_groups = [all_snps[i:i+1000] for i in range(0, len(all_snps), 1000)]
+        snap_dir = os.path.join(self.gwas_dir, 'SNAP', 'input')
+        if not os.path.exists(snap_dir):
+            os.makedirs(snap_dir)
+        for i, snp_group in enumerate(snp_groups):
+            path = os.path.join(snap_dir, 'snps_10e-8_part{}.txt'.format(i))
+            with open(path, 'w') as write_file:
+                write_file.write('\n'.join(snp_group))
+        """
+        return all_snps
+
+
+
+
+
 if __name__ =='__main__':
     gcat = GwasCatalog()
-    gcat.read_ebi_mappings()
-    gcat.get_efo_id_to_genes(mapped_term_cutoff=1)
+    #gcat.read_ebi_mappings()
+    #gcat.get_efo_id_to_genes(mapped_term_cutoff=1)
     #catalog_term_to_efo_ids, mapped_pmids = gcat.read_ebi_mappings(path)
     #gcat.get_rows()
     #gcat.apply_fdr()
     #rows = gcat.get_rows()
-    
+    gcat.write_all_snps()
     """
     print 'SNPs passing 0.05 P-value -', sum(row['p-Value'] <= 0.05 for row in rows if row['p-Value'])
     print 'SNPs passing 0.05 P-value and reporting genes -', sum(row['p-Value'] <= 0.05 and bool(row['genes']) for row in rows if row['FDR p-Value'])
@@ -263,6 +299,7 @@ if __name__ =='__main__':
             continue
         print pmid, trait, date, number_loci
     """
+    """
     doid_id_to_genes = gcat.get_doid_id_to_genes(coding=True, fdr_cutoff=0.05, mapped_term_cutoff=1)
     import doid
     doid = doid.DO()
@@ -277,3 +314,4 @@ if __name__ =='__main__':
     #print len(psoriasis), 'psoriasis genes'
     #print psoriasis & ms
     #print ms
+    """

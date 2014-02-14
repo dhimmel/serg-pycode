@@ -19,7 +19,8 @@ class Drug():
         self.name = None
         #self.side_effect_names = set()
         self.meddra_concepts = set()
-        
+        self.meddra_frequent_concepts = set()
+
     def __hash__(self):
         return hash(self.pubchem)
     
@@ -96,6 +97,13 @@ class SIDER(object):
               'meddra_concept', 'meddra_name']
         return self.read_file('meddra_adverse_effects', fieldnames)
 
+    def read_meddra_freq_parsed(self):
+        fieldnames = ['stitch_id_flat', 'stitch_id_stereo', 'label_id',
+                      'umls_concept_id', 'concept_name', 'placebo',
+                      'freq', 'freq_lower', 'freq_upper',
+                      'meddra_level', 'meddra_concept', 'meddra_name']
+        return self.read_file('meddra_freq_parsed', fieldnames)
+
 
     def create_drugs(self):
         """
@@ -117,7 +125,7 @@ class SIDER(object):
             drug.flat_id = label['stitch_id_flat']
             drug.stereo_ids.add(label['stitch_id_stereo'])
         self.pubchem_to_drug = pubchem_to_drug
-        
+
         for adverse_effect in self.read_meddra_adverse_effects():
             flat_id = adverse_effect['stitch_id_flat']
             pubchem = SIDER.stitch_to_pubchem(flat_id)
@@ -133,16 +141,44 @@ class SIDER(object):
             if adverse_effect['meddra_level'] != 'PT':
                 continue
             drug.meddra_concepts.add(adverse_effect['meddra_concept'])
-        
+
+        for adverse_effect in self.read_meddra_freq_parsed():
+            flat_id = adverse_effect['stitch_id_flat']
+            pubchem = SIDER.stitch_to_pubchem(flat_id)
+            if not pubchem:
+                continue
+            drug = pubchem_to_drug.get(pubchem)
+            if drug is None:
+                print 'In Freq Parse: pubchem drug', pubchem, 'not found'
+                continue
+            if adverse_effect['meddra_level'] != 'PT':
+                continue
+            if adverse_effect['placebo'] == 'placebo':
+                continue
+            freq = adverse_effect['freq']
+            if freq in ['postmarketing', 'rare', 'infrequent', 'potential']:
+                continue
+            elif freq == 'frequent':
+                drug.meddra_frequent_concepts.add(adverse_effect['meddra_concept'])
+            elif '%' in freq:
+                percentage = float(freq.replace('%', ''))
+                if percentage > 5.0:
+                    drug.meddra_frequent_concepts.add(adverse_effect['meddra_concept'])
+            else:
+                print 'Unparsable frequency', freq
+
+
+
+
     
-    def annotate_meddra_codes(self, umls_version='2011AB'):
+    def annotate_meddra_codes(self, umls_version='2011AB', frequency=False):
         drugs = self.pubchem_to_drug.values()
         umls_path = data.version_dir('umls', umls_version)
         meta = metathesaurus.Metathesaurus(umls_path)
         with meta:
             id_to_concept = meta.shelves['concepts']
             for drug in drugs:
-                concept_ids = drug.meddra_concepts
+                concept_ids = drug.meddra_frequent_concepts if frequency else drug.meddra_concepts
                 concepts = set(id_to_concept.get(cui) for cui in concept_ids)
                 concepts.discard(None)
                 codes = set(concept.source_to_code.get('MDR')
@@ -160,7 +196,13 @@ class SIDER(object):
         self.create_drugs()
         self.annotate_meddra_codes()
         return self.get_drugs()
-    
+
+    def get_frequent_meddra_annotated_drugs(self):
+        self.create_drugs()
+        self.annotate_meddra_codes(frequency=True)
+        return self.get_drugs()
+
+
     def get_name_to_drug(self):
         name_to_drug = dict()
         for drug in self.get_drugs():
@@ -170,7 +212,7 @@ class SIDER(object):
 if __name__ == '__main__':
     sider = SIDER()
     sider.create_drugs()
-    sider.annotate_meddra_codes()
+    sider.annotate_meddra_codes(frequency=True)
     for drug in sider.get_drugs():
         if len(drug.meddra_concepts) != len(drug.meddra_codes):
             print drug.name, len(drug.meddra_concepts), len(drug.meddra_codes)
