@@ -196,5 +196,5 @@ if __name__ == '__main__':
     with meta:
         concepts = meta.shelves['concepts']
         print concepts['C0155555']
-  
+    #from bioparser.metathesaurus import Concept
     

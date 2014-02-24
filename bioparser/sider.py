@@ -1,6 +1,7 @@
 import os
 import csv
 import gzip
+import re
 
 
 import data
@@ -20,6 +21,7 @@ class Drug():
         #self.side_effect_names = set()
         self.meddra_concepts = set()
         self.meddra_frequent_concepts = set()
+        self.se_freq_tuples = set() # (umls_concept, label, freq_category, freq_percentage)
 
     def __hash__(self):
         return hash(self.pubchem)
@@ -28,7 +30,7 @@ class Drug():
         return self.pubchem == other.pubchem
         
     def __repr__(self):
-        return str(self.__dict__)
+        return str(self.name)
 
     def get_all_names(self, copy_to_lower=False):
         """Returns a set with all names for the drug available in SIDER."""
@@ -140,7 +142,11 @@ class SIDER(object):
             drug.name = drug_name
             if adverse_effect['meddra_level'] != 'PT':
                 continue
-            drug.meddra_concepts.add(adverse_effect['meddra_concept'])
+            meddra_concept = adverse_effect['meddra_concept']
+            drug.meddra_concepts.add(meddra_concept)
+            drug.se_freq_tuples.add((meddra_concept, 'unknown_label', 'uncategorized', -1.0))
+
+
 
         for adverse_effect in self.read_meddra_freq_parsed():
             flat_id = adverse_effect['stitch_id_flat']
@@ -155,22 +161,42 @@ class SIDER(object):
                 continue
             if adverse_effect['placebo'] == 'placebo':
                 continue
-            freq = adverse_effect['freq']
-            if freq in ['postmarketing', 'rare', 'infrequent', 'potential']:
-                continue
-            elif freq == 'frequent':
-                drug.meddra_frequent_concepts.add(adverse_effect['meddra_concept'])
-            elif '%' in freq:
-                percentage = float(freq.replace('%', ''))
-                if percentage > 5.0:
-                    drug.meddra_frequent_concepts.add(adverse_effect['meddra_concept'])
+
+            category, percentage = SIDER.parse_freq(adverse_effect['freq'])
+            meddra_concept = adverse_effect['meddra_concept']
+            drug.se_freq_tuples.add((meddra_concept, adverse_effect['label_id'], category, percentage))
+            drug.meddra_frequent_concepts.add(meddra_concept)
+
+
+    @staticmethod
+    def parse_freq(value):
+        category = 'uncategorized'
+        percentage = -1.0
+        if value in ['postmarketing', 'rare', 'infrequent', 'potential', 'frequent']:
+            category = value
+        else:
+            match = re.search(r'([.0-9]*)(%|$)', value)
+            if not match:
+                print value
             else:
-                print 'Unparsable frequency', freq
+                percentage = float(match.group(1))
+        return category, percentage
 
+    @staticmethod
+    def cuis_to_mdrs(cuis,  umls_version='2011AB'):
+        umls_path = data.version_dir('umls', umls_version)
+        meta = metathesaurus.Metathesaurus(umls_path)
+        cui_to_mdr = dict()
+        with meta:
+            id_to_concept = meta.shelves['concepts']
+            for cui in cuis:
+                concept = id_to_concept.get(cui)
+                if concept is None:
+                    cui_to_mdr[cui] = None
+                else:
+                    cui_to_mdr[cui] = concept.source_to_code.get('MDR')
+        return cui_to_mdr
 
-
-
-    
     def annotate_meddra_codes(self, umls_version='2011AB', frequency=False):
         drugs = self.pubchem_to_drug.values()
         umls_path = data.version_dir('umls', umls_version)
@@ -187,32 +213,35 @@ class SIDER(object):
                 drug.meddra_codes = codes
         
     def get_drugs(self, exclude_nameless=True):
+        self.create_drugs()
         drugs = self.pubchem_to_drug.values()
         if exclude_nameless:
             drugs = [drug for drug in drugs if drug.name]
         return drugs
-    
-    def get_meddra_annotated_drugs(self):
-        self.create_drugs()
-        self.annotate_meddra_codes()
-        return self.get_drugs()
 
-    def get_frequent_meddra_annotated_drugs(self):
-        self.create_drugs()
-        self.annotate_meddra_codes(frequency=True)
-        return self.get_drugs()
-
+    def get_side_effect_rows(self, require_meddra_code_map=True):
+        drugs = self.get_drugs()
+        rows = list()
+        for drug in drugs:
+            for se_freq_tuple in drug.se_freq_tuples:
+                umls_concept, label, freq_category, freq_percentage = se_freq_tuple
+                row = {'drug': drug, 'umls_concept': umls_concept, 'label': label,
+                       'freq_category': freq_category, 'freq_percentage': freq_percentage}
+                rows.append(row)
+        umls_concepts = {row['umls_concept'] for row in rows}
+        cui_to_mdr = SIDER.cuis_to_mdrs(umls_concepts)
+        for row in rows:
+            row['meddra_code'] = cui_to_mdr[row['umls_concept']]
+        if require_meddra_code_map:
+            rows = filter(lambda row: row['meddra_code'], rows)
+        return rows
 
     def get_name_to_drug(self):
         name_to_drug = dict()
         for drug in self.get_drugs():
             name_to_drug.update(dict.fromkeys(drug.get_all_names(), drug))
-        return name_to_drug()
-        
+        return name_to_drug
+
 if __name__ == '__main__':
     sider = SIDER()
-    sider.create_drugs()
-    sider.annotate_meddra_codes(frequency=True)
-    for drug in sider.get_drugs():
-        if len(drug.meddra_concepts) != len(drug.meddra_codes):
-            print drug.name, len(drug.meddra_concepts), len(drug.meddra_codes)
+    rows = sider.get_side_effect_rows()

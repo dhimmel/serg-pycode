@@ -440,6 +440,15 @@ for ctd_row in ctd.read_gene2disease_filtered():
     tb_gene_medic_ctd.append(row)
 tb_gene_medic_ctd.write()
 
+################################################################################
+############# MSB PREDICT Indications
+tb_drugbank_omim_predict = Table('drugbank_omim_predict', ['drugbank_id', 'omim_id'])
+nature_predict = bioparser.data.Data().nature_predict
+for row in nature_predict.omim_drugbank_mapper():
+    row['drugbank_id'] = drugank_id_to_int(row['drugbank_id'])
+    tb_drugbank_omim_predict.append(row)
+
+
 ###############################################################################
 ### MicroRNA
 mircat = bioparser.data.Data().mircat
@@ -477,7 +486,7 @@ tb_bto_relationship.write()
 
 #########################
 ## GNF Gene Atlas - Gene Expression by Tissue
-tb_gnf = Table('gnf', ['gene_id', 'bto_id', 'expr', 'log_expr'])
+tb_gnf = Table('gnf', ['gene_id', 'bto_id', 'expr', 'log10_expr'])
 for expression in bioparser.data.Data().gnf.expression_generator():
     expression['gene_id'] = expression['gene'].int_id
     tb_gnf.append(expression)
@@ -554,12 +563,10 @@ all_chemical_names = set(all_names_to_chemical_id)
 
 sider = bioparser.data.Data().sider
 add_version('sider', sider.directory)
-sider_drugs = sider.get_meddra_annotated_drugs()
 #name_to_sider_drug = sider.get_name_to_drug
 
-
 sider_mesh_id_tuples = list()
-for drug in sider_drugs:
+for drug in sider.get_drugs():
     drug_name = drug.name
     chemical_id = None
     if drug_name in chemical_names:
@@ -584,12 +591,21 @@ for drug in sider_drugs:
         sider_mesh_id_tuples.append((drug, chemical_id))
     #print drug.name, 'mapped to multiple CTD chemicals:', chemical_ids
 
+sider_drug_to_mesh_id = dict(sider_mesh_id_tuples)
+tb_ctd_side_effect = Table('ctd_side_effect',
+    ['mesh_id', 'umls_id', 'label', 'freq_category_id', 'freq_percentage'])
 
-tb_ctd_side_effect = Table('ctd_side_effect', ['mesh_id', 'umls_id'])
-for sider_drug, mesh_id in sider_mesh_id_tuples:
-    for umls_id in sider_drug.meddra_concepts:
-        row = {'mesh_id': mesh_id, 'umls_id': umls_id}
-        tb_ctd_side_effect.append(row)
+sider_rows = sider.get_side_effect_rows()
+for row in sider_rows:
+    mesh_id = sider_drug_to_mesh_id.get(row['drug'])
+    if not mesh_id:
+        continue
+    row['mesh_id'] = mesh_id
+    row['umls_id'] = row['umls_concept']
+    tb_ctd_side_effect.append(row)
+
+tb_ctd_side_effect_freq_category = factor_table(tb_ctd_side_effect, 'freq_category')
+tb_ctd_side_effect_freq_category.write()
 
 
 # Write holdout tables
@@ -607,6 +623,8 @@ tb_doid_efo_map.write()
 tb_gene_efo_gwas.remove_invalid_references(tb_efo, 'efo_id')
 tb_gene_efo_gwas.write()
 
+tb_drugbank_omim_predict.remove_invalid_references(tb_omim, 'omim_id')
+tb_drugbank_omim_predict.write()
 
 tb_ctd_drugbank_map.remove_invalid_references(tb_drugbank, 'drugbank_id')
 tb_ctd_drugbank_map.write()

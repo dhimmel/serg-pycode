@@ -110,7 +110,7 @@ class Data:
         self.morbid_map = omim.MorbidMap()
         self.msigdb = msigdb.MSigDB()
         #self.omim = omim.OMIM()
-        #self.nature_predict = nature_predict.NaturePredict(source_data_dir('nature-predict'))
+        self.nature_predict = nature_predict.NaturePredict()
         #self.nci = nci_thesaurus.NCIOntology(current_path('nci', path_type='files'))
         self.sider = sider.SIDER()
         self.pdn = pdn.PDN()
