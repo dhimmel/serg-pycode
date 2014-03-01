@@ -630,6 +630,7 @@ tb_ctd_drugbank_map.remove_invalid_references(tb_drugbank, 'drugbank_id')
 tb_ctd_drugbank_map.write()
 
 tb_ctd_side_effect.remove_invalid_references(tb_side_effect, 'umls_id') # meddra version should be changed to SIDER version
+tb_ctd_side_effect.remove_duplicates(tb_ctd_side_effect.fieldnames)
 tb_ctd_side_effect.write()
 
 doc_path = os.path.join(ictnet_dir, 'table_documentation.txt')

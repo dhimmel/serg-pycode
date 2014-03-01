@@ -62,6 +62,14 @@ class DO(obo.OBO):
             doid_to_xrefs[node] = xrefs
         return doid_to_xrefs
 
+    def get_xref_to_doids(self, code, prepend=''):
+        doid_to_xrefs = self.get_doid_to_xrefs(code, prepend)
+        xref_to_doids = dict()
+        for doid, xrefs in doid_to_xrefs.iteritems():
+            for xref in xrefs:
+                xref_to_doids.setdefault(xref, set()).add(doid)
+        return xref_to_doids
+
 
 if __name__ =='__main__':
     do = DO()

@@ -1,0 +1,242 @@
+import os
+import csv
+import collections
+import re
+import logging
+import datetime
+import operator
+
+import data
+
+
+
+class GwasCatalog(object):
+
+    def __init__(self, directory=None):
+        if directory is None:
+            directory = data.current_path('gwas-catalog', require_dated_format=True)
+        self.directory = directory
+
+    def get_catalog_rows(self, path=None):
+        if hasattr(self, 'catalog_rows'):
+            return self.catalog_rows
+
+        if not path:
+            path = os.path.join(self.directory, 'gwascatalog.txt')
+
+        symbol_to_gene = data.Data().hgnc.get_symbol_to_gene()
+
+        # Parsing Parameters
+        rsid_pattern = re.compile(r"rs[0-9]+")
+        gene_split_pattern = re.compile(r"[, ]+")
+        invalid_genes = {'Intergenic', 'NR', 'Pending'}
+        date_format = '%m/%d/%Y'
+
+        read_file = open(path)
+        reader = csv.DictReader(read_file, delimiter='\t')
+        catalog_rows = list()
+        for row in reader:
+            parsed_row = collections.OrderedDict()
+            parsed_row['phenotype'] = row['Disease/Trait']
+            parsed_row['rsids'] = re.findall(rsid_pattern, row['SNPs'])
+            parsed_row['date'] = datetime.datetime.strptime(row['Date'], date_format)
+            reported_symbols = re.split(gene_split_pattern, row['Reported Gene(s)'])
+            reported_genes = {symbol_to_gene.get(symbol)
+                              for symbol in set(reported_symbols) - invalid_genes}
+            reported_genes.discard(None)
+            parsed_row['reported_symbols'] = reported_symbols
+            parsed_row['reported_genes'] = reported_genes
+            parsed_row['pubmed'] = row['PUBMEDID']
+            parsed_row['chromosome'] = row['Chr_id']
+            parsed_row['position'] = None if row['Chr_pos'] == '' else int(row['Chr_pos'])
+            parsed_row['mlog_pval'] = None if row['Pvalue_mlog'] == '' else float(row['Pvalue_mlog'])
+            catalog_rows.append(parsed_row)
+        read_file.close()
+
+        self.catalog_rows = catalog_rows
+        return catalog_rows
+
+
+    def get_filtered_rows(self):
+        if hasattr(self, 'filtered_rows'):
+            return self.filtered_rows()
+
+        mlog_pval_threshold = 8.0
+
+        filtered_rows = list()
+        catalog_rows = self.get_catalog_rows()
+        for catalog_row in catalog_rows:
+            try:
+                catalog_row['rsid'],  = catalog_row['rsids']
+            except ValueError:
+                # association not defined by a single lead SNP
+                continue
+            if catalog_row['mlog_pval'] < mlog_pval_threshold:
+                continue
+            filtered_rows.append(catalog_row)
+
+        self.filtered_rows = filtered_rows
+        return filtered_rows
+
+    def annotate_dapple_genes(self):
+        wingspan_path = os.path.join(self.directory, 'dapple', 'WSinput.txt')
+        with open(wingspan_path) as wingspan_file:
+            fieldnames = 'rsid', 'chromosome', 'lower', 'upper'
+            reader = csv.DictReader(wingspan_file, delimiter='\t', fieldnames=fieldnames)
+            rsid_to_wingspan = {wingspan['rsid']: wingspan for wingspan in reader}
+
+        genelist_path = os.path.join(self.directory, 'dapple', 'genelist.tmp')
+        rsid_to_genes = dict()
+        ensembl_to_gene = data.Data().hgnc.get_ensembl_to_gene()
+        symbol_to_gene = data.Data().hgnc.get_symbol_to_gene()
+        with open(genelist_path) as genelist_file:
+            reader = csv.reader(genelist_file, delimiter='\t')
+            for row in reader:
+                gene = ensembl_to_gene.get(row[1])
+                if not gene:
+                    gene = symbol_to_gene.get(row[11])
+                if not gene:
+                    # cannot map gene to HGNC
+                    continue
+                rsid_to_genes.setdefault(row[17], list()).append(gene)
+
+        for catalog_row in self.get_catalog_rows():
+            try:
+                rsid, = catalog_row['rsids']
+            except ValueError:
+                continue
+            wingspan = rsid_to_wingspan.get(rsid)
+            if not wingspan:
+                continue
+            catalog_row['dapple_wingspan'] = wingspan['lower'], wingspan['upper']
+            catalog_row['dapple_genes'] = rsid_to_genes.get(rsid, list())
+
+    def annotate_efo(self, path=None):
+        """
+        Read the mapping file available at the EBI's GWAS Diagram Browser:
+        http://www.ebi.ac.uk/fgpt/gwas/#downloadstab
+
+        association receives an item with key 'efo_id' only if one efo_id is mapped
+        to the association.
+        """
+        if path is None:
+            file_names = os.listdir(self.directory)
+            file_names = filter(lambda s: re.match(r"GWAS-EFO-Mappings[0-9\-]*\.txt$", s), file_names)
+            file_names.sort()
+            file_name = file_names[-1]
+            path = os.path.join(self.directory, file_name)
+
+        efo_graph = data.Data().efo.get_graph()
+        trait_tuple_to_efo_ids = dict()
+        read_file = open(path)
+        unmatched_efo_terms = set()
+        reader = csv.DictReader(read_file, delimiter='\t')
+        for row in reader:
+            catalog_term = row['DISEASETRAIT']
+            efo_id = row['EFOURI']
+            efo_id = efo_id.rsplit('/', 1)[-1]
+            efo_id = efo_id.replace('rdfns#', '')
+            efo_id = efo_id.replace('CL#', '')
+            efo_id = ':'.join(efo_id.rsplit('_', 1))
+            if efo_id not in efo_graph.node:
+                unmatched_efo_terms.add(efo_id)
+                continue
+            trait_tuple = row['PUBMEDID'], catalog_term
+            trait_tuple_to_efo_ids.setdefault(trait_tuple, list()).append(efo_id)
+        for efo_id in unmatched_efo_terms:
+            logging.warning(efo_id + " from EBI's gwas_catalog_to_EFO_mappings not found in EFO.")
+        read_file.close()
+
+        # Trait tuple is (pubmed_id, trait)
+        trait_tuple_to_rows = dict()
+        for association in self.get_catalog_rows():
+            trait_tuple = association['pubmed'], association['phenotype']
+            trait_tuple_to_rows.setdefault(trait_tuple, list()).append(association)
+
+        for trait_tuple, efo_ids in trait_tuple_to_efo_ids.iteritems():
+            for association in trait_tuple_to_rows.get(trait_tuple, list()):
+                if len(efo_ids) == 1:
+                    association['efo_id'] = efo_ids[0]
+                else:
+                    association['efo_ids'] = efo_ids
+
+    def annotate_doid(self):
+        self.annotate_efo()
+        doid_graph = data.Data().doid.get_graph()
+        efo_to_doid_ids = data.Data().doid.get_xref_to_doids('EFO', 'EFO:')
+        for association in self.get_catalog_rows():
+            efo_id = association.get('efo_id')
+            if not efo_id:
+                continue
+            doid_ids = efo_to_doid_ids.get(efo_id)
+            if not doid_ids:
+                continue
+            if len(doid_ids) > 1:
+                print association, doid_ids
+                continue
+            else:
+                doid_id, = doid_ids
+                association['doid_id'] = doid_id
+                association['doid_name'] = doid_graph.node[doid_id]['name']
+
+
+    def write_all_snps(self):
+        """Write a tab delimited file of SNPs. columns represent rsid and chromosome."""
+        all_snps = set()
+        for row in self.get_catalog_rows():
+            chromosome = row['chromosome']
+            if not chromosome:
+                continue
+            chromosome = int(chromosome)
+            all_snps |= {(snp, chromosome) for snp in row['rsids']}
+        all_snps = sorted(all_snps, key=lambda x: (x[1], x[0]))
+        path = os.path.join(self.directory, 'dapple', 'input_snps.txt')
+        with open(path, 'w') as write_file:
+            write_file.write('\n'.join('{}\t{}'.format(*snp) for snp in all_snps))
+
+    def disease_ontology_table(self):
+        self.annotate_doid()
+        self.annotate_dapple_genes()
+        associations = self.get_filtered_rows()
+        associations = [a for a in associations if a.get('doid_id')]
+        associations = [a for a in associations if a.get('dapple_wingspan')]
+        associations.sort(key=lambda a: (a['mlog_pval'], a['date']))
+        associations.reverse()
+        doid_to_associations = dict()
+        for association in associations:
+            doid_id = association['doid_id']
+            chromosome = association['chromosome']
+            wingspan = association['dapple_wingspan']
+            included_associations = doid_to_associations.setdefault(doid_id, list())
+            add = True
+            for included_association in included_associations:
+                incl_wing = included_association['dapple_wingspan']
+                included_chromosome = included_association['chromosome']
+                if (chromosome == included_chromosome and
+                    (incl_wing[0] <= wingspan[0] and wingspan[0] <= incl_wing[1]) or
+                    (incl_wing[0] <= wingspan[1] and wingspan[1] <= incl_wing[1])):
+                    # overlapping association with greater significance already included
+                    add = False
+                    break
+            if add:
+                included_associations.append(association)
+        return doid_to_associations
+
+        #associations = reduce(operator.add, doid_to_associations.values())
+
+        path = os.path.join(self.directory, 'associations.txt')
+        csv.DictWriter
+
+if __name__ =='__main__':
+    gcat = GwasCatalog()
+    #catalog_rows = gcat.get_catalog_rows()
+    #gcat.annotate_dapple_genes()
+    #filtered_rows = gcat.get_filtered_rows()
+    #sum(int(bool(row.get('dapple_wingspan'))) for row in filtered_rows)
+    #gcat.write_all_snps()
+    doid_to_associations = gcat.disease_ontology_table()
+
+    associations = reduce(operator.add, doid_to_associations.values())
+    print collections.Counter([len(a['reported_genes']) for a in associations])
+    import pprint
+    #pprint.pprint(doid_to_associations['DOID:2377'])

@@ -31,7 +31,7 @@ class NXOntology(object):
     def propogate_annotation(self, node, attribute, element):
         """
         Add element to the node attribute specified by attribute for 
-        the specified node and all of its descencdants. The node attribute
+        the specified node and all of its descendants. The node attribute
         is assumed to be a set.
         """
         descendents = self.get_descendents(node)
@@ -153,8 +153,4 @@ class NXOntology(object):
             metrics['source'] = node_0
             metrics['target'] = node_1
             yield metrics
-        
-        
-        
-        
-        
+

@@ -59,7 +59,8 @@ def parse_obo(path):
                 tag, value = parse_tag_value_pair(line)
                 if tag in singular_stanza_tags:
                     if tag in stanza:
-                        logging.warning('Multiple ' + tag + ' for ' + stanza['id'])
+                        #logging.warning('Multiple ' + tag + ' for ' + stanza['id'])
+                        pass
                     stanza[tag] = value
                 else:
                     stanza.setdefault(tag, list()).append(value)
@@ -80,7 +81,11 @@ def process_stanzas(stanzas):
         if 'xref' in stanza:
             xref_dict = dict()
             for xref in stanza['xref']:
-                key, value = xref.split(':', 1)
+                try:
+                    key, value = xref.split(':', 1)
+                except ValueError:
+                    # invalid cross reference
+                    continue
                 xref_dict.setdefault(key, list()).append(value)
             stanza['xref'] = xref_dict
     return stanzas
