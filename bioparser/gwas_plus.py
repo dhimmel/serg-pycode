@@ -194,7 +194,10 @@ class GwasCatalog(object):
         with open(path, 'w') as write_file:
             write_file.write('\n'.join('{}\t{}'.format(*snp) for snp in all_snps))
 
-    def disease_ontology_table(self):
+    def get_doid_to_associations(self):
+        """association is a list with the first association representing the
+        study reporting the strongest association for that region.
+        """
         self.annotate_doid()
         self.annotate_dapple_genes()
         associations = self.get_filtered_rows()
@@ -210,33 +213,104 @@ class GwasCatalog(object):
             included_associations = doid_to_associations.setdefault(doid_id, list())
             add = True
             for included_association in included_associations:
-                incl_wing = included_association['dapple_wingspan']
-                included_chromosome = included_association['chromosome']
+                incl_wing = included_association[0]['dapple_wingspan']
+                included_chromosome = included_association[0]['chromosome']
                 if (chromosome == included_chromosome and
                     (incl_wing[0] <= wingspan[0] and wingspan[0] <= incl_wing[1]) or
                     (incl_wing[0] <= wingspan[1] and wingspan[1] <= incl_wing[1])):
                     # overlapping association with greater significance already included
                     add = False
+                    included_association.append(association)
                     break
             if add:
-                included_associations.append(association)
-        return doid_to_associations
+                included_associations.append([association])
 
-        #associations = reduce(operator.add, doid_to_associations.values())
+        merged_associations = list()
+        for doid, associations in doid_to_associations.items():
+            for association in associations:
+                gene_counter = collections.Counter()
+                for a in association:
+                    gene_counter.update(a['reported_genes'])
+                minp_reported_genes = association[0]['reported_genes']
+                max_gene_count = max(gene_counter.values() + [0])
+                max_genes = [k for k, v in gene_counter.items() if v == max_gene_count]
+                genes = minp_reported_genes if len(minp_reported_genes) == 1 else max_genes
+                merged = {'doid_code': doid, 'doid_name': association[0]['doid_name'],
+                          'genes': '|'.join(map(str, genes)),
+                          'gene_list': genes,
+                          'gene_counter': gene_counter,
+                          'dapple_genes': '|'.join(map(str, association[0]['dapple_genes'])),
+                          'studies': '|'.join(a['pubmed'] for a in association),
+                          'snps': '|'.join(a['rsid'] for a in association),
+                          'mlog_pvals': '|'.join('{0:.3f}'.format(a['mlog_pval']) for a in association)}
+                if len(genes) == 1:
+                    merged['gene'], = genes
+                merged_associations.append(merged)
 
+        #write files
+        path_singular = os.path.join(self.directory, 'associations-singular.txt')
+        path_multiple = os.path.join(self.directory, 'associations-multiple.txt')
+        fieldnames_singular = ['doid_code', 'doid_name', 'gene', 'dapple_genes', 'studies', 'snps', 'mlog_pvals']
+        fieldnames_multiple = ['doid_code', 'doid_name', 'genes', 'dapple_genes', 'studies', 'snps', 'mlog_pvals']
+        file_singular = open(path_singular, 'w')
+        file_multiple = open(path_multiple, 'w')
+        writer_singular = csv.DictWriter(file_singular, delimiter='\t', fieldnames=fieldnames_singular, extrasaction='ignore')
+        writer_multiple = csv.DictWriter(file_multiple, delimiter='\t', fieldnames=fieldnames_multiple, extrasaction='ignore')
+        writer_singular.writeheader()
+        writer_multiple.writeheader()
+        for merged_association in merged_associations:
+            if 'gene' in merged_association:
+                writer_singular.writerow(merged_association)
+            else:
+                writer_multiple.writerow(merged_association)
+        file_singular.close()
+        file_multiple.close()
+
+        association_tuples = set()
+        for association in merged_associations:
+            if 'gene' not in association:
+                continue
+            gene = association['gene']
+            if gene.locus_group != 'protein-coding gene':
+                continue
+            atup = association['doid_code'], association['doid_name'], association['gene']
+            association_tuples.add(atup)
+
+        association_tuples = sorted(association_tuples)
         path = os.path.join(self.directory, 'associations.txt')
-        csv.DictWriter
+        with open(path, 'w') as write_file:
+            writer = csv.writer(write_file, delimiter='\t')
+            writer.writerow(['doid_code', 'doid_name', 'symbol'])
+            writer.writerows(association_tuples)
+
+        return merged_associations
 
 if __name__ =='__main__':
+    import pprint
     gcat = GwasCatalog()
     #catalog_rows = gcat.get_catalog_rows()
     #gcat.annotate_dapple_genes()
     #filtered_rows = gcat.get_filtered_rows()
     #sum(int(bool(row.get('dapple_wingspan'))) for row in filtered_rows)
     #gcat.write_all_snps()
-    doid_to_associations = gcat.disease_ontology_table()
+    merged_associations = gcat.get_doid_to_associations()
+    disease_to_genes = dict()
+    for a in merged_associations:
+        genes = a['gene_list']
+        if not len(genes) == 1:
+            continue
+        gene, = genes
+        if gene.locus_group != 'protein-coding gene':
+            print 'Noncoding', gene
+            continue
+        disease_to_genes.setdefault(a['doid_name'], set()).add(gene)
+    pprint.pprint(disease_to_genes)
 
-    associations = reduce(operator.add, doid_to_associations.values())
-    print collections.Counter([len(a['reported_genes']) for a in associations])
+
+
+
+
+    #associations = reduce(operator.add, doid_to_associations.values())
+    #print collections.Counter([len(a['reported_genes']) for a in associations])
     import pprint
     #pprint.pprint(doid_to_associations['DOID:2377'])

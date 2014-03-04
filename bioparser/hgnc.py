@@ -17,7 +17,7 @@ class Gene(object):
         return self.symbol == other.symbol
     
     def __str__(self):
-        return 'HUGU Gene: ' + self.symbol
+        return self.symbol
 
     def __repr__(self):
         return self.symbol    

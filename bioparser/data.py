@@ -13,6 +13,7 @@ import etiome
 import frimp
 import gnf
 import gwas_catalog
+import gwas_plus
 import hgnc
 import ipa
 import iref
@@ -100,6 +101,7 @@ class Data:
         self.frimp = frimp.IMP()
         self.gnf = gnf.GNF()
         self.gwas_catalog = gwas_catalog.GwasCatalog()
+        self.gwas_plus = gwas_plus.GwasCatalog()
         self.hgnc = hgnc.HGNC()
         self.iref = iref.iRefIndex()
         self.ipa = ipa.IPA()

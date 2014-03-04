@@ -42,7 +42,9 @@ def create_graph():
     # Add genes from HGNC
     logging.info('Adding HGNC gene nodes.')
     for gene in data.hgnc.get_genes():
-        node_data = {'name': gene.name, 'locus_group': gene.locus_group}
+        if gene.locus_group != 'protein-coding gene':
+            continue
+        node_data = {'name': gene.name}
         graph.add_node(gene.symbol, 'gene', node_data)
     
     # Add tissues from BTO
@@ -61,25 +63,15 @@ def create_graph():
 
     # Add (disease, gene, association, both) edges
     logging.info('Adding GWAS catalog disease-gene associations.')
-    coding_only = True
-    exclude_pmids = set() #{'21833088'}
-    fdr_cutoff = 0.05
-    mapped_term_cutoff = 1
-    logging.info('coding genes only: {}'.format(coding_only))
-    logging.info('excluding pmids: {}'.format(exclude_pmids))
-    logging.info('fdr_cutoff: {}'.format(fdr_cutoff))
-    logging.info('mapped_term_cutoff: {}'.format(mapped_term_cutoff))
-    doid_id_to_genes = data.gwas_catalog.get_doid_id_to_genes(
-        coding=coding_only,
-        fdr_cutoff=fdr_cutoff,
-        mapped_term_cutoff=mapped_term_cutoff,
-        exclude_pmids=exclude_pmids)
-    for doid_id, genes in doid_id_to_genes.iteritems():
-        for gene in genes:
-            symbol = gene.symbol
-            graph.add_edge(doid_id, symbol, 'association', 'both')
-    doids_with_associations = [doid_id for doid_id, genes in
-                               doid_id_to_genes.iteritems() if len(genes) > 0]
+    associations_path = os.path.join(data.gwas_plus.directory, 'associations.txt')
+    associations_file = open(associations_path)
+    associations_reader = csv.DictReader(associations_file, delimiter='\t')
+    doids_with_associations = set()
+    for association in associations_reader:
+        doid_code = association['doid_code']
+        graph.add_edge(doid_code, association['symbol'], 'association', 'both')
+        doids_with_associations.add(doid_code)
+    associations_file.close()
 
     # Add (disease, disease, similarity, both)
     logging.info('Adding Intrinsic Semantic Similarity disease-disease edges.')
@@ -112,6 +104,8 @@ def create_graph():
     logging.info('log10_expression_cutoff: {}'.format(log10_expr_cutoff))
     expressions = data.gnf.expression_generator()
     for expression in expressions:
+        if expression['gene'].locus_group != 'protein-coding gene':
+            continue
         if expression['log10_expr'] < log10_expr_cutoff:
             continue
         edge_data = {'log10_expr': expression['log10_expr']}
@@ -126,8 +120,10 @@ def create_graph():
         edge_data = {k: v for k, v in interaction.items() if k in edge_keys}
         source = interaction['source'].symbol
         target = interaction['target'].symbol
-        graph.add_edge(source, target, 'interaction', 'both', edge_data)
-
+        try:
+            graph.add_edge(source, target, 'interaction', 'both', edge_data)
+        except KeyError:
+            pass
 
     # (gene, gene, function) information
     logging.info('Adding IMP gene-gene relationships.')
@@ -149,8 +145,10 @@ def create_graph():
             prob_cutoff = probability_cutoff)
     for symbol_a, symbol_b, prob in relationships:
         edge_data = {'probability': prob}
-        graph.add_edge(symbol_a, symbol_b, 'function', 'both', edge_data)
-
+        try:
+            graph.add_edge(symbol_a, symbol_b, 'function', 'both', edge_data)
+        except KeyError:
+            pass
 
     # Add (disease, tissue, cooccurrence, both)
     logging.info('Adding CoPub disease-tissue cooccurrence.')
@@ -166,7 +164,6 @@ def create_graph():
         edge_data = {'r_scaled': r_scaled}
         graph.add_edge(doid_id, bto_id, 'cooccurrence', 'both', edge_data)
 
-
     # Add MSigDB gene sets
     for set_type in msig_set_types:
         for name, description, genes in msigdb.gene_set_generator(set_type):
@@ -174,7 +171,10 @@ def create_graph():
             node_data = {'description': description}
             graph.add_node(unique_name, set_type, node_data)
             for gene in genes:
-                graph.add_edge(gene.symbol, unique_name, 'membership', 'both')
+                try:
+                    graph.add_edge(gene.symbol, unique_name, 'membership', 'both')
+                except KeyError:
+                    pass
 
     # Print metanode counter
     logging.info('MetaNode Counts')
@@ -199,7 +199,7 @@ if __name__ == '__main__':
     # Parse the arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--network-dir', type=os.path.expanduser, default=
-        '~/Documents/serg/ashg13/140205-parsweep')
+        '~/Documents/serg/ashg13/140302-parsweep')
     parser.add_argument('--config', action='store_true')
     parser.add_argument('--create', action='store_true')
     args = parser.parse_args()
