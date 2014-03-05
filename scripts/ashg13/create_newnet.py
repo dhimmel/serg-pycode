@@ -62,6 +62,7 @@ def create_graph():
         graph.add_node(doid_id, 'disease', node_data)
 
     # Add (disease, gene, association, both) edges
+    exclude_doids = {'DOID:0050589', 'DOID:2914'} # IBD and immune system disease
     logging.info('Adding GWAS catalog disease-gene associations.')
     associations_path = os.path.join(data.gwas_plus.directory, 'associations.txt')
     associations_file = open(associations_path)
@@ -69,6 +70,8 @@ def create_graph():
     doids_with_associations = set()
     for association in associations_reader:
         doid_code = association['doid_code']
+        if doid_code in exclude_doids:
+            continue
         graph.add_edge(doid_code, association['symbol'], 'association', 'both')
         doids_with_associations.add(doid_code)
     associations_file.close()
@@ -125,7 +128,7 @@ def create_graph():
         except KeyError:
             pass
 
-    # (gene, gene, function) information
+    # (gene, gene, function, both) information
     logging.info('Adding IMP gene-gene relationships.')
     processed_file = None #'positives_and_predictions_0.5'
     include_positives = True
@@ -157,6 +160,8 @@ def create_graph():
     coocc_gen = copub_analysis.doid_bto_cooccurrence_generator()
     for row in coocc_gen:
         doid_id = row['doid_id']
+        if doid_id not in doids_with_associations:
+            continue
         bto_id = row['bto_id']
         r_scaled = row['r_scaled']
         if r_scaled < r_scaled_cutoff:

@@ -283,6 +283,17 @@ class GwasCatalog(object):
             writer.writerow(['doid_code', 'doid_name', 'symbol'])
             writer.writerows(association_tuples)
 
+        path = os.path.join(self.directory, 'associations-per-disease.txt')
+        disease_counter = collections.Counter((a[0], a[1]) for a in association_tuples)
+        counts = list()
+        for (code, name), count in disease_counter.items():
+            counts.append([code, name, count])
+        counts.sort(key=lambda x: -x[2])
+        with open(path, 'w') as write_file:
+            writer = csv.writer(write_file, delimiter='\t')
+            writer.writerow(['doid_code', 'doid_name', 'count'])
+            writer.writerows(counts)
+
         return merged_associations
 
 if __name__ =='__main__':
