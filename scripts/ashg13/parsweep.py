@@ -16,14 +16,6 @@ graph = graph_agent.get()
 print 'graph loaded'
 metagraph = graph.metagraph
 
-# MetaEdgeAgent
-
-
-metric = collections.OrderedDict()
-damping_exponent = 0.5
-metric['name'] = 'DWPC_{}'.format(damping_exponent)
-metric['algorithm'] = 'DWPC'
-metric['arguments'] = {'damping_exponent': damping_exponent}
 
 metaedge_GaD = metagraph.get_edge(('gene', 'disease', 'association', 'both'))
 metaedge_DaG = metaedge_GaD.inverse
@@ -34,7 +26,6 @@ metaedge_GeT = metagraph.get_edge(('gene', 'tissue', 'expression', 'both'))
 metaedge_TeG = metaedge_GeT.inverse
 metaedge_TcD = metagraph.get_edge(('tissue', 'disease', 'cooccurrence', 'both'))
 metaedge_DcT = metaedge_TcD.inverse
-
 
 
 # (disease, disease, similarity, both)
@@ -59,17 +50,20 @@ r_scaled_thresholds = [15, 20, 25, 30, 35, 40, 45]
 metanode_to_nodes = graph.get_metanode_to_nodes()
 genes = metanode_to_nodes[metaedge_GaD.source]
 diseases = metanode_to_nodes[metaedge_GaD.target]
+for node_list in genes, diseases:
+    node_list.sort(key=lambda node: node.id_)
+
 diseases_10plus = [disease for disease in diseases if len(disease.get_edges(metaedge_DaG)) >= 10]
 disease_gene_pairs = list(itertools.product(diseases_10plus, genes))
-#disease_gene_pairs = disease_gene_pairs[:2]
-#gene_disease_edges = [graph.edge_dict[(gene.id_, disease.id_, 'association', 'both')]
-#                      for disease, gene in disease_gene_pairs]
+
+
+def get_gte_mask(key, threshold):
+    return lambda edge_data: edge_data[key] >= threshold
 
 #DsD
 features = list()
 for lin_threshold in lin_thresholds:
-    mask = lambda edge_data: edge_data['lin_similarity'] >= lin_threshold
-
+    mask = get_gte_mask('lin_similarity', lin_threshold)
     feature = dict()
     feature['metapath'] = metapath_GaDsD
     feature['metaedge_to_mask'] = {metaedge_DsD: mask}
@@ -84,7 +78,7 @@ for lin_threshold in lin_thresholds:
 
 #GfG
 for probability_threshold in probability_thresholds:
-    mask = lambda edge_data: edge_data['probability'] >= probability_threshold
+    mask = get_gte_mask('probability', probability_threshold)
 
     feature = dict()
     feature['metapath'] = metapath_GfGaD
@@ -100,7 +94,7 @@ for probability_threshold in probability_thresholds:
 
 #GeT
 for log10_expr_threshold in log10_expr_thresholds:
-    mask = lambda edge_data: edge_data['log10_expr'] >= log10_expr_threshold
+    mask = get_gte_mask('log10_expr', log10_expr_threshold)
     feature = dict()
     feature['metapath'] = metapath_GeTeGaD
     feature['metaedge_to_mask'] = {metaedge_GeT: mask, metaedge_TeG: mask}
@@ -109,7 +103,7 @@ for log10_expr_threshold in log10_expr_thresholds:
 
 #DcT
 for r_scaled_threshold in r_scaled_thresholds:
-    mask = lambda edge_data: edge_data['r_scaled'] >= r_scaled_threshold
+    mask = get_gte_mask('r_scaled', r_scaled_threshold)
     feature = dict()
     feature['metapath'] = metapath_GaDcTcD
     feature['metaedge_to_mask'] = {metaedge_DcT: mask, metaedge_TcD: mask}
@@ -118,8 +112,8 @@ for r_scaled_threshold in r_scaled_thresholds:
 
 #GeT and TcD
 for log10_expr_threshold, r_scaled_threshold in itertools.product(log10_expr_thresholds, r_scaled_thresholds):
-    mask_GeT = lambda edge_data: edge_data['log10_expr'] >= log10_expr_threshold
-    mask_TcD = lambda edge_data: edge_data['r_scaled'] >= r_scaled_threshold
+    mask_GeT = get_gte_mask('log10_expr', log10_expr_threshold)
+    mask_TcD = get_gte_mask('r_scaled', r_scaled_threshold)
     feature = dict()
     feature['metapath'] = metapath_GeTcD
     feature['metaedge_to_mask'] = {metaedge_GeT: mask_GeT, metaedge_TcD: mask_TcD}
