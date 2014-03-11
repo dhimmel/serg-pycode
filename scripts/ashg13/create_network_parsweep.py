@@ -78,10 +78,11 @@ def create_graph():
 
     # Add (disease, disease, similarity, both)
     logging.info('Adding Intrinsic Semantic Similarity disease-disease edges.')
-    lin_cutoff = 0.1
+    lin_cutoff = 0.0
     logging.info('lin_cutoff: {}'.format(lin_cutoff))
     similarity_generator = doid_onto.pairwise_similarities(doids_with_associations)
-    for similarity in similarity_generator:
+    similarities = list(similarity_generator)
+    for similarity in similarities:
         lin_similarity = similarity['lin_similarity']
         if lin_similarity < lin_cutoff:
             continue
@@ -103,7 +104,7 @@ def create_graph():
 
     # Add (gene, tissue, expression, both) edges
     logging.info('Adding GNF gene-tissue expression.')
-    log10_expr_cutoff = 1.0
+    log10_expr_cutoff = 0.5
     logging.info('log10_expression_cutoff: {}'.format(log10_expr_cutoff))
     expressions = data.gnf.expression_generator()
     for expression in expressions:
@@ -155,7 +156,7 @@ def create_graph():
 
     # Add (disease, tissue, cooccurrence, both)
     logging.info('Adding CoPub disease-tissue cooccurrence.')
-    r_scaled_cutoff = 15
+    r_scaled_cutoff = 10
     logging.info('r_scaled_cutoff: {}'.format(r_scaled_cutoff))
     coocc_gen = copub_analysis.doid_bto_cooccurrence_generator()
     for row in coocc_gen:
@@ -204,7 +205,7 @@ if __name__ == '__main__':
     # Parse the arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--network-dir', type=os.path.expanduser, default=
-        '~/Documents/serg/ashg13/140302-parsweep')
+        '~/Documents/serg/ashg13/140310-parsweep')
     parser.add_argument('--config', action='store_true')
     parser.add_argument('--create', action='store_true')
     args = parser.parse_args()

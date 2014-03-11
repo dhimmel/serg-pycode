@@ -12,11 +12,11 @@ import pandas.io.parsers
 network_dir = '/home/dhimmels/Documents/serg/ashg13/140302-parsweep'
 
 
-feature_path = os.path.join(network_dir, 'features-corrupt.txt.gz')
+feature_path = os.path.join(network_dir, 'features-subset-fine.txt.gz')
 feature_df = pandas.io.parsers.read_table(feature_path, compression='gzip')
 
 column_names = feature_df.columns.values.tolist()
-feature_names = column_names[5:]
+feature_names = column_names[4:]
 
 
 grouped = list(feature_df.groupby('target'))
@@ -45,7 +45,7 @@ for feature_name in feature_names:
         y_score = group[feature_name]
         group_aucs.append(sklearn.metrics.roc_auc_score(y_true, y_score))
         group_positives.append(sum(y_true))
-    feature['auc_grouped'] = numpy.average(group_aucs, weights=group_positives)
+    feature['auc_grouped'] = numpy.average(group_aucs)
     feature['auc_grouped_weighted'] = numpy.average(group_aucs, weights=group_positives)
 
 fieldnames = ['name', 'metapath', 'auc_global', 'auc_grouped', 'auc_grouped_weighted'] + list(metaedges)
