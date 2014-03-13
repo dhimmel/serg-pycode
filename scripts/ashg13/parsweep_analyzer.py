@@ -12,7 +12,7 @@ import pandas.io.parsers
 network_dir = '/home/dhimmels/Documents/serg/ashg13/140302-parsweep'
 
 
-feature_path = os.path.join(network_dir, 'features-subset-fine.txt.gz')
+feature_path = os.path.join(network_dir, 'features-subset-fine-2percent.txt.gz')
 feature_df = pandas.io.parsers.read_table(feature_path, compression='gzip')
 
 column_names = feature_df.columns.values.tolist()
@@ -28,7 +28,6 @@ for feature_name in feature_names:
     split_feature = feature_name.split('_')
     metapath = split_feature[0]
     thresholds = [tuple(threshold.split('=')) for threshold in split_feature[1:]]
-    #metaedges |= {threshold[0] for threshold in thresholds}
     feature = {'name': feature_name, 'metapath': metapath}
     features.append(feature)
     for metaedge, value in thresholds:

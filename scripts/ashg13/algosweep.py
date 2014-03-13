@@ -45,22 +45,25 @@ feature_names = ['{}:{}'.format(metric['name'], metapath)
     for metric, metapath in itertools.product(metrics, metapaths)]
 fieldnames = ['source', 'target', 'target_name', 'status'] + feature_names
 
-feature_path = os.path.join(network_dir, 'features.txt.gz')
+feature_path = os.path.join(network_dir, 'features-edge-exclusions.txt.gz')
 feature_file = gzip.open(feature_path, 'w')
 
 writer = csv.DictWriter(feature_file, delimiter='\t', fieldnames=fieldnames)
 writer.writeheader()
 
 for i, (disease, gene) in enumerate(disease_gene_pairs):
-    results = hetnet.algorithms.features_betweens(graph, gene, disease, metapaths, metrics)
+    edge = graph.edge_dict.get((gene.id_, disease.id_, 'association', 'both'))
+    status = 1 if edge else 0
+    exclude_edges = {edge, edge.inverse} if status else set()
+    results = hetnet.algorithms.features_betweens(graph, gene,
+        disease, metapaths, metrics, exclude_edges=exclude_edges)
     results['source'] = gene
     results['target'] = disease
     results['target_name'] = disease.data['name']
-    results['status'] = int((gene.id_, disease.id_, 'association', 'both') in graph.edge_dict)
+    results['status'] = status
+
     percent = 100.0 * i / total_edges
     writer.writerow(results)
     print '{:.1f}% -  {:10}{}'.format(percent, gene, results['target_name'])
 
 feature_file.close()
-
-

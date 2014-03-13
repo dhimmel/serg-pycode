@@ -34,25 +34,21 @@ metaedge_DcT = metaedge_TcD.inverse
 # (disease, disease, similarity, both)
 metapath_GaDsD = metagraph.get_metapath((metaedge_GaD, metaedge_DsD))
 metapath_GaDsDsD = metagraph.get_metapath((metaedge_GaD, metaedge_DsD, metaedge_DsD))
-#lin_thresholds = [0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5]
-lin_thresholds = utilities.floats.sequence(0.1, 0.5, 0.02)
+lin_thresholds = utilities.floats.sequence(0.0, 0.5, 0.01)
 
 # (gene, gene, function, both) information
 metapath_GfGaD = metagraph.get_metapath((metaedge_GfG, metaedge_GaD))
 metapath_GfGfGaD = metagraph.get_metapath((metaedge_GfG, metaedge_GfG, metaedge_GaD))
-#probability_thresholds = [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 probability_thresholds = utilities.floats.sequence(0.2, 1.0, 0.05)
 
 # (gene, tissue, expression, both)
 metapath_GeTeGaD = metagraph.get_metapath((metaedge_GeT, metaedge_TeG, metaedge_GaD))
 metapath_GeTcD = metagraph.get_metapath((metaedge_GeT, metaedge_TcD))
-#log10_expr_thresholds = [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0]
-log10_expr_thresholds = utilities.floats.sequence(1.0, 4.0, 0.2)
+log10_expr_thresholds = utilities.floats.sequence(0.5, 4.0, 0.1)
 
 # Add (disease, tissue, cooccurrence, both)
 metapath_GaDcTcD = metagraph.get_metapath((metaedge_GaD, metaedge_DcT, metaedge_TcD))
-#r_scaled_thresholds = [15, 20, 25, 30, 35, 40, 45]
-r_scaled_thresholds = utilities.floats.sequence(15, 45, 1)
+r_scaled_thresholds = utilities.floats.sequence(10, 45, 1)
 
 metanode_to_nodes = graph.get_metanode_to_nodes()
 genes = metanode_to_nodes[metaedge_GaD.source]
@@ -68,8 +64,7 @@ dgs_tuples = [
     for disease, gene in disease_gene_pairs]
 
 random.seed(0)
-dgs_tuples = [(d, g, s) for d, g, s in dgs_tuples if s or random.random() < 0.01]
-#dgs_tuples = [(d, g, s) for d, g, s in dgs_tuples]
+dgs_tuples = [(d, g, s) for d, g, s in dgs_tuples if s or random.random() < 0.025]
 
 def get_gte_mask(key, threshold):
     return lambda edge_data: edge_data[key] >= threshold
@@ -148,8 +143,13 @@ for feature_index, feature in enumerate(features):
                 edge.mask()
     print feature['name']
     for edge_index, (disease, gene, status) in enumerate(dgs_tuples):
+        if status:
+            edge = graph.edge_dict[(gene.id_, disease.id_, 'association', 'both')]
+            exclude_edges = {edge, edge.inverse}
+        else:
+            exclude_edges = set()
         paths = graph.paths_between_tree(gene, disease, feature['metapath'],
-            duplicates=False, masked=False, exclude_nodes={}, exclude_edges={})
+            duplicates=False, masked=False, exclude_nodes=set(), exclude_edges=exclude_edges)
         dwpc = hetnet.algorithms.DWPC({'paths_st': paths}, damping_exponent=0.5)
         feature_array[edge_index][feature_index] = dwpc
 
@@ -233,7 +233,7 @@ dgs_tuples = [
     for disease, gene in disease_gene_pairs]
 
 random.seed(0)
-dgs_tuples = [(d, g, s) for d, g, s in dgs_tuples if s or random.random() < 0.05]
+dgs_tuples = [(d, g, s) for d, g, s in dgs_tuples if s or random.random() < 0.025]
 #dgs_tuples = [(d, g, s) for d, g, s in dgs_tuples]
 
 def get_gte_mask(key, threshold):
@@ -318,7 +318,7 @@ for feature_index, feature in enumerate(features):
         dwpc = hetnet.algorithms.DWPC({'paths_st': paths}, damping_exponent=0.5)
         feature_array[edge_index][feature_index] = dwpc
 
-feature_path = os.path.join(network_dir, 'features-5percent.txt.gz')
+feature_path = os.path.join(network_dir, 'features-2.5percent.txt.gz')
 feature_file = gzip.open(feature_path, 'w')
 fieldnames = ['source', 'target', 'target_name', 'status'] + [f['name'] for f in features]
 feature_file.write('\t'.join(fieldnames))
