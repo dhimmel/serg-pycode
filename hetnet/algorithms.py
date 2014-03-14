@@ -7,30 +7,17 @@ import hetnet
 import hetnet.agents
 
         
-def path_degree_product(path, damping_exponent, exclude_masked=True):
+def path_degree_product(path, damping_exponent, exclude_edges=set(), exclude_masked=True):
     """ """
-    degrees = list()
-    for edge in path:
-        source_degree = len(edge.source.get_edges(edge.metaedge, exclude_masked))
-        target_degree = len(edge.target.get_edges(edge.metaedge.inverse, exclude_masked))
-        degrees.append(source_degree)
-        degrees.append(target_degree)
-
-    damped_degrees = [degree ** damping_exponent for degree in degrees]
-    degree_product = reduce(operator.mul, damped_degrees)
-    return degree_product
-
-def edge_weighted_path_degree_product(path, damping_exponent, exclude_masked=True):
-    """
-    http://en.wikipedia.org/wiki/Poisson_binomial_distribution
-    """
-    raise Exception
     degrees = list()
     for edge in path:
         source_edges = edge.source.get_edges(edge.metaedge, exclude_masked)
         target_edges = edge.target.get_edges(edge.metaedge.inverse, exclude_masked)
-        source_degree = sum(e.data['probability'] for e in source_edges)
-        target_degree = sum(e.data['probability'] for e in target_edges)
+        if exclude_edges:
+            source_edges -= exclude_edges
+            target_edges -= exclude_edges
+        source_degree = len(source_edges)
+        target_degree = len(target_edges)
         degrees.append(source_degree)
         degrees.append(target_degree)
 
@@ -38,145 +25,78 @@ def edge_weighted_path_degree_product(path, damping_exponent, exclude_masked=Tru
     degree_product = reduce(operator.mul, damped_degrees)
     return degree_product
 
-def PCs(paths):
-    return len(paths['paths_s'])
+def PCs(paths_s):
+    return len(paths_s)
 
-def PCt(paths):
-    return len(paths['paths_t'])
+def PCt(paths_t):
+    return len(paths_t)
 
 def PC(paths):
-    return len(paths['paths_st'])
+    return len(paths)
 
-def NPC(paths):
-    denom = len(paths['paths_s']) + len(paths['paths_t'])
+def NPC(paths_s, paths_t):
+    if len(paths_t) == 0:
+        paths = list()
+    else:
+        target = paths_t[0].source()
+        paths = [path for path in paths_s if path.target() == target]
+    denom = len(paths_s) + len(paths_t)
     if denom:
-        return 2.0 * len(paths['paths_st']) / denom
+        return 2.0 * len(paths) / denom
     else:
         return None
 
-def DWPC(paths, damping_exponent):
-    paths = paths['paths_st']
-    degree_products = (path_degree_product(path, damping_exponent) for path in paths)
+def DWPC(paths, damping_exponent, exclude_edges=set(), exclude_masked=True):
+    degree_products = (path_degree_product(path, damping_exponent, exclude_edges=exclude_edges, exclude_masked=exclude_masked) for path in paths)
     path_weights = (1.0 / degree_product for degree_product in degree_products)
     dwpc = sum(path_weights)
     return dwpc
 
-def PWPC(paths, probability_key='probability'):
-    """
-    probability weighted path count
-    """
-    paths = paths['paths_st']
-    path_probs = list()
-    for path in paths:
-        probabilities = [edge.data[probability_key] for edge in path]
-        path_probs.append(reduce(operator.mul, probabilities))
-    pwpc = sum(path_probs)
-    return pwpc
-
-
-algorithm_to_path_types = {
-    'PCs': {'paths_s'},
-    'PCt': {'paths_t'},
-    'PC': {'paths_st'},
-    'NPC': {'paths_st', 'paths_s', 'paths_t'},
-    'DWPC': {'paths_st'},
-    'PWPC': {'paths_st'}}
-
-algorithm_to_function = {
-    'PCs': PCs,
-    'PCt': PCt,
-    'PC': PC,
-    'NPC': NPC,
-    'DWPC': DWPC,
-    'PWPC': PWPC}
-    
-
-def features_betweens(graph, source, target, metapaths, features, duplicates=False, masked=False, exclude_nodes=set(), exclude_edges=set()):
-    results = collections.OrderedDict()
-    for metapath in metapaths:
-        feature_dict = features_between(graph, source, target, metapath, features, duplicates, masked, exclude_nodes, exclude_edges)
-        for name, value in feature_dict.iteritems():
-            key = '{}:{}'.format(name, metapath)
-            results[key] = value
-    return results
-
-def features_between(graph, source, target, metapath, features,
-                     duplicates, masked, exclude_nodes, exclude_edges):
-    path_types = set()
-    
-    for feature in features:
-        algorithm = feature['algorithm']
-        path_types |= algorithm_to_path_types[algorithm]
-        
-    paths = paths_between(graph, source, target, metapath, path_types, duplicates, masked, exclude_nodes, exclude_edges)
-    
-    results = collections.OrderedDict()
-    for feature in features:
-        function = algorithm_to_function[feature['algorithm']]
-        results[feature['name']] = function(paths, **feature['arguments'])
-    return results
-
-def paths_between(graph, source, target, metapath, path_types, duplicates, masked, exclude_nodes, exclude_edges):
-    paths = dict()
-    
-    if 'paths_s' in path_types:
-        paths['paths_s'] = graph.paths_from(source, metapath, duplicates, masked, exclude_nodes, exclude_edges)
-        
-    if 'paths_t' in path_types:
-        paths['paths_t'] = graph.paths_from(target, metapath.inverse, duplicates, masked, exclude_nodes, exclude_edges)
-    
-    if 'paths_st' in path_types:
-        
-        if 'paths_s' in path_types:
-            paths['paths_st'] = [path for path in paths['paths_s'] if path.target() == target]
-            
-        elif 'paths_t' in path_types:
-            paths_ts = [path for path in paths['paths_t'] if path.target() == source]
-            paths['paths_st'] = [hetnet.Path(path.inverse_edges) for path in paths_ts]
-            
-        else:
-            paths['paths_st'] = graph.paths_between_tree(source, target, metapath, duplicates, masked, exclude_nodes, exclude_edges)
-
-    return paths
-
-def get_features():
+def get_metrics():
     """ """
-    features = list()
-    
-    feature = collections.OrderedDict()
-    feature['name'] = 'PC'
-    feature['algorithm'] = 'PC'
-    feature['arguments'] = dict()
-    features.append(feature)
+    metrics = list()
 
-    feature = collections.OrderedDict()
-    feature['name'] = 'PCs'
-    feature['algorithm'] = 'PCs'
-    feature['arguments'] = dict()
-    features.append(feature)
+    metric = collections.OrderedDict()
+    metric['name'] = 'PC'
+    metric['fxn'] = PC
+    metric['algorithm'] = 'PC'
+    metric['arguments'] = {'paths': None}
+    metrics.append(metric)
 
-    feature = collections.OrderedDict()
-    feature['name'] = 'PCt'
-    feature['algorithm'] = 'PCt'
-    feature['arguments'] = dict()
-    features.append(feature)
+    metric = collections.OrderedDict()
+    metric['name'] = 'PCs'
+    metric['fxn'] = PCs
+    metric['algorithm'] = 'PCs'
+    metric['arguments'] = {'paths_s': None}
+    metrics.append(metric)
 
-    feature = collections.OrderedDict()
-    feature['name'] = 'NPC'
-    feature['algorithm'] = 'NPC'
-    feature['arguments'] = dict()
-    features.append(feature)
-    
+    metric = collections.OrderedDict()
+    metric['name'] = 'PCt'
+    metric['algorithm'] = 'PCt'
+    metric['fxn'] = PCt
+    metric['arguments'] = {'paths_t': None}
+    metrics.append(metric)
+
+    metric = collections.OrderedDict()
+    metric['name'] = 'NPC'
+    metric['algorithm'] = 'NPC'
+    metric['fxn'] = NPC
+    metric['arguments'] = {'paths_s': None, 'paths_t': None}
+    metrics.append(metric)
+
     dwpc_exponents = [x / 10.0 for x in range(0, 11)]
     for damping_exponent in dwpc_exponents:
-        feature = collections.OrderedDict()
-        feature['name'] = 'DWPC_{}'.format(damping_exponent)
-        feature['algorithm'] = 'DWPC'
-        feature['arguments'] = {'damping_exponent': damping_exponent}
-        features.append(feature)
-    
-    return features
-    
+        metric = collections.OrderedDict()
+        metric['name'] = 'DWPC_{}'.format(damping_exponent)
+        metric['algorithm'] = 'DWPC'
+        metric['fxn'] = DWPC
+        metric['arguments'] = {'paths': None, 'damping_exponent': damping_exponent, 'exclude_edges': None}
+        metrics.append(metric)
+
+    return metrics
+
+
+
 
 def create_example_graph():
     
@@ -202,7 +122,7 @@ def create_example_graph():
     graph.add_edge('IL17', 'brain', 'expression', 'both')
     graph.add_edge('IL17', 'BRCA1', 'transcription', 'backward')
     return graph
-    
+
 
 def matched_negatives(positives, source_negatives=1, target_negatives=1, seed=0):
     """ positives is a list of edges"""

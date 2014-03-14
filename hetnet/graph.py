@@ -60,6 +60,9 @@ class BaseNode(ElemMask):
     def __hash__(self):
         return hash(self.id_)
 
+    def __lt__(self, other):
+        return self.id_ < other.id_
+
     def __eq__(self, other):
         return self.id_ == other.id_
 
@@ -628,13 +631,15 @@ class Node(BaseNode):
         self.edges = {metaedge: set() for metaedge in metanode.edges}
 
     def get_edges(self, metaedge, exclude_masked=True):
-        
+        """
+        Returns the set of edges incident to self of the specified metaedge.
+        """
         if exclude_masked:
-            edges = list()
+            edges = set()
             for edge in self.edges[metaedge]:
                 if edge.masked or edge.target.masked:
                     continue
-                edges.append(edge)
+                edges.add(edge)
         else:
             edges = self.edges[metaedge]
         return edges

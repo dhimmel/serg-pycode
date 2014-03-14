@@ -12,9 +12,7 @@ import bioparser.gxa
 import bioparser.data
 import hetnet
 import hetnet.agents
-
-import copub_analysis
-import mappings
+from scripts.gene_disease_hetnet.data_integration import copub_analysis
 
 
 
@@ -205,7 +203,7 @@ if __name__ == '__main__':
     # Parse the arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--network-dir', type=os.path.expanduser, default=
-        '~/Documents/serg/ashg13/140310-parsweep')
+        '~/Documents/serg/gene-disease-hetnet/networks/140313-thresholdsweep')
     parser.add_argument('--config', action='store_true')
     parser.add_argument('--create', action='store_true')
     args = parser.parse_args()

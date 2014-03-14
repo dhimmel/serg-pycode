@@ -38,5 +38,4 @@ for damping_exponent in [0.1 * x for x in range(11)]:
 
 feature_array = numpy.array(feature_df[5:])
 
-column_names[]
-feature_dfvalues
+

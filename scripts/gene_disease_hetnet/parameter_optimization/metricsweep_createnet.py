@@ -13,11 +13,6 @@ import bioparser.data
 import hetnet
 import hetnet.agents
 
-import copub_analysis
-import mappings
-
-
-
 def create_graph():
     data = bioparser.data.Data()
 
@@ -114,7 +109,7 @@ if __name__ == '__main__':
     # Parse the arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--network-dir', type=os.path.expanduser, default=
-        '~/Documents/serg/ashg13/140305-algosweep')
+        '~/Documents/serg/gene-disease-hetnet/networks/140313-metricsweep')
     parser.add_argument('--config', action='store_true')
     parser.add_argument('--create', action='store_true')
     args = parser.parse_args()
