@@ -135,6 +135,7 @@ for log10_expr_threshold, r_scaled_threshold in itertools.product(log10_expr_thr
 
 feature_array = [[0 for i in xrange(len(features))] for j in xrange(len(dgs_tuples))]
 
+damping_exponent = 0.4
 metaedge_to_edges = graph.get_metaedge_to_edges()
 for feature_index, feature in enumerate(features):
     graph.unmask()
@@ -152,10 +153,11 @@ for feature_index, feature in enumerate(features):
             exclude_edges = set()
         paths = graph.paths_between_tree(gene, disease, feature['metapath'],
             duplicates=False, masked=False, exclude_nodes=set(), exclude_edges=exclude_edges)
-        dwpc = hetnet.algorithms.DWPC(paths, damping_exponent=0.5, exclude_edges=exclude_edges)
+        dwpc = hetnet.algorithms.DWPC(paths, damping_exponent=damping_exponent, exclude_edges=exclude_edges)
         feature_array[edge_index][feature_index] = dwpc
 
-feature_path = os.path.join(network_dir, 'features.txt.gz')
+feature_path = os.path.join(network_dir, 
+    'features-exp{}.txt.gz'.format(damping_exponent))
 feature_file = gzip.open(feature_path, 'w')
 fieldnames = ['source', 'target', 'target_name', 'status'] + [f['name'] for f in features]
 feature_file.write('\t'.join(fieldnames))

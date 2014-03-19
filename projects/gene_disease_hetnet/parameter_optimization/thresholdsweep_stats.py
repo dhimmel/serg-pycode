@@ -9,11 +9,26 @@ import numpy
 import pandas
 import pandas.io.parsers
 
-network_dir = '/home/dhimmels/Documents/serg/ashg13/140302-parsweep'
+#network_dir = '/home/dhimmels/Documents/serg/ashg13/140310-parsweep'
+project_dir = '/home/dhimmels/Documents/serg/gene-disease-hetnet'
+network_dir = os.path.join(project_dir, 'networks', '140313-thresholdsweep')
 
 
-feature_path = os.path.join(network_dir, 'features-subset-fine-2percent.txt.gz')
+
+part_path = os.path.join(project_dir, 'partitions.txt.gz')
+part_file = gzip.open(part_path)
+part_reader = csv.DictReader(part_file, delimiter='\t')
+#part_df = pandas.io.parsers.read_table(part_path, compression='gzip')
+training_tuples = {(row['doid_code'], row['gene'])
+                   for row in part_reader
+                   if row['part'] == 'train'}
+part_file.close()
+
+feature_path = os.path.join(network_dir, 'features-exp0.4.txt.gz')
 feature_df = pandas.io.parsers.read_table(feature_path, compression='gzip')
+is_training = feature_df.apply(lambda x: (x['target'], x['source']) in training_tuples, axis=1)
+training_feature_df = feature_df.loc[is_training]
+feature_df = training_feature_df
 
 column_names = feature_df.columns.values.tolist()
 feature_names = column_names[4:]
@@ -48,7 +63,7 @@ for feature_name in feature_names:
     feature['auc_grouped_weighted'] = numpy.average(group_aucs, weights=group_positives)
 
 fieldnames = ['name', 'metapath', 'auc_global', 'auc_grouped', 'auc_grouped_weighted'] + list(metaedges)
-auc_path = os.path.join(network_dir, 'feature-aucs.txt')
+auc_path = os.path.join(network_dir, 'feature-aucs-training.txt')
 auc_file = open(auc_path, 'w')
 writer = csv.DictWriter(auc_file, delimiter='\t', fieldnames=fieldnames, extrasaction='ignore')
 writer.writeheader()

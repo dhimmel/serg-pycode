@@ -60,7 +60,7 @@ print 'Negative Inclusion Probability: {}'.format(negative_prob)
 for i, (disease, gene) in enumerate(disease_gene_pairs):
     edge = graph.edge_dict.get((gene.id_, disease.id_, 'association', 'both'))
     status = 1 if edge else 0
-    if not status or random.random() > negative_prob:
+    if not status and random.random() > negative_prob:
         continue
 
     exclude_edges = {edge, edge.inverse} if status else set()

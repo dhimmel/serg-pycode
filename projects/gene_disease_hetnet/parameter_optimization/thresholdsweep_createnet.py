@@ -12,7 +12,7 @@ import bioparser.gxa
 import bioparser.data
 import hetnet
 import hetnet.agents
-from scripts.gene_disease_hetnet.data_integration import copub_analysis
+from projects.gene_disease_hetnet.data_integration import copub_analysis
 
 
 
@@ -89,16 +89,6 @@ def create_graph():
         edge_data = {'lin_similarity': lin_similarity}
         graph.add_edge(source, target, 'similarity', 'both', edge_data)
 
-    """
-    # Add (gene, tissue, expression, both) edges
-    logging.info('Adding BodyMap2 gene-tissue expression.')
-    fpkm_cutoff = 75.0
-    logging.info('fpkm_cutoff: {}'.format(fpkm_cutoff))
-    edge_tuples = data.bodymap2.get_edges(fpkm_cutoff)
-    for symbol, tissue, fpkm in edge_tuples:
-        edge_data = {'fpkm': fpkm}
-        graph.add_edge(tissue, symbol, 'expression', 'both', edge_data)
-    """
 
     # Add (gene, tissue, expression, both) edges
     logging.info('Adding GNF gene-tissue expression.')
