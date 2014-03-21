@@ -65,3 +65,20 @@ writer = csv.DictWriter(partition_file, delimiter='\t', fieldnames=fieldnames)
 writer.writeheader()
 writer.writerows(rows)
 partition_file.close()
+
+partition_dir = os.path.join(project_dir, 'disease-partitions')
+doid_to_writer = dict()
+write_files = list()
+for doid_code in doid_codes:
+    path = os.path.join(partition_dir, '{}.txt.gz'.format(doid_code.replace(':', '_')))
+    write_file = gzip.open(path, 'w')
+    write_files.append(write_file)
+    writer = csv.DictWriter(write_file, delimiter='\t', fieldnames=fieldnames)
+    writer.writeheader()
+    doid_to_writer[doid_code] = writer
+
+for row in rows:
+    doid_to_writer[row['doid_code']].writerow(row)
+
+for write_file in write_files:
+    write_file.close()

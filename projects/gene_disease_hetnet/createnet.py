@@ -16,7 +16,7 @@ from projects.gene_disease_hetnet.data_integration import copub_analysis
 
 
 
-def create_graph():
+def create_graph(associations_path):
     data = bioparser.data.Data()
 
     msigdb = bioparser.data.Data().msigdb
@@ -60,7 +60,6 @@ def create_graph():
     # Add (disease, gene, association, both) edges
     exclude_doids = {'DOID:0050589', 'DOID:2914'} # IBD and immune system disease
     logging.info('Adding GWAS catalog disease-gene associations.')
-    associations_path = os.path.join(data.gwas_plus.directory, 'associations.txt')
     associations_file = open(associations_path)
     associations_reader = csv.DictReader(associations_file, delimiter='\t')
     doids_with_associations = set()
@@ -74,7 +73,7 @@ def create_graph():
 
     # Add (disease, disease, similarity, both)
     logging.info('Adding Intrinsic Semantic Similarity disease-disease edges.')
-    lin_cutoff = 30.0
+    lin_cutoff = 0.2
     logging.info('lin_cutoff: {}'.format(lin_cutoff))
     similarity_generator = doid_onto.pairwise_similarities(doids_with_associations)
     similarities = list(similarity_generator)
@@ -90,7 +89,7 @@ def create_graph():
 
     # Add (gene, tissue, expression, both) edges
     logging.info('Adding GNF gene-tissue expression.')
-    log10_expr_cutoff = 1.6
+    log10_expr_cutoff = 1.0
     logging.info('log10_expression_cutoff: {}'.format(log10_expr_cutoff))
     expressions = data.gnf.expression_generator()
     for expression in expressions:
@@ -118,7 +117,7 @@ def create_graph():
 
     # Add (disease, tissue, cooccurrence, both)
     logging.info('Adding CoPub disease-tissue cooccurrence.')
-    r_scaled_cutoff = 27
+    r_scaled_cutoff = 32
     logging.info('r_scaled_cutoff: {}'.format(r_scaled_cutoff))
     coocc_gen = copub_analysis.doid_bto_cooccurrence_generator()
     for row in coocc_gen:
@@ -167,14 +166,17 @@ if __name__ == '__main__':
     # Parse the arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--network-dir', type=os.path.expanduser, default=
-        '~/Documents/serg/gene-disease-hetnet/networks/140317-all-assoc')
-    parser.add_argument('--config', action='store_true')
+        '~/Documents/serg/gene-disease-hetnet/networks/140321-no-wtccc2')
     parser.add_argument('--create', action='store_true')
+    parser.add_argument('--associations-id', default='processed-no-wtccc2')
     args = parser.parse_args()
     network_dir = args.network_dir
     graph_agent = hetnet.agents.GraphAgent(network_dir)
     graph_dir = graph_agent.graph_dir
 
+    associations_path = os.path.join(
+        bioparser.data.Data().gwas_plus.directory,
+        args.associations_id, 'associations.txt')
 
     if args.create:
 
@@ -182,7 +184,7 @@ if __name__ == '__main__':
         log_path = os.path.join(graph_dir, 'creation.log')
         logging.basicConfig(filename=log_path, level=logging.INFO,
                             filemode='w', format='%(levelname)s:%(message)s')
-        graph = create_graph()
+        graph = create_graph(associations_path)
 
         # Save the graph
         graph_agent = hetnet.agents.GraphAgent(network_dir)

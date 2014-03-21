@@ -12,10 +12,14 @@ import data
 
 class GwasCatalog(object):
 
-    def __init__(self, directory=None):
+    def __init__(self, directory=None, processed_dirname='processed', ignore_pmids=set()):
         if directory is None:
             directory = data.current_path('gwas-catalog', require_dated_format=True)
         self.directory = directory
+        self.processed_dir = os.path.join(directory, processed_dirname)
+        if not os.path.isdir(self.processed_dir):
+            os.mkdir(self.processed_dir)
+        self.ignore_pmids = ignore_pmids
 
     def get_catalog_rows(self, path=None):
         if hasattr(self, 'catalog_rows'):
@@ -47,6 +51,8 @@ class GwasCatalog(object):
             parsed_row['reported_symbols'] = reported_symbols
             parsed_row['reported_genes'] = reported_genes
             parsed_row['pubmed'] = row['PUBMEDID']
+            if parsed_row['pubmed'] in self.ignore_pmids:
+                continue
             parsed_row['chromosome'] = row['Chr_id']
             parsed_row['position'] = None if row['Chr_pos'] == '' else int(row['Chr_pos'])
             parsed_row['mlog_pval'] = None if row['Pvalue_mlog'] == '' else float(row['Pvalue_mlog'])
@@ -248,8 +254,8 @@ class GwasCatalog(object):
                 merged_associations.append(merged)
 
         #write files
-        path_singular = os.path.join(self.directory, 'associations-singular.txt')
-        path_multiple = os.path.join(self.directory, 'associations-multiple.txt')
+        path_singular = os.path.join(self.processed_dir, 'associations-singular.txt')
+        path_multiple = os.path.join(self.processed_dir, 'associations-multiple.txt')
         fieldnames_singular = ['doid_code', 'doid_name', 'gene', 'dapple_genes', 'studies', 'snps', 'mlog_pvals']
         fieldnames_multiple = ['doid_code', 'doid_name', 'genes', 'dapple_genes', 'studies', 'snps', 'mlog_pvals']
         file_singular = open(path_singular, 'w')
@@ -277,13 +283,13 @@ class GwasCatalog(object):
             association_tuples.add(atup)
 
         association_tuples = sorted(association_tuples)
-        path = os.path.join(self.directory, 'associations.txt')
+        path = os.path.join(self.processed_dir, 'associations.txt')
         with open(path, 'w') as write_file:
             writer = csv.writer(write_file, delimiter='\t')
             writer.writerow(['doid_code', 'doid_name', 'symbol'])
             writer.writerows(association_tuples)
 
-        path = os.path.join(self.directory, 'associations-per-disease.txt')
+        path = os.path.join(self.processed_dir, 'associations-per-disease.txt')
         disease_counter = collections.Counter((a[0], a[1]) for a in association_tuples)
         counts = list()
         for (code, name), count in disease_counter.items():
@@ -305,6 +311,7 @@ if __name__ =='__main__':
     #sum(int(bool(row.get('dapple_wingspan'))) for row in filtered_rows)
     #gcat.write_all_snps()
     merged_associations = gcat.get_doid_to_associations()
+    """
     disease_to_genes = dict()
     for a in merged_associations:
         genes = a['gene_list']
@@ -316,12 +323,13 @@ if __name__ =='__main__':
             continue
         disease_to_genes.setdefault(a['doid_name'], set()).add(gene)
     pprint.pprint(disease_to_genes)
-
+    """
+    gcat_no_wtccc2 = GwasCatalog(processed_dirname='processed-no-wtccc2', ignore_pmids={'21833088'})
+    merged_associations_no_wtccc2 = gcat_no_wtccc2.get_doid_to_associations()
 
 
 
 
     #associations = reduce(operator.add, doid_to_associations.values())
     #print collections.Counter([len(a['reported_genes']) for a in associations])
-    import pprint
     #pprint.pprint(doid_to_associations['DOID:2377'])
