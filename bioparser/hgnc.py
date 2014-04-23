@@ -1,6 +1,7 @@
 import os
 import csv
 import gzip
+import collections
 
 import data
 import utilities.omictools
@@ -86,7 +87,7 @@ class HGNC(object):
         """Return a list of genes."""
         if self.genes is None:
             gene_generator = self.gene_generator()
-            self.genes = list(gene_generator)
+            self.genes = list(set(gene_generator))
         return self.genes
 
 
@@ -169,10 +170,35 @@ class HGNC(object):
         genes.discard(None)
         return genes
 
+    def write_as_table(self):
+        """Write as tab delimited table of protein coding genes.
+        """
+        genes = self.get_genes()
+        genes = [gene for gene in genes if gene.locus_group == 'protein-coding gene']
+        rows = list()
+        for gene in genes:
+            row = collections.OrderedDict()
+            rows.append(row)
+            row['hgnc_id'] = gene.hgnc_id
+            row['symbol'] = gene.symbol
+            row['name'] = gene.name
+            row['aliases'] = '|'.join(sorted(set(gene.previous_symbols + gene.synonyms)))
+            row['entrez'] = gene.entrez_id or gene.entrez_id_ncbi_mapped
+            row['ensembl'] = gene.ensembl_id or gene.ensembl_id_ensembl_mapped
+            row['uniprot'] = gene.uniprot_id
+            row['chromosome'] = gene.chromosome
+        rows.sort(key=lambda x: x['symbol'])
+        path = os.path.join(self.directory, 'protein-coding.txt')
+        write_file = open(path, 'w')
+        writer = csv.DictWriter(write_file, delimiter='\t', fieldnames=rows[0].keys())
+        writer.writeheader()
+        writer.writerows(rows)
+        write_file.close()
+
 
 if __name__ == '__main__':
     hgnc = HGNC()
-    hgnc.get_symbol_to_gene()
+    hgnc.write_as_table()
     #gene_number = len(hgnc.get_genes())
     #symbol_number = len(hgnc.get_symbol_to_gene())
     #print symbol_number, 'symbols representing', gene_number, 'genes'
