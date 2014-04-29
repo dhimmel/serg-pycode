@@ -24,9 +24,10 @@ row_html_template = (
 </div>
 ''')
 
-html_str = ''
+
+html_list = list()
 for category, category_rows in category_to_rows.items():
-    html_str += '<h2>{}</h2>\n'.format(category)
+    html_str = '<h2>{}</h2>\n'.format(category)
     for i, row in enumerate(category_rows):
         if i % 3 == 0:
             html_str += '<div class="row">\n'
@@ -35,6 +36,9 @@ for category, category_rows in category_to_rows.items():
             html_str += '</div>\n'
     if len(category_rows) % 3 != 0:
         html_str += '</div>\n'
+    html_list.append(html_str)
+
+html_str = '\n<hr>\n'.join(html_list)
 
 description_path = os.path.join(website_dir, 'download-descriptions.html')
 with open(description_path, 'w') as write_file:

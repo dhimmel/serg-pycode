@@ -84,6 +84,22 @@ class GwasCatalog(object):
         self.filtered_rows = filtered_rows
         return filtered_rows
 
+    def annotate_snap_wingspans(self):
+        wingspan_path = os.path.join(self.directory, 'SNAP', 'wingspans_0.1-centimorgans.txt')
+        with open(wingspan_path) as wingspan_file:
+            reader = csv.DictReader(wingspan_file, delimiter='\t')
+            rsid_to_wingspan = {wingspan['rsid']: wingspan for wingspan in reader}
+
+        for catalog_row in self.get_catalog_rows():
+            try:
+                rsid, = catalog_row['rsids']
+            except ValueError:
+                continue
+            wingspan = rsid_to_wingspan.get(rsid)
+            if not wingspan:
+                continue
+            catalog_row['snap_wingspan'] = wingspan['lower'], wingspan['upper']
+
     def annotate_dapple_genes(self):
         wingspan_path = os.path.join(self.directory, 'dapple', 'WSinput.txt')
         with open(wingspan_path) as wingspan_file:
@@ -170,6 +186,7 @@ class GwasCatalog(object):
         self.annotate_efo()
         doid_graph = data.Data().doid.get_graph()
         efo_to_doid_ids = data.Data().doid.get_xref_to_doids('EFO', 'EFO:')
+        remove_doids, pop_doids = self.read_doid_processing_info()
         for association in self.get_catalog_rows():
             efo_id = association.get('efo_id')
             if not efo_id:
@@ -180,10 +197,12 @@ class GwasCatalog(object):
             if len(doid_ids) > 1:
                 print association, doid_ids
                 continue
-            else:
-                doid_id, = doid_ids
-                association['doid_id'] = doid_id
-                association['doid_name'] = doid_graph.node[doid_id]['name']
+            doid_id, = doid_ids
+            if doid_id in remove_doids:
+                continue
+            doid_id = pop_doids.get(doid_id, doid_id)
+            association['doid_id'] = doid_id
+            association['doid_name'] = doid_graph.node[doid_id]['name']
 
 
     def write_all_snps(self):
@@ -196,30 +215,31 @@ class GwasCatalog(object):
             chromosome = int(chromosome)
             all_snps |= {(snp, chromosome) for snp in row['rsids']}
         all_snps = sorted(all_snps, key=lambda x: (x[1], x[0]))
-        path = os.path.join(self.directory, 'dapple', 'input_snps.txt')
+        path = os.path.join(self.directory, 'all_snps.txt')
         with open(path, 'w') as write_file:
             write_file.write('\n'.join('{}\t{}'.format(*snp) for snp in all_snps))
 
-    def get_doid_to_associations(self):
+    def get_merged_associations(self, wingspan_key='dapple_wingspan'):
         """association is a list with the first association representing the
         study reporting the strongest association for that region.
         """
         self.annotate_doid()
         self.annotate_dapple_genes()
+        self.annotate_snap_wingspans()
         associations = self.get_filtered_rows()
         associations = [a for a in associations if a.get('doid_id')]
-        associations = [a for a in associations if a.get('dapple_wingspan')]
+        associations = [a for a in associations if a.get(wingspan_key)]
         associations.sort(key=lambda a: (a['mlog_pval'], a['date']))
         associations.reverse()
         doid_to_associations = dict()
         for association in associations:
             doid_id = association['doid_id']
             chromosome = association['chromosome']
-            wingspan = association['dapple_wingspan']
+            wingspan = association[wingspan_key]
             included_associations = doid_to_associations.setdefault(doid_id, list())
             add = True
             for included_association in included_associations:
-                incl_wing = included_association[0]['dapple_wingspan']
+                incl_wing = included_association[0][wingspan_key]
                 included_chromosome = included_association[0]['chromosome']
                 if (chromosome == included_chromosome and
                     (incl_wing[0] <= wingspan[0] and wingspan[0] <= incl_wing[1]) or
@@ -245,7 +265,7 @@ class GwasCatalog(object):
                           'genes': '|'.join(map(str, genes)),
                           'gene_list': genes,
                           'gene_counter': gene_counter,
-                          'dapple_genes': '|'.join(map(str, association[0]['dapple_genes'])),
+                          'dapple_genes': '|'.join(map(str, association[0].get('dapple_genes', []))),
                           'studies': '|'.join(a['pubmed'] for a in association),
                           'snps': '|'.join(a['rsid'] for a in association),
                           'mlog_pvals': '|'.join('{0:.3f}'.format(a['mlog_pval']) for a in association)}
@@ -302,15 +322,49 @@ class GwasCatalog(object):
 
         return merged_associations
 
+    def read_doid_processing_info(self, path=None):
+        if path is None:
+            path = '/home/dhimmels/Documents/serg/gene-disease-hetnet/data-integration/doid-processing-info.txt'
+        with open(path) as read_file:
+            lines = list(read_file)
+
+        remove_doids = set()
+        pop_doids = dict()
+        for line in lines:
+            line = line.split('#', 1)[0].rstrip()
+            line_list = line.split(' ')
+            command = line_list.pop(0)
+            if command == 'remove':
+                remove_doids.add(line_list[0])
+            elif command == 'pop':
+                pop_doids[line_list[0]] = line_list[2]
+            else:
+                assert False
+        return remove_doids, pop_doids
+
+
+
 if __name__ =='__main__':
     import pprint
     gcat = GwasCatalog()
+    print len(gcat.get_merged_associations('snap_wingspan'))
+    #print sum(len(v) for v in gcat.get_merged_associations('snap_wingspan').values())
+
+    #gcat.annotate_dapple_genes()
+    #gcat.annotate_snap_wingspans()
+    #rows = gcat.get_filtered_rows()
+    #print 'Total', len(rows)
+    #print 'dapple', sum('dapple_wingspan' in row for row in rows)
+    #print 'snap', sum('snap_wingspan' in row for row in rows)
+
     #catalog_rows = gcat.get_catalog_rows()
     #gcat.annotate_dapple_genes()
     #filtered_rows = gcat.get_filtered_rows()
     #sum(int(bool(row.get('dapple_wingspan'))) for row in filtered_rows)
     #gcat.write_all_snps()
-    merged_associations = gcat.get_doid_to_associations()
+    #merged_associations = gcat.get_merged_associations()
+
+
     """
     disease_to_genes = dict()
     for a in merged_associations:
@@ -324,8 +378,8 @@ if __name__ =='__main__':
         disease_to_genes.setdefault(a['doid_name'], set()).add(gene)
     pprint.pprint(disease_to_genes)
     """
-    gcat_no_wtccc2 = GwasCatalog(processed_dirname='processed-no-wtccc2', ignore_pmids={'21833088'})
-    merged_associations_no_wtccc2 = gcat_no_wtccc2.get_doid_to_associations()
+    #gcat_no_wtccc2 = GwasCatalog(processed_dirname='processed-no-wtccc2', ignore_pmids={'21833088'})
+    #merged_associations_no_wtccc2 = gcat_no_wtccc2.get_doid_to_associations()
 
 
 
