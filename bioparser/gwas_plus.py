@@ -182,11 +182,12 @@ class GwasCatalog(object):
                 else:
                     association['efo_ids'] = efo_ids
 
-    def annotate_doid(self):
+    def annotate_doid(self, ontoprocess_path=None):
         self.annotate_efo()
         doid_graph = data.Data().doid.get_graph()
         efo_to_doid_ids = data.Data().doid.get_xref_to_doids('EFO', 'EFO:')
-        remove_doids, pop_doids = self.read_doid_processing_info()
+
+        remove_doids, pop_doids = self.read_ontprocess_info(ontoprocess_path)
         for association in self.get_catalog_rows():
             efo_id = association.get('efo_id')
             if not efo_id:
@@ -219,11 +220,11 @@ class GwasCatalog(object):
         with open(path, 'w') as write_file:
             write_file.write('\n'.join('{}\t{}'.format(*snp) for snp in all_snps))
 
-    def get_merged_associations(self, wingspan_key='dapple_wingspan'):
+    def get_merged_associations(self, doidprocess_path=None, wingspan_key='dapple_wingspan'):
         """association is a list with the first association representing the
         study reporting the strongest association for that region.
         """
-        self.annotate_doid()
+        self.annotate_doid(ontoprocess_path=doidprocess_path)
         self.annotate_dapple_genes()
         self.annotate_snap_wingspans()
         associations = self.get_filtered_rows()
@@ -322,32 +323,48 @@ class GwasCatalog(object):
 
         return merged_associations
 
-    def read_doid_processing_info(self, path=None):
+
+    @staticmethod
+    def read_ontprocess_info(path):
+        """
+        Terms to omit should be encoded like:
+        remove TERM_ID # comment can go here
+
+        Terms to omit with annotations transferred to a second node:
+        pop TERM_ID --> TERM_ID # comment can go here
+        """
         if path is None:
-            path = '/home/dhimmels/Documents/serg/gene-disease-hetnet/data-integration/doid-processing-info.txt'
+            return set(), dict()
+
         with open(path) as read_file:
             lines = list(read_file)
 
-        remove_doids = set()
-        pop_doids = dict()
+        remove_terms = set()
+        pop_terms = dict()
         for line in lines:
             line = line.split('#', 1)[0].rstrip()
             line_list = line.split(' ')
             command = line_list.pop(0)
             if command == 'remove':
-                remove_doids.add(line_list[0])
+                remove_terms.add(line_list[0])
             elif command == 'pop':
-                pop_doids[line_list[0]] = line_list[2]
+                pop_terms[line_list[0]] = line_list[2]
             else:
                 assert False
-        return remove_doids, pop_doids
+        return remove_terms, pop_terms
 
 
 
 if __name__ =='__main__':
     import pprint
+
+
+
     gcat = GwasCatalog()
-    print len(gcat.get_merged_associations('snap_wingspan'))
+    doidprocess_path = '/home/dhimmels/Documents/serg/gene-disease-hetnet/data-integration/doid-ontprocess-info.txt'
+    merged_associations = gcat.get_merged_associations(doidprocess_path=doidprocess_path)
+
+    #print len(gcat.get_merged_associations('snap_wingspan'))
     #print sum(len(v) for v in gcat.get_merged_associations('snap_wingspan').values())
 
     #gcat.annotate_dapple_genes()

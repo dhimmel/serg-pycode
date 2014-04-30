@@ -83,7 +83,7 @@ if __name__ == '__main__':
     # Parse the arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--network-dir', type=os.path.expanduser, default=
-        '~/Documents/serg/gene-disease-hetnet/networks/140319-all-assoc')
+        '~/Documents/serg/gene-disease-hetnet/networks/140429-all-assoc')
     parser.add_argument('--partition-path', type=os.path.expanduser)
     parser.add_argument('--feature-path', type=os.path.expanduser)
     parser.add_argument('--dwpc-exponent', default=0.4, type=float)
