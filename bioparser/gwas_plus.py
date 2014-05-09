@@ -402,37 +402,32 @@ class GwasCatalog(object):
         write_file.close()
 
 
+        # Compute the number of associations per disease
+        disease_to_counter = dict()
+        for status_row in status_rows:
+            disease = status_row['doid_code'], status_row['doid_name']
+            status = status_row['status']
+            counter = disease_to_counter.setdefault(disease, collections.Counter())
+            counter[status] += 1
 
+        disease_count_rows = list()
+        for (doid_code, doid_name), counter in disease_to_counter.items():
+            row = {'doid_code': doid_code, 'doid_name': doid_name,
+                   'assoc_high': counter['assoc_high'],
+                   'linked_high': counter['linked_high'],
+                   'assoc_low': counter['assoc_low'],
+                   'linked_low': counter['linked_low'],
+                   'excluded': sum(counter.values()) - counter['assoc_high']}
+            disease_count_rows.append(row)
+        disease_count_rows.sort(key=operator.itemgetter('assoc_high', 'assoc_low'), reverse=True)
 
-        """
-        association_tuples = set()
-        for association in merged_associations:
-            if 'gene' not in association:
-                continue
-            gene = association['gene']
-            if gene.locus_group != 'protein-coding gene':
-                continue
-            atup = association['doid_code'], association['doid_name'], association['gene']
-            association_tuples.add(atup)
-
-        association_tuples = sorted(association_tuples)
-        path = os.path.join(self.processed_dir, 'associations.txt')
-        with open(path, 'w') as write_file:
-            writer = csv.writer(write_file, delimiter='\t')
-            writer.writerow(['doid_code', 'doid_name', 'symbol'])
-            writer.writerows(association_tuples)
-
+        fieldnames = ['doid_code', 'doid_name', 'assoc_high', 'linked_high', 'assoc_low', 'linked_low', 'excluded']
         path = os.path.join(self.processed_dir, 'associations-per-disease.txt')
-        disease_counter = collections.Counter((a[0], a[1]) for a in association_tuples)
-        counts = list()
-        for (code, name), count in disease_counter.items():
-            counts.append([code, name, count])
-        counts.sort(key=lambda x: -x[2])
         with open(path, 'w') as write_file:
-            writer = csv.writer(write_file, delimiter='\t')
-            writer.writerow(['doid_code', 'doid_name', 'count'])
-            writer.writerows(counts)
-        """
+            writer = csv.DictWriter(write_file, delimiter='\t', fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(disease_count_rows)
+
         return merged_associations
 
 
