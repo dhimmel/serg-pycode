@@ -80,6 +80,7 @@ class HGNC(object):
             gene = Gene(row['symbol'])
             gene.__dict__.update(row)
             gene.int_id = int(gene.hgnc_id.split(':')[1])
+            gene.coding = gene.locus_group == 'protein-coding gene'
             yield gene
         read_file.close()
     
@@ -198,7 +199,9 @@ class HGNC(object):
 
 if __name__ == '__main__':
     hgnc = HGNC()
-    hgnc.write_as_table()
+    #hgnc.write_as_table()
+    entrez_to_gene = hgnc.get_entrez_to_gene()
+    print entrez_to_gene['']
     #gene_number = len(hgnc.get_genes())
     #symbol_number = len(hgnc.get_symbol_to_gene())
     #print symbol_number, 'symbols representing', gene_number, 'genes'

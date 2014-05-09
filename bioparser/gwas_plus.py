@@ -12,7 +12,7 @@ import data
 
 class GwasCatalog(object):
 
-    def __init__(self, directory=None, processed_dirname='processed', ignore_pmids=set()):
+    def __init__(self, directory=None, processed_dirname='processed2', ignore_pmids=set()):
         if directory is None:
             directory = data.current_path('gwas-catalog', require_dated_format=True)
         self.directory = directory
@@ -28,12 +28,15 @@ class GwasCatalog(object):
         if not path:
             path = os.path.join(self.directory, 'gwascatalog.txt')
 
-        symbol_to_gene = data.Data().hgnc.get_symbol_to_gene()
+        #symbol_to_gene = data.Data().hgnc.get_symbol_to_gene()
+        entrez_to_gene = data.Data().hgnc.get_entrez_to_gene()
+        symbols_to_genes = data.Data().hgnc.identifiers_to_genes
 
         # Parsing Parameters
         rsid_pattern = re.compile(r"rs[0-9]+")
-        gene_split_pattern = re.compile(r"[, ]+")
-        invalid_genes = {'Intergenic', 'NR', 'Pending'}
+        reported_gene_split_pattern = re.compile(r"[, ]+")
+        mapped_gene_split_pattern = re.compile(r" - |;")
+        invalid_symbols = {'Intergenic', 'NR', 'Pending'}
         date_format = '%m/%d/%Y'
 
         read_file = open(path)
@@ -44,12 +47,32 @@ class GwasCatalog(object):
             parsed_row['phenotype'] = row['Disease/Trait']
             parsed_row['rsids'] = re.findall(rsid_pattern, row['SNPs'])
             parsed_row['date'] = datetime.datetime.strptime(row['Date'], date_format)
-            reported_symbols = re.split(gene_split_pattern, row['Reported Gene(s)'])
-            reported_genes = {symbol_to_gene.get(symbol)
-                              for symbol in set(reported_symbols) - invalid_genes}
-            reported_genes.discard(None)
+            reported_symbols = re.split(reported_gene_split_pattern, row['Reported Gene(s)'])
+            reported_symbols = set(reported_symbols) - invalid_symbols
+            reported_genes = symbols_to_genes(reported_symbols, coding=False)
             parsed_row['reported_symbols'] = reported_symbols
             parsed_row['reported_genes'] = reported_genes
+
+            #mapped_symbols_field = row['Mapped_gene']
+            #mapped_symbols = re.split(mapped_gene_split_pattern, mapped_symbols_field)
+            #mapped_symbols.remove('')
+            #mapped_genes = symbols_to_genes(mapped_symbols, coding=False)
+            #parsed_row['mapped_genes'] = mapped_genes
+            #if ' - ' not in mapped_symbols_field and len(mapped_genes) == 1:
+            #    parsed_row['mapped_gene'] = mapped_genes,
+
+            mapped_entrez = set(row['Snp_gene_ids'].split(';'))
+            mapped_entrez.discard('')
+            mapped_genes = symbols_to_genes(mapped_entrez, id_type='entrez', coding=False)
+            parsed_row['mapped_genes'] = mapped_genes
+
+            upstream_gene = entrez_to_gene.get(row['Upstream_gene_id'])
+            if upstream_gene:
+                parsed_row['upstream_gene'] = upstream_gene
+            downstream_gene = entrez_to_gene.get(row['Downstream_gene_id'])
+            if downstream_gene:
+                parsed_row['downstream_gene'] = downstream_gene
+
             parsed_row['pubmed'] = row['PUBMEDID']
             if parsed_row['pubmed'] in self.ignore_pmids:
                 continue
@@ -63,11 +86,13 @@ class GwasCatalog(object):
         return catalog_rows
 
 
-    def get_filtered_rows(self):
+    def get_filtered_rows(self, mlog_pval_threshold=None):
+        """
+        for 5e-8 use
+        mlog_pval_threshold=7.30103
+        """
         if hasattr(self, 'filtered_rows'):
             return self.filtered_rows()
-
-        mlog_pval_threshold = 8.0
 
         filtered_rows = list()
         catalog_rows = self.get_catalog_rows()
@@ -77,7 +102,7 @@ class GwasCatalog(object):
             except ValueError:
                 # association not defined by a single lead SNP
                 continue
-            if catalog_row['mlog_pval'] < mlog_pval_threshold:
+            if mlog_pval_threshold is None and catalog_row['mlog_pval'] < mlog_pval_threshold:
                 continue
             filtered_rows.append(catalog_row)
 
@@ -220,7 +245,16 @@ class GwasCatalog(object):
         with open(path, 'w') as write_file:
             write_file.write('\n'.join('{}\t{}'.format(*snp) for snp in all_snps))
 
-    def get_merged_associations(self, doidprocess_path=None, wingspan_key='dapple_wingspan'):
+    @staticmethod
+    def max_counter_keys(counter, key_subset=None):
+        if key_subset is not None:
+            counter = collections.Counter({k: v for
+                k, v in counter.iteritems() if k in key_subset})
+        max_value = max(counter.values() + [0])
+        max_keys = [k for k, v in counter.iteritems() if v == max_value]
+        return max_keys
+
+    def get_merged_associations(self, doidprocess_path=None, wingspan_key='dapple_wingspan', mlog_cutoff=7.30103):
         """association is a list with the first association representing the
         study reporting the strongest association for that region.
         """
@@ -253,46 +287,124 @@ class GwasCatalog(object):
                 included_associations.append([association])
 
         merged_associations = list()
+        disease_to_statuses = dict()
         for doid, associations in doid_to_associations.items():
             for association in associations:
-                gene_counter = collections.Counter()
+
+                # Create a counter of gene reports
+                report_counter = collections.Counter()
                 for a in association:
-                    gene_counter.update(a['reported_genes'])
-                minp_reported_genes = association[0]['reported_genes']
-                max_gene_count = max(gene_counter.values() + [0])
-                max_genes = [k for k, v in gene_counter.items() if v == max_gene_count]
-                genes = minp_reported_genes if len(minp_reported_genes) == 1 else max_genes
+                    report_counter.update(a['reported_genes'])
+                for gene in report_counter.keys():
+                    if not gene.coding:
+                        del report_counter['gene']
+                mode_reported = GwasCatalog.max_counter_keys(report_counter)
+
+                # Mapped genes
+                all_mapped_genes = set()
+                sequentially_mapped_gene = None
+
+                for a in association:
+                    mapped_genes = filter(operator.attrgetter('coding'), a.get('mapped_genes', []))
+                    upstream_gene = a.get('upstream_gene')
+                    downstream_gene = a.get('downstream_gene')
+                    stream_genes = {upstream_gene, downstream_gene}
+                    stream_genes.discard(None)
+                    mapped_gene = None
+                    # GWAS catalog finds that rsid is within a single gene
+                    if len(mapped_genes) == 1:
+                        mapped_gene, = mapped_genes
+                    # GWAS catalog finds that rsid is within a multiple gene
+                    elif len(mapped_genes) > 1:
+                        mode_mapped_genes = GwasCatalog.max_counter_keys(report_counter, key_subset=mapped_genes)
+                        if len(mode_mapped_genes) == 1:
+                            mapped_gene, = mode_mapped_genes
+                    # GWAS catalog finds an upstream and downstream gene
+                    elif len(mapped_genes) == 0:
+                        mode_stream_genes = GwasCatalog.max_counter_keys(report_counter, key_subset=stream_genes)
+                        if len(mode_stream_genes) == 1:
+                            mapped_gene, = mode_stream_genes
+
+                    a['mapped_gene'] = mapped_gene
+                    if not sequentially_mapped_gene and mapped_gene:
+                        sequentially_mapped_gene = mapped_gene
+
+                    all_mapped_genes |= set(mapped_genes)
+                    all_mapped_genes |= stream_genes
+
+
+                candidate_genes = all_mapped_genes | set(report_counter)
+                resolved_gene = mode_reported[0] if len(mode_reported) == 1 else sequentially_mapped_gene
+
                 merged = {'doid_code': doid, 'doid_name': association[0]['doid_name'],
-                          'genes': '|'.join(map(str, genes)),
-                          'gene_list': genes,
-                          'gene_counter': gene_counter,
+                          'resolved_gene': resolved_gene,
+                          'candidate_genes': '|'.join(map(str, candidate_genes)),
+                          'report_counter': report_counter,
+                          'mapped_genes': '|'.join(str(a['mapped_gene']) for a in association),
                           'dapple_genes': '|'.join(map(str, association[0].get('dapple_genes', []))),
                           'studies': '|'.join(a['pubmed'] for a in association),
                           'snps': '|'.join(a['rsid'] for a in association),
-                          'mlog_pvals': '|'.join('{0:.3f}'.format(a['mlog_pval']) for a in association)}
-                if len(genes) == 1:
-                    merged['gene'], = genes
+                          'mlog_pvals': '|'.join('{0:.3f}'.format(a['mlog_pval']) for a in association),
+                          'confidence': 'high' if association[0]['mlog_pval'] >= mlog_cutoff else 'low'}
                 merged_associations.append(merged)
 
-        #write files
-        path_singular = os.path.join(self.processed_dir, 'associations-singular.txt')
-        path_multiple = os.path.join(self.processed_dir, 'associations-multiple.txt')
-        fieldnames_singular = ['doid_code', 'doid_name', 'gene', 'dapple_genes', 'studies', 'snps', 'mlog_pvals']
-        fieldnames_multiple = ['doid_code', 'doid_name', 'genes', 'dapple_genes', 'studies', 'snps', 'mlog_pvals']
-        file_singular = open(path_singular, 'w')
-        file_multiple = open(path_multiple, 'w')
-        writer_singular = csv.DictWriter(file_singular, delimiter='\t', fieldnames=fieldnames_singular, extrasaction='ignore')
-        writer_multiple = csv.DictWriter(file_multiple, delimiter='\t', fieldnames=fieldnames_multiple, extrasaction='ignore')
-        writer_singular.writeheader()
-        writer_multiple.writeheader()
-        for merged_association in merged_associations:
-            if 'gene' in merged_association:
-                writer_singular.writerow(merged_association)
-            else:
-                writer_multiple.writerow(merged_association)
-        file_singular.close()
-        file_multiple.close()
+                disease_tuple = merged['doid_code'], merged['doid_name']
+                statuses = disease_to_statuses.setdefault(disease_tuple, dict())
+                confidence = merged['confidence']
+                linked_set = statuses.setdefault('linked_{}'.format(confidence), set())
+                assoc_set = statuses.setdefault('assoc_{}'.format(confidence), set())
+                assoc_set.add(resolved_gene)
+                linked_set.update(candidate_genes)
 
+        status_rows = list()
+        for (doid_code, doid_name), statuses in disease_to_statuses.items():
+            linked_high = statuses.get('linked_high', set())
+            linked_low = statuses.get('linked_low', set())
+            assoc_low = statuses.get('assoc_low', set())
+            assoc_high = statuses.get('assoc_high', set())
+            gene_sets = [linked_high, linked_low, assoc_high, assoc_low]
+            for gene_set in gene_sets:
+                gene_set.discard(None)
+
+            # pecking order: assoc_high, linked_high, assoc_low, linked_low
+            linked_low.difference_update(assoc_high | linked_high | assoc_low)
+            assoc_low.difference_update(assoc_high | linked_high)
+            linked_high.difference_update(assoc_high)
+            for status_key, gene_set in statuses.items():
+                for gene in gene_set:
+                    status_row = {'doid_code': doid_code, 'doid_name': doid_name,
+                     'gene_code': gene.hgnc_id, 'gene_symbol': gene.symbol,
+                     'status': status_key}
+                    status_rows.append(status_row)
+        status_rows.sort(key=operator.itemgetter('doid_name', 'status', 'gene_symbol'))
+        assert len(status_rows) == len(set(map(operator.itemgetter('doid_code', 'gene_code'), status_rows)))
+
+
+        #write files
+        fieldnames = ['doid_code', 'doid_name', 'resolved_gene',
+                      'confidence', 'candidate_genes', 'report_counter',
+                      'mapped_genes', 'dapple_genes', 'studies', 'snps', 'mlog_pvals']
+        path = os.path.join(self.processed_dir, 'associations-processing.txt')
+        write_file = open(path, 'w')
+        writer = csv.DictWriter(write_file, delimiter='\t', fieldnames=fieldnames, extrasaction='ignore')
+        writer.writeheader()
+        writer.writerows(merged_associations)
+        write_file.close()
+
+        # write statuses
+        fieldnames = ['doid_code', 'doid_name', 'gene_code',
+                      'gene_symbol', 'status']
+        path = os.path.join(self.processed_dir, 'association-statuses.txt')
+        write_file = open(path, 'w')
+        writer = csv.DictWriter(write_file, delimiter='\t', fieldnames=fieldnames, extrasaction='ignore')
+        writer.writeheader()
+        writer.writerows(status_rows)
+        write_file.close()
+
+
+
+
+        """
         association_tuples = set()
         for association in merged_associations:
             if 'gene' not in association:
@@ -320,7 +432,7 @@ class GwasCatalog(object):
             writer = csv.writer(write_file, delimiter='\t')
             writer.writerow(['doid_code', 'doid_name', 'count'])
             writer.writerows(counts)
-
+        """
         return merged_associations
 
 
