@@ -10,7 +10,7 @@ import hetnet.agents
 import hetnet.algorithms
 
 project_dir = '/home/dhimmels/Documents/serg/gene-disease-hetnet'
-network_dir = os.path.join(project_dir, 'networks', '140313-metricsweep')
+network_dir = os.path.join(project_dir, 'networks', '140509-metricsweep')
 
 graph_agent = hetnet.agents.GraphAgent(network_dir)
 
@@ -37,10 +37,27 @@ diseases = sorted(metanode_to_nodes[metaedge_GaD.target])
 for node_list in genes, diseases:
     node_list.sort(key=lambda node: node.id_)
 
-diseases_10plus = [disease for disease in diseases if len(disease.get_edges(metaedge_GaD.inverse)) >= 10]
-disease_gene_pairs = list(itertools.product(diseases_10plus, genes))
-total_edges = len(disease_gene_pairs)
-
+negative_prob = 0.025
+print 'Negative Inclusion Probability: {}'.format(negative_prob)
+dgs_tuples = list()
+part_path = os.path.join(project_dir, 'partitions.txt.gz')
+part_file = gzip.open(part_path)
+part_reader = csv.DictReader(part_file, delimiter='\t')
+for part_row in part_reader:
+    if part_row['part'] == 'test':
+        continue
+    status = part_row['status']
+    percentile = float(part_row['percentile'])
+    disease_node = graph.node_dict[part_row['disease_code']]
+    gene_node = graph.node_dict[part_row['gene_symbol']]
+    if part_row['status'] == 'assoc_high':
+        dgs_tuple = disease_node, gene_node, 1
+        dgs_tuples.append(dgs_tuple)
+    if part_row['status'] == 'negative' and percentile <= negative_prob:
+        dgs_tuple = disease_node, gene_node, 0
+        dgs_tuples.append(dgs_tuple)
+part_file.close()
+total_edges =len(dgs_tuples)
 
 
 feature_names = ['{}:{}'.format(metric['name'], metapath)
@@ -53,15 +70,9 @@ feature_file = gzip.open(feature_path, 'w')
 writer = csv.DictWriter(feature_file, delimiter='\t', fieldnames=fieldnames)
 writer.writeheader()
 
-random.seed(0)
-negative_prob = 0.025
-print 'Negative Inclusion Probability: {}'.format(negative_prob)
 
-for i, (disease, gene) in enumerate(disease_gene_pairs):
+for i, (disease, gene, status) in enumerate(dgs_tuples):
     edge = graph.edge_dict.get((gene.id_, disease.id_, 'association', 'both'))
-    status = 1 if edge else 0
-    if not status and random.random() > negative_prob:
-        continue
 
     exclude_edges = {edge, edge.inverse} if status else set()
 

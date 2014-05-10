@@ -7,14 +7,17 @@ import itertools
 import logging
 import ConfigParser
 import pprint
+import gzip
 
 import bioparser.gxa
 import bioparser.data
 import hetnet
 import hetnet.agents
 
-def create_graph():
+def create_graph(associations_path, doidprocess_path, pathophys_path, partition_path):
     data = bioparser.data.Data()
+    doid_remove, doid_pop = bioparser.gwas_plus.GwasCatalog.read_ontprocess_info(doidprocess_path)
+    exclude_doids = doid_remove | set(doid_pop)
 
     msigdb = bioparser.data.Data().msigdb
     msig_set_types = msigdb.abbrev_to_name.keys()
@@ -25,7 +28,8 @@ def create_graph():
 
     # Define and initialize networkx graph
     metaedge_tuples = [('disease', 'gene', 'association', 'both'),
-                       ('gene', 'gene', 'interaction', 'both')]
+                       ('gene', 'gene', 'interaction', 'both'),
+                       ('disease', 'pathophysiology', 'membership', 'both')]
     metaedge_tuples.extend([('gene', set_type, 'membership', 'both') for set_type in msig_set_types])
     metagraph = hetnet.MetaGraph.from_edge_tuples(metaedge_tuples)
     graph = hetnet.Graph(metagraph)
@@ -33,7 +37,7 @@ def create_graph():
     # Add genes from HGNC
     logging.info('Adding HGNC gene nodes.')
     for gene in data.hgnc.get_genes():
-        if gene.locus_group != 'protein-coding gene':
+        if not gene.coding:
             continue
         node_data = {'name': gene.name}
         graph.add_node(gene.symbol, 'gene', node_data)
@@ -42,22 +46,52 @@ def create_graph():
     logging.info('Adding DOID disease nodes.')
     doid_onto = data.doid.get_ontology()
     for doid_id, nx_data in doid_onto.graph.nodes(data=True):
+        if doid_id in exclude_doids:
+            continue
         node_data = {'name': nx_data['name']}
         graph.add_node(doid_id, 'disease', node_data)
 
+    # Add pathophysiology nodes
+    exclude_pathophys = {'unspecific', 'ideopathic'}
+    with open(pathophys_path) as read_file:
+        reader = csv.DictReader(read_file, delimiter='\t')
+        pathophys_rows = list(reader)
+    pathophys_rows = [row for row in pathophys_rows
+                      if row['pathophysiology'] not in exclude_pathophys]
+    pathophys_rows = [row for row in pathophys_rows
+                      if row['doid_code'] not in exclude_doids]
+    pathophys_terms = {row['pathophysiology'] for row in pathophys_rows}
+    for pathophys_term in pathophys_terms:
+        graph.add_node(pathophys_term, 'pathophysiology')
+
+    # Add (disease, pathophysiology, membership, both) edges
+    for pathophys_row in pathophys_rows:
+        doid_code = pathophys_row['doid_code']
+        pathophys_term = pathophys_row['pathophysiology']
+        graph.add_edge(doid_code, pathophys_term, 'membership', 'both')
+
     # Add (disease, gene, association, both) edges
-    exclude_doids = {'DOID:0050589', 'DOID:2914'} # IBD and immune system disease
+    with gzip.open(partition_path) as part_file:
+        reader = csv.DictReader(part_file, delimiter='\t')
+        part_rows = list(reader)
+    assoc_to_part = {(row['disease_code'], row['gene_symbol']): row['part']
+                        for row in part_rows if row['status'] != 'negative'}
+
     logging.info('Adding GWAS catalog disease-gene associations.')
-    associations_path = os.path.join(data.gwas_plus.directory, 'associations.txt')
     associations_file = open(associations_path)
     associations_reader = csv.DictReader(associations_file, delimiter='\t')
     doids_with_associations = set()
     for association in associations_reader:
-        doid_code = association['doid_code']
-        if doid_code in exclude_doids:
+        disease_code = association['disease_code']
+        gene_symbol = association['gene_symbol']
+        assoc_tuple = disease_code, gene_symbol
+        if association['status'] != 'assoc_high':
             continue
-        graph.add_edge(doid_code, association['symbol'], 'association', 'both')
-        doids_with_associations.add(doid_code)
+        part = assoc_to_part.get(assoc_tuple, 'excluded')
+        if part == 'test':
+            continue
+        graph.add_edge(disease_code, gene_symbol, 'association', 'both')
+        doids_with_associations.add(disease_code)
     associations_file.close()
 
 
@@ -109,22 +143,34 @@ if __name__ == '__main__':
     # Parse the arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--network-dir', type=os.path.expanduser, default=
-        '~/Documents/serg/gene-disease-hetnet/networks/140313-metricsweep')
-    parser.add_argument('--config', action='store_true')
+        '~/Documents/serg/gene-disease-hetnet/networks/140509-metricsweep')
+    parser.add_argument('--doidprocess-path', type=os.path.expanduser, default=
+        '~/Documents/serg/gene-disease-hetnet/data-integration/doid-ontprocess-info.txt')
+    parser.add_argument('--pathophys-path', type=os.path.expanduser, default=
+        '~/Documents/serg/gene-disease-hetnet/data-integration/pathophysiology.txt')
+    parser.add_argument('--partition-path', type=os.path.expanduser, default=
+        '~/Documents/serg/gene-disease-hetnet/partitions.txt.gz')
+    parser.add_argument('--associations-id', default='processed')
     parser.add_argument('--create', action='store_true')
     args = parser.parse_args()
     network_dir = args.network_dir
     graph_agent = hetnet.agents.GraphAgent(network_dir)
     graph_dir = graph_agent.graph_dir
     
-        
+    associations_path = os.path.join(
+        bioparser.data.Data().gwas_plus.directory,
+        args.associations_id, 'association-statuses.txt')
+
     if args.create:
         
         # Create the graph
         log_path = os.path.join(graph_dir, 'creation.log')
         logging.basicConfig(filename=log_path, level=logging.INFO,
                             filemode='w', format='%(levelname)s:%(message)s')
-        graph = create_graph()
+        graph = create_graph(associations_path=associations_path,
+                             doidprocess_path=args.doidprocess_path,
+                             pathophys_path=args.pathophys_path,
+                             partition_path=args.partition_path)
         
         # Save the graph
         graph_agent = hetnet.agents.GraphAgent(network_dir)

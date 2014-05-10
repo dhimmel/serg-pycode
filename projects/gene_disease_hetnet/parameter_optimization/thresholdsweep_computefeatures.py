@@ -3,6 +3,7 @@ import itertools
 import os
 import gzip
 import random
+import csv
 
 import hetnet
 import hetnet.agents
@@ -10,7 +11,7 @@ import hetnet.algorithms
 import utilities.floats
 
 project_dir = '/home/dhimmels/Documents/serg/gene-disease-hetnet'
-network_dir = os.path.join(project_dir, 'networks', '140313-thresholdsweep')
+network_dir = os.path.join(project_dir, 'networks', '140509-thresholdsweep')
 graph_agent = hetnet.agents.GraphAgent(network_dir)
 
 # Load graph
@@ -22,24 +23,11 @@ metagraph = graph.metagraph
 
 metaedge_GaD = metagraph.get_edge(('gene', 'disease', 'association', 'both'))
 metaedge_DaG = metaedge_GaD.inverse
-metaedge_GiG = metagraph.get_edge(('gene', 'gene', 'interaction', 'both'))
-metaedge_GfG = metagraph.get_edge(('gene', 'gene', 'function', 'both'))
-metaedge_DsD = metagraph.get_edge(('disease', 'disease', 'similarity', 'both'))
 metaedge_GeT = metagraph.get_edge(('gene', 'tissue', 'expression', 'both'))
 metaedge_TeG = metaedge_GeT.inverse
 metaedge_TcD = metagraph.get_edge(('tissue', 'disease', 'cooccurrence', 'both'))
 metaedge_DcT = metaedge_TcD.inverse
 
-
-# (disease, disease, similarity, both)
-metapath_GaDsD = metagraph.get_metapath((metaedge_GaD, metaedge_DsD))
-metapath_GaDsDsD = metagraph.get_metapath((metaedge_GaD, metaedge_DsD, metaedge_DsD))
-lin_thresholds = utilities.floats.sequence(0.0, 0.5, 0.01)
-
-# (gene, gene, function, both) information
-metapath_GfGaD = metagraph.get_metapath((metaedge_GfG, metaedge_GaD))
-metapath_GfGfGaD = metagraph.get_metapath((metaedge_GfG, metaedge_GfG, metaedge_GaD))
-probability_thresholds = utilities.floats.sequence(0.2, 1.0, 0.05)
 
 # (gene, tissue, expression, both)
 metapath_GeTeGaD = metagraph.get_metapath((metaedge_GeT, metaedge_TeG, metaedge_GaD))
@@ -56,53 +44,35 @@ diseases = metanode_to_nodes[metaedge_GaD.target]
 for node_list in genes, diseases:
     node_list.sort(key=lambda node: node.id_)
 
-diseases_10plus = [disease for disease in diseases if len(disease.get_edges(metaedge_DaG)) >= 10]
-disease_gene_pairs = list(itertools.product(diseases_10plus, genes))
-
-dgs_tuples = [
-    (disease, gene, int((gene.id_, disease.id_, 'association', 'both') in graph.edge_dict))
-    for disease, gene in disease_gene_pairs]
 
 negative_prob = 0.005
 print 'Negative Inclusion Probability: {}'.format(negative_prob)
-random.seed(0)
-dgs_tuples = [(d, g, s) for d, g, s in dgs_tuples if s or random.random() < negative_prob]
+dgs_tuples = list()
+part_path = os.path.join(project_dir, 'partitions.txt.gz')
+part_file = gzip.open(part_path)
+part_reader = csv.DictReader(part_file, delimiter='\t')
+for part_row in part_reader:
+    if part_row['part'] == 'test':
+        continue
+    status = part_row['status']
+    percentile = float(part_row['percentile'])
+    disease_node = graph.node_dict[part_row['disease_code']]
+    gene_node = graph.node_dict[part_row['gene_symbol']]
+    if part_row['status'] == 'assoc_high':
+        dgs_tuple = disease_node, gene_node, 1
+        dgs_tuples.append(dgs_tuple)
+    if part_row['status'] == 'negative' and percentile <= negative_prob:
+        dgs_tuple = disease_node, gene_node, 0
+        dgs_tuples.append(dgs_tuple)
+part_file.close()
+
+
 
 def get_gte_mask(key, threshold):
     return lambda edge_data: edge_data[key] >= threshold
 
-#DsD
+
 features = list()
-for lin_threshold in lin_thresholds:
-    mask = get_gte_mask('lin_similarity', lin_threshold)
-    feature = dict()
-    feature['metapath'] = metapath_GaDsD
-    feature['metaedge_to_mask'] = {metaedge_DsD: mask}
-    feature['name'] = 'GaDsD_DsD={}'.format(lin_threshold)
-    features.append(feature)
-
-    feature = dict()
-    feature['metapath'] = metapath_GaDsDsD
-    feature['metaedge_to_mask'] = {metaedge_DsD: mask}
-    feature['name'] = 'GaDsDsD_DsD={}'.format(lin_threshold)
-    features.append(feature)
-
-
-#GfG
-for probability_threshold in probability_thresholds:
-    mask = get_gte_mask('probability', probability_threshold)
-
-    feature = dict()
-    feature['metapath'] = metapath_GfGaD
-    feature['metaedge_to_mask'] = {metaedge_GfG: mask}
-    feature['name'] = 'GfGaD_GfG={}'.format(probability_threshold)
-    features.append(feature)
-
-    feature = dict()
-    feature['metapath'] = metapath_GfGfGaD
-    feature['metaedge_to_mask'] = {metaedge_GfG: mask}
-    feature['name'] = 'GfGfGaD_GfG={}'.format(probability_threshold)
-    features.append(feature)
 
 #GeT
 for log10_expr_threshold in log10_expr_thresholds:

@@ -12,7 +12,7 @@ import data
 
 class GwasCatalog(object):
 
-    def __init__(self, directory=None, processed_dirname='processed2', ignore_pmids=set()):
+    def __init__(self, directory=None, processed_dirname='processed', ignore_pmids=set()):
         if directory is None:
             directory = data.current_path('gwas-catalog', require_dated_format=True)
         self.directory = directory
@@ -297,7 +297,7 @@ class GwasCatalog(object):
                     report_counter.update(a['reported_genes'])
                 for gene in report_counter.keys():
                     if not gene.coding:
-                        del report_counter['gene']
+                        del report_counter[gene]
                 mode_reported = GwasCatalog.max_counter_keys(report_counter)
 
                 # Mapped genes
@@ -310,6 +310,7 @@ class GwasCatalog(object):
                     downstream_gene = a.get('downstream_gene')
                     stream_genes = {upstream_gene, downstream_gene}
                     stream_genes.discard(None)
+                    stream_genes = set(filter(operator.attrgetter('coding'), stream_genes))
                     mapped_gene = None
                     # GWAS catalog finds that rsid is within a single gene
                     if len(mapped_genes) == 1:
@@ -336,7 +337,7 @@ class GwasCatalog(object):
                 candidate_genes = all_mapped_genes | set(report_counter)
                 resolved_gene = mode_reported[0] if len(mode_reported) == 1 else sequentially_mapped_gene
 
-                merged = {'doid_code': doid, 'doid_name': association[0]['doid_name'],
+                merged = {'disease_code': doid, 'disease_name': association[0]['doid_name'],
                           'resolved_gene': resolved_gene,
                           'candidate_genes': '|'.join(map(str, candidate_genes)),
                           'report_counter': report_counter,
@@ -348,7 +349,7 @@ class GwasCatalog(object):
                           'confidence': 'high' if association[0]['mlog_pval'] >= mlog_cutoff else 'low'}
                 merged_associations.append(merged)
 
-                disease_tuple = merged['doid_code'], merged['doid_name']
+                disease_tuple = merged['disease_code'], merged['disease_name']
                 statuses = disease_to_statuses.setdefault(disease_tuple, dict())
                 confidence = merged['confidence']
                 linked_set = statuses.setdefault('linked_{}'.format(confidence), set())
@@ -357,7 +358,7 @@ class GwasCatalog(object):
                 linked_set.update(candidate_genes)
 
         status_rows = list()
-        for (doid_code, doid_name), statuses in disease_to_statuses.items():
+        for (disease_code, disease_name), statuses in disease_to_statuses.items():
             linked_high = statuses.get('linked_high', set())
             linked_low = statuses.get('linked_low', set())
             assoc_low = statuses.get('assoc_low', set())
@@ -372,16 +373,16 @@ class GwasCatalog(object):
             linked_high.difference_update(assoc_high)
             for status_key, gene_set in statuses.items():
                 for gene in gene_set:
-                    status_row = {'doid_code': doid_code, 'doid_name': doid_name,
+                    status_row = {'disease_code': disease_code, 'disease_name': disease_name,
                      'gene_code': gene.hgnc_id, 'gene_symbol': gene.symbol,
                      'status': status_key}
                     status_rows.append(status_row)
-        status_rows.sort(key=operator.itemgetter('doid_name', 'status', 'gene_symbol'))
-        assert len(status_rows) == len(set(map(operator.itemgetter('doid_code', 'gene_code'), status_rows)))
+        status_rows.sort(key=operator.itemgetter('disease_name', 'status', 'gene_symbol'))
+        assert len(status_rows) == len(set(map(operator.itemgetter('disease_code', 'gene_code'), status_rows)))
 
 
         #write files
-        fieldnames = ['doid_code', 'doid_name', 'resolved_gene',
+        fieldnames = ['disease_code', 'disease_name', 'resolved_gene',
                       'confidence', 'candidate_genes', 'report_counter',
                       'mapped_genes', 'dapple_genes', 'studies', 'snps', 'mlog_pvals']
         path = os.path.join(self.processed_dir, 'associations-processing.txt')
@@ -392,7 +393,7 @@ class GwasCatalog(object):
         write_file.close()
 
         # write statuses
-        fieldnames = ['doid_code', 'doid_name', 'gene_code',
+        fieldnames = ['disease_code', 'disease_name', 'gene_code',
                       'gene_symbol', 'status']
         path = os.path.join(self.processed_dir, 'association-statuses.txt')
         write_file = open(path, 'w')
@@ -405,14 +406,14 @@ class GwasCatalog(object):
         # Compute the number of associations per disease
         disease_to_counter = dict()
         for status_row in status_rows:
-            disease = status_row['doid_code'], status_row['doid_name']
+            disease = status_row['disease_code'], status_row['disease_name']
             status = status_row['status']
             counter = disease_to_counter.setdefault(disease, collections.Counter())
             counter[status] += 1
 
         disease_count_rows = list()
-        for (doid_code, doid_name), counter in disease_to_counter.items():
-            row = {'doid_code': doid_code, 'doid_name': doid_name,
+        for (disease_code, disease_name), counter in disease_to_counter.items():
+            row = {'disease_code': disease_code, 'disease_name': disease_name,
                    'assoc_high': counter['assoc_high'],
                    'linked_high': counter['linked_high'],
                    'assoc_low': counter['assoc_low'],
@@ -421,7 +422,7 @@ class GwasCatalog(object):
             disease_count_rows.append(row)
         disease_count_rows.sort(key=operator.itemgetter('assoc_high', 'assoc_low'), reverse=True)
 
-        fieldnames = ['doid_code', 'doid_name', 'assoc_high', 'linked_high', 'assoc_low', 'linked_low', 'excluded']
+        fieldnames = ['disease_code', 'disease_name', 'assoc_high', 'linked_high', 'assoc_low', 'linked_low', 'excluded']
         path = os.path.join(self.processed_dir, 'associations-per-disease.txt')
         with open(path, 'w') as write_file:
             writer = csv.DictWriter(write_file, delimiter='\t', fieldnames=fieldnames)
