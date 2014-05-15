@@ -114,7 +114,9 @@ def write_sif(graph, path, max_edges=None, seed=0):
     for metaedge, edges in metaedge_to_edges.iteritems():
         if max_edges is not None and len(edges) > max_edges:
             edges = random.sample(edges, k=max_edges)
-        for edge in edges:
+        for i, edge in enumerate(edges):
+            if i:
+                sif_file.write('\n')
             sif_tuple = edge.source, edge.metaedge.kind, edge.target
             line = '{} {} {}'.format(*sif_tuple)
             sif_file.write(line)
