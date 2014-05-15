@@ -93,8 +93,9 @@ if __name__ == '__main__':
 
     # filesystem
     network_dir = args.network_dir
-    if not os.path.isdir(args.feature_path):
-        os.mkdir(args.feature_path)
+    path_head, path_tail = os.path.split(args.feature_path)
+    if not os.path.isdir(path_head):
+        os.mkdir(path_head)
 
     # Read Objects
     graph = read_graph(network_dir)
