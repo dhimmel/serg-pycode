@@ -37,7 +37,7 @@ diseases = sorted(metanode_to_nodes[metaedge_GaD.target])
 for node_list in genes, diseases:
     node_list.sort(key=lambda node: node.id_)
 
-negative_prob = 0.025
+negative_prob = 0.05
 print 'Negative Inclusion Probability: {}'.format(negative_prob)
 dgs_tuples = list()
 part_path = os.path.join(project_dir, 'partitions.txt.gz')

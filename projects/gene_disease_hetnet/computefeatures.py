@@ -23,20 +23,22 @@ def compute_features(graph, part_rows, feature_path, dwpc_exponent):
     total_edges = len(part_rows)
     writer = None
     for i, part_row in enumerate(part_rows):
-        doid_code = part_row['doid_code']
-        gene_symbol = part_row['gene']
+        disease_code = part_row['disease_code']
+        gene_symbol = part_row['gene_symbol']
         source = graph.node_dict[gene_symbol]
-        target = graph.node_dict[doid_code]
+        target = graph.node_dict[disease_code]
 
         edge = graph.edge_dict.get((source.id_, target.id_, 'association', 'both'))
         exclude_edges = {edge, edge.inverse} if edge else set()
-        status = int(bool(edge))
 
         features = collections.OrderedDict()
-        features['source'] = gene_symbol
-        features['target'] = doid_code
-        features['target_name'] = part_row['doid_name']
-        features['status'] = status
+        features['gene_code'] = part_row['gene_code']
+        features['gene_symbol'] = gene_symbol
+        features['disease_code'] = disease_code
+        features['disease_name'] = part_row['disease_name']
+        features['status'] = part_row['status']
+        features['status_int'] = part_row['status_int']
+        features['percentile'] = part_row['percentile']
         features['part'] = part_row['part']
 
         features['PC_s|G-a-D'] = len(graph.paths_from(source, metapath_GaD, masked=False, exclude_edges=exclude_edges))
@@ -58,7 +60,7 @@ def compute_features(graph, part_rows, feature_path, dwpc_exponent):
         writer.writerow(features)
 
         percent = 100.0 * i / total_edges
-        print '{:.1f}% -  {:10}{}'.format(percent, gene_symbol, part_row['doid_name'])
+        print '{:.1f}% -  {:10}{}'.format(percent, gene_symbol, part_row['disease_name'])
 
     feature_file.close()
 
@@ -74,7 +76,7 @@ def read_part(partition_path):
     partition_file = gzip.open(partition_path)
     part_rows = list(csv.DictReader(partition_file, delimiter='\t'))
     for row in part_rows:
-        row['status'] = int(row['status'])
+        row['status_int'] = int(row['status_int'])
     partition_file.close()
     return part_rows
 
@@ -88,7 +90,11 @@ if __name__ == '__main__':
     parser.add_argument('--feature-path', type=os.path.expanduser)
     parser.add_argument('--dwpc-exponent', default=0.4, type=float)
     args = parser.parse_args()
+
+    # filesystem
     network_dir = args.network_dir
+    if not os.path.isdir(args.feature_path):
+        os.mkdir(args.feature_path)
 
     # Read Objects
     graph = read_graph(network_dir)

@@ -49,7 +49,7 @@ alphas = [0.01, 0.02, 0.05, 0.01, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.75,
 
 ridge = sklearn.linear_model.RidgeClassifierCV(alphas)
 ridge.fit(X, y_true)
-ridge.decision_function(X_test)
+ridge.decision_function(X)
 """
 column_names = feature_df.columns.values.tolist()
 feature_names = column_names[4:]
