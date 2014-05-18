@@ -111,7 +111,7 @@ def create_graph(associations_path, doidprocess_path, pathophys_path, partition_
 
     # Add (gene, tissue, expression, both) edges
     logging.info('Adding GNF gene-tissue expression.')
-    log10_expr_cutoff = 1.3
+    log10_expr_cutoff = 1.4
     logging.info('log10_expression_cutoff: {}'.format(log10_expr_cutoff))
     expressions = data.gnf.expression_generator()
     for expression in expressions:
@@ -139,7 +139,7 @@ def create_graph(associations_path, doidprocess_path, pathophys_path, partition_
 
     # Add (disease, tissue, cooccurrence, both)
     logging.info('Adding CoPub disease-tissue cooccurrence.')
-    r_scaled_cutoff = 33
+    r_scaled_cutoff = 29
     logging.info('r_scaled_cutoff: {}'.format(r_scaled_cutoff))
     coocc_gen = copub_analysis.doid_bto_cooccurrence_generator()
     for row in coocc_gen:
@@ -190,7 +190,7 @@ if __name__ == '__main__':
     # Parse the arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--network-dir', type=os.path.expanduser, default=
-        '~/Documents/serg/gene-disease-hetnet/networks/140514-all-assoc')
+        '~/Documents/serg/gene-disease-hetnet/networks/140518-all-assoc')
     parser.add_argument('--doidprocess-path', type=os.path.expanduser, default=
         '~/Documents/serg/gene-disease-hetnet/data-integration/doid-ontprocess-info.txt')
     parser.add_argument('--pathophys-path', type=os.path.expanduser, default=
