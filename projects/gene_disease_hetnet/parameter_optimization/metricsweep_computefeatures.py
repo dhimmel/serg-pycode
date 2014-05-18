@@ -10,7 +10,7 @@ import hetnet.agents
 import hetnet.algorithms
 
 project_dir = '/home/dhimmels/Documents/serg/gene-disease-hetnet'
-network_dir = os.path.join(project_dir, 'networks', '140509-metricsweep')
+network_dir = os.path.join(project_dir, 'networks', '140516-metricsweep')
 
 graph_agent = hetnet.agents.GraphAgent(network_dir)
 

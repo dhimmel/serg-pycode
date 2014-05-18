@@ -11,7 +11,7 @@ import hetnet.algorithms
 import utilities.floats
 
 project_dir = '/home/dhimmels/Documents/serg/gene-disease-hetnet'
-network_dir = os.path.join(project_dir, 'networks', '140509-thresholdsweep')
+network_dir = os.path.join(project_dir, 'networks', '140516-thresholdsweep')
 graph_agent = hetnet.agents.GraphAgent(network_dir)
 
 # Load graph
@@ -82,7 +82,6 @@ for log10_expr_threshold in log10_expr_thresholds:
     feature['metaedge_to_mask'] = {metaedge_GeT: mask, metaedge_TeG: mask}
     feature['name'] = 'GeTeGaD_GeT={}'.format(log10_expr_threshold)
     features.append(feature)
-
 
 #DcT
 for r_scaled_threshold in r_scaled_thresholds:

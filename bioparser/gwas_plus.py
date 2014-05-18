@@ -466,11 +466,14 @@ class GwasCatalog(object):
 if __name__ =='__main__':
     import pprint
 
-
+    doidprocess_path = '/home/dhimmels/Documents/serg/gene-disease-hetnet/data-integration/doid-ontprocess-info.txt'
 
     gcat = GwasCatalog()
-    doidprocess_path = '/home/dhimmels/Documents/serg/gene-disease-hetnet/data-integration/doid-ontprocess-info.txt'
     merged_associations = gcat.get_merged_associations(doidprocess_path=doidprocess_path)
+
+    gcat_no_wtccc2 = GwasCatalog(processed_dirname='processed-no-wtccc2', ignore_pmids={'21833088'})
+    merged_associations_no_wtccc2 = gcat_no_wtccc2.get_merged_associations(doidprocess_path=doidprocess_path)
+
 
     #print len(gcat.get_merged_associations('snap_wingspan'))
     #print sum(len(v) for v in gcat.get_merged_associations('snap_wingspan').values())

@@ -66,21 +66,21 @@ def create_graph(associations_path, doidprocess_path, pathophys_path, partition_
         graph.add_node(doid_id, 'disease', node_data)
 
     # Add pathophysiology nodes
-    exclude_pathophys = {'unspecific', 'ideopathic'}
+    exclude_pathophys = {'unspecific', 'idiopathic'}
     with open(pathophys_path) as read_file:
         reader = csv.DictReader(read_file, delimiter='\t')
         pathophys_rows = list(reader)
     pathophys_rows = [row for row in pathophys_rows
                       if row['pathophysiology'] not in exclude_pathophys]
     pathophys_rows = [row for row in pathophys_rows
-                      if row['doid_code'] not in exclude_doids]
+                      if row['disease_code'] not in exclude_doids]
     pathophys_terms = {row['pathophysiology'] for row in pathophys_rows}
     for pathophys_term in pathophys_terms:
         graph.add_node(pathophys_term, 'pathophysiology')
 
     # Add (disease, pathophysiology, membership, both) edges
     for pathophys_row in pathophys_rows:
-        doid_code = pathophys_row['doid_code']
+        doid_code = pathophys_row['disease_code']
         pathophys_term = pathophys_row['pathophysiology']
         graph.add_edge(doid_code, pathophys_term, 'membership', 'both')
 

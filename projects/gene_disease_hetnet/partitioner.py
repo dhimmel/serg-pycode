@@ -12,7 +12,7 @@ data = bioparser.data.Data()
 
 
 random.seed(0)
-percent_training = 0.8
+percent_training = 0.25
 min_genes_per_disease = 10
 status_to_int = {'assoc_high': 1, 'negative': 0,
                  'assoc_low': -1, 'linked_low': -1, 'linked_high': -1}
@@ -62,8 +62,9 @@ for status, rows in status_to_rows.iteritems():
     n = len(rows)
     rindexes = range(n)
     random.shuffle(rindexes)
+    random.shuffle(rindexes)
     for rindex, row in zip(rindexes, rows):
-        percentile = float(rindex + 1) / n
+        percentile = round(float(rindex + 1) / n, 9)
         row['percentile'] = percentile
         row['part'] = 'train' if percentile <= percent_training else 'test'
 
