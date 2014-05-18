@@ -88,9 +88,9 @@ def create_graph(associations_path, doidprocess_path, pathophys_path, partition_
     # Add (disease, gene, association, both) edges
     with gzip.open(partition_path) as part_file:
         reader = csv.DictReader(part_file, delimiter='\t')
-        part_rows = list(reader)
+        part_rows = [row for row in reader if row['status'] == 'assoc_high']
     assoc_to_part = {(row['disease_code'], row['gene_symbol']): row['part']
-                        for row in part_rows if row['status'] != 'negative'}
+                     for row in part_rows}
 
     logging.info('Adding GWAS catalog disease-gene associations.')
     associations_file = open(associations_path)
@@ -104,6 +104,7 @@ def create_graph(associations_path, doidprocess_path, pathophys_path, partition_
             continue
         part = assoc_to_part.get(assoc_tuple, 'excluded')
         if exclude_testing and part == 'test':
+            # broken excludes all associations with diseases with 10+ assoc.
             continue
         graph.add_edge(disease_code, gene_symbol, 'association', 'both')
         doids_with_associations.add(disease_code)

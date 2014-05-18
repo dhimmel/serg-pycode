@@ -73,9 +73,9 @@ def create_graph(associations_path, doidprocess_path, pathophys_path, partition_
     # Add (disease, gene, association, both) edges
     with gzip.open(partition_path) as part_file:
         reader = csv.DictReader(part_file, delimiter='\t')
-        part_rows = list(reader)
+        part_rows = [row for row in reader if row['status'] == 'assoc_high']
     assoc_to_part = {(row['disease_code'], row['gene_symbol']): row['part']
-                        for row in part_rows if row['status'] != 'negative'}
+                     for row in part_rows}
 
     logging.info('Adding GWAS catalog disease-gene associations.')
     associations_file = open(associations_path)
@@ -143,7 +143,7 @@ if __name__ == '__main__':
     # Parse the arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--network-dir', type=os.path.expanduser, default=
-        '~/Documents/serg/gene-disease-hetnet/networks/140516-metricsweep')
+        '~/Documents/serg/gene-disease-hetnet/networks/140518-metricsweep')
     parser.add_argument('--doidprocess-path', type=os.path.expanduser, default=
         '~/Documents/serg/gene-disease-hetnet/data-integration/doid-ontprocess-info.txt')
     parser.add_argument('--pathophys-path', type=os.path.expanduser, default=

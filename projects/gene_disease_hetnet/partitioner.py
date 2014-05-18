@@ -12,7 +12,7 @@ data = bioparser.data.Data()
 
 
 random.seed(0)
-percent_training = 0.25
+percent_training = 0.75
 min_genes_per_disease = 10
 status_to_int = {'assoc_high': 1, 'negative': 0,
                  'assoc_low': -1, 'linked_low': -1, 'linked_high': -1}
