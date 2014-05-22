@@ -191,7 +191,7 @@ if __name__ == '__main__':
     # Parse the arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--network-dir', type=os.path.expanduser, default=
-        '~/Documents/serg/gene-disease-hetnet/networks/140518-all-assoc')
+        '~/Documents/serg/gene-disease-hetnet/networks/140522-all-assoc')
     parser.add_argument('--doidprocess-path', type=os.path.expanduser, default=
         '~/Documents/serg/gene-disease-hetnet/data-integration/doid-ontprocess-info.txt')
     parser.add_argument('--pathophys-path', type=os.path.expanduser, default=
