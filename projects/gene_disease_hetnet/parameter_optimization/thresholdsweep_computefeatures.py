@@ -11,7 +11,7 @@ import hetnet.algorithms
 import utilities.floats
 
 project_dir = '/home/dhimmels/Documents/serg/gene-disease-hetnet'
-network_dir = os.path.join(project_dir, 'networks', '140516-thresholdsweep')
+network_dir = os.path.join(project_dir, 'networks', '140518-thresholdsweep')
 graph_agent = hetnet.agents.GraphAgent(network_dir)
 
 # Load graph

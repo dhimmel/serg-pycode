@@ -112,6 +112,15 @@ class BasePath(IterMask):
             yield edge
             yield edge.source
         yield self.target()
+
+    def max_overlap(self, others):
+        for other in others:
+            len_other = len(other)
+            if len_other > len(self):
+                continue
+            if self[:len_other] == other:
+                return other
+        return None
     
     def __iter__(self):
         return iter(self.edges)
@@ -125,7 +134,7 @@ class BasePath(IterMask):
     def __hash__(self):
         return hash(self.edges)
     
-    def __eq__(self):
+    def __eq__(self, other):
         return self.edges == other.edges
 
 class MetaGraph(BaseGraph):
@@ -257,6 +266,9 @@ class MetaGraph(BaseGraph):
             return self.path_dict[edges]
         except KeyError:
             assert isinstance(edges, tuple)
+            if len(edges) == 0:
+                return None
+
             metapath = MetaPath(edges)
             self.path_dict[edges] = metapath
 
@@ -266,6 +278,14 @@ class MetaGraph(BaseGraph):
 
             metapath.inverse = inverse
             inverse.inverse = metapath
+
+            sub_edges = edges[1:]
+            if not sub_edges:
+                metapath.sub = None
+                inverse.sub = None
+            else:
+                metapath.sub = self.get_metapath(sub_edges)
+                inverse.sub = self.get_metapath(inverse_edges[1:])
 
             return metapath
     
