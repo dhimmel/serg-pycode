@@ -26,10 +26,11 @@ def create_graph(associations_path, doidprocess_path, pathophys_path, partition_
     exclude_doids = doid_remove | set(doid_pop)
 
     msigdb = bioparser.data.Data().msigdb
-    msig_set_types = msigdb.abbrev_to_name.keys()
+    #msig_set_types = msigdb.abbrev_to_name.keys()
     # http://www.broadinstitute.org/gsea/msigdb/collections.jsp
-    #msig_set_types = ['c1.all', 'c2.cgp', 'c2.cp.all', 'c3.mir', 'c3.tft',
-    #                  'c4.cgn', 'c4.cm', 'c5.bp', 'c5.cc', 'c5.mf', 'c6.all', 'c7.all']
+    msig_set_types = ['c1.all', 'c2.cgp', 'c2.cp.biocarta', 'c2.cp.kegg', 'c2.cp.reactome',
+                      'c3.mir', 'c3.tft', 'c4.cgn', 'c4.cm', 'c5.bp', 'c5.cc', 'c5.mf',
+                      'c6.all', 'c7.all']
 
     # Define and initialize networkx graph
     metaedge_tuples = [('disease', 'gene', 'association', 'both'),
@@ -191,7 +192,7 @@ if __name__ == '__main__':
     # Parse the arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--network-dir', type=os.path.expanduser, default=
-        '~/Documents/serg/gene-disease-hetnet/networks/140522-all-assoc')
+        '~/Documents/serg/gene-disease-hetnet/networks/140528-all-assoc')
     parser.add_argument('--doidprocess-path', type=os.path.expanduser, default=
         '~/Documents/serg/gene-disease-hetnet/data-integration/doid-ontprocess-info.txt')
     parser.add_argument('--pathophys-path', type=os.path.expanduser, default=
@@ -226,9 +227,9 @@ if __name__ == '__main__':
         graph_agent = hetnet.agents.GraphAgent(network_dir)
         graph_agent.set(graph)
         graph_agent.write_additional_formats()
-        sif_path = os.path.join(network_dir, 'graph', 'graph.sif')
+        sif_path = os.path.join(network_dir, 'graph', 'graph.sif.gz')
         hetnet.readwrite.graph.write_sif(graph, sif_path)
-        sif_subset_path = os.path.join(network_dir, 'graph', 'graph-10k.sif')
+        sif_subset_path = os.path.join(network_dir, 'graph', 'graph-10k.sif.gz')
         hetnet.readwrite.graph.write_sif(graph, sif_subset_path, max_edges=int(1e4), seed=0)
         nodetable_path = os.path.join(network_dir, 'graph', 'node_table.tsv')
         hetnet.readwrite.graph.write_nodetable(graph, nodetable_path)

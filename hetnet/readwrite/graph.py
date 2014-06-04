@@ -108,7 +108,7 @@ def write_gml(graph, path):
 def write_sif(graph, path, max_edges=None, seed=0):
     if max_edges is not None:
         assert isinstance(max_edges, int)
-    sif_file = open(path, 'w')
+    sif_file = gzip.open(path, 'wb') if path.endswith('.gz') else open(path, 'w')
     metaedge_to_edges = graph.get_metaedge_to_edges(exclude_inverts=True)
     random.seed(seed)
     for metaedge, edges in metaedge_to_edges.iteritems():

@@ -57,7 +57,7 @@ for part_row in part_reader:
         dgs_tuple = disease_node, gene_node, 0
         dgs_tuples.append(dgs_tuple)
 part_file.close()
-total_edges =len(dgs_tuples)
+total_edges = len(dgs_tuples)
 
 
 feature_names = ['{}:{}'.format(metric['name'], metapath)

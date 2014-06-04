@@ -4,13 +4,18 @@ import itertools
 import os
 import gzip
 import csv
+import time
 
 import hetnet
 import hetnet.agents
-import hetnet.algorithms
+import hetnet.pathtools
 
 
 def compute_features(graph, part_rows, feature_path, dwpc_exponent):
+
+    print('Initial Memory Usage: {:.1f}. Max Memory Usage: {:.1f}'.format(
+        hetnet.pathtools.memory_usage() / 1024.0, hetnet.pathtools.max_MB / 1024.0))
+
     # Define Metapaths
     metagraph = graph.metagraph
     metapaths = metagraph.extract_metapaths('gene', 'disease', max_length=3)
@@ -23,6 +28,8 @@ def compute_features(graph, part_rows, feature_path, dwpc_exponent):
     total_edges = len(part_rows)
     writer = None
     for i, part_row in enumerate(part_rows):
+        time_start = time.clock()
+
         disease_code = part_row['disease_code']
         gene_symbol = part_row['gene_symbol']
         source = graph.node_dict[gene_symbol]
@@ -41,15 +48,17 @@ def compute_features(graph, part_rows, feature_path, dwpc_exponent):
         features['percentile'] = part_row['percentile']
         features['part'] = part_row['part']
 
-        features['PC_s|G-a-D'] = len(graph.paths_from(source, metapath_GaD, masked=False, exclude_edges=exclude_edges))
-        features['PC_t|G-a-D'] = len(graph.paths_from(target, metapath_DaG, masked=False, exclude_edges=exclude_edges))
+        features['PC_s|G-a-D'] = len(hetnet.pathtools.filtered_crdfs_paths_from(
+            source, metapath_GaD, exclude_edges=exclude_edges))
+        features['PC_t|G-a-D'] = len(hetnet.pathtools.filtered_crdfs_paths_from(
+            target, metapath_DaG, exclude_edges=exclude_edges))
 
         for metapath in metapaths:
             feature_name = 'DWPC_{}|{}'.format(dwpc_exponent, metapath)
-            paths = graph.paths_between_tree(source, target, metapath,
-                duplicates=False, masked=True,
-                exclude_nodes=set(), exclude_edges=exclude_edges)
-            dwpc = hetnet.algorithms.DWPC(paths,
+
+            paths = hetnet.pathtools.crdfs_paths_fromto(target, source, metapath.inverse,
+                                                        exclude_edges=exclude_edges)
+            dwpc = hetnet.pathtools.degree_weighted_path_count(paths,
                 damping_exponent=dwpc_exponent, exclude_edges=exclude_edges)
             features[feature_name] = dwpc
         if writer is None:
@@ -59,7 +68,10 @@ def compute_features(graph, part_rows, feature_path, dwpc_exponent):
             writer.writeheader()
         writer.writerow(features)
 
+        time_end = time.clock()
         percent = 100.0 * i / total_edges
+        print 'cache size {} | memory {:.3f} | seconds {:.3f}'.format(
+            len(hetnet.pathtools.cache), hetnet.pathtools.memory_usage() / 1024.0, time_end - time_start)
         print '{:.1f}% -  {:10}{}'.format(percent, gene_symbol, part_row['disease_name'])
 
     feature_file.close()
@@ -85,11 +97,14 @@ if __name__ == '__main__':
     # Parse the arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--network-dir', type=os.path.expanduser, default=
-        '~/Documents/serg/gene-disease-hetnet/networks/140522-all-assoc')
+        '~/Documents/serg/gene-disease-hetnet/networks/140528-all-assoc')
     parser.add_argument('--partition-path', type=os.path.expanduser)
     parser.add_argument('--feature-path', type=os.path.expanduser)
     parser.add_argument('--dwpc-exponent', default=0.4, type=float)
+    parser.add_argument('--max-gb', default=60.0, type=float)
     args = parser.parse_args()
+
+    hetnet.pathtools.max_MB = args.max_gb * 1024.0
 
     # filesystem
     network_dir = args.network_dir

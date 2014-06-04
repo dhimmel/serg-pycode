@@ -12,13 +12,16 @@ import hetnet
 
 cache_gets = 0
 cache_sets = 0
+i_memcheck = 0
 max_MB = 60 * 1024
 prune_fraction = 0.2
-memcheck_frequency = 0.01
+memcheck_interval = 1000
 cache = collections.OrderedDict()
 
 
 
+# Set memory_usage to a function that returns memory usage in MB.
+# Python resource module returns max session memory rather than current usage.
 
 try:
     import psutil
@@ -55,10 +58,15 @@ def cache_get(key):
     return value
 
 def cache_set(key, value):
-    global cache_sets
-    cache_sets += 1
     cache[key] = value
-    if random.random() <= memcheck_frequency and memory_usage() > max_MB:
+    global cache_sets
+    global i_memcheck
+    cache_sets += 1
+    if i_memcheck < memcheck_interval:
+        i_memcheck += 1
+        return
+    i_memcheck = 0
+    if memory_usage() > max_MB:
         n_remove = int(len(cache) * prune_fraction)
         remove_keys = tuple(itertools.islice(cache.iterkeys(), n_remove))
         for key in remove_keys:
@@ -69,7 +77,12 @@ def cache_set(key, value):
         print_str = 'Deleted {} cached items. Using {:.1f}GB for {:.2f} item cache. Hitrate {:.5f}'
         print(print_str.format(n_remove, memory / 1024.0, len(cache), hitrate))
 
+
 def cache_hit_rate():
+    """
+    Returns the cache hit rate, which is the percent of lookups
+    that succeed (where the result is cached).
+    """
     return float(cache_gets) / (cache_sets + cache_gets)
 
 
@@ -134,8 +147,9 @@ def crdfs_paths_fromto(source_node, target_node, metapath, exclude_nodes=set(), 
 
 def rdfs_paths_from(node, metapath):
     """
+    CAUTION: SLOW NOT CACHED
     Recursive depth-first-search to find all paths corresponding to metapath
-    and starting at node. Paths with duplicate nodes are NOT excluded currently.
+    and starting at node. Paths with duplicate nodes are excluded.
     Returns a tuple of paths (as tuples of hetnet.Edge() objects
     rather than a hetnet.Path() objects).
     """
@@ -154,6 +168,7 @@ def rdfs_paths_from(node, metapath):
 def rdfs_paths_fromto(source_node, target_node, metapath, exclude_masked=False,
                       exclude_nodes=set(), exclude_edges=set()):
     """
+    CAUTION: SLOW NOT CACHED
     Recursive depth-first-search to find all paths corresponding to metapath,
     originating on source_node and terminating on target_node. Paths with
     duplicate nodes ARE excluded currently. Returns a generator of
@@ -176,6 +191,13 @@ def rdfs_paths_fromto(source_node, target_node, metapath, exclude_masked=False,
 
 def path_based_features(source_node, target_node, metapath, exclude_masked=False,
                         exclude_nodes=set(), exclude_edges=set()):
+    """
+    Return a dictionary where items store:
+    -- paths between the source and target node
+    -- paths from the source
+    -- paths from the target
+    where paths follow the provided metapath.
+    """
     paths_s = filtered_crdfs_paths_from(source_node, metapath, exclude_masked, exclude_nodes, exclude_edges)
     paths_t = filtered_crdfs_paths_from(target_node, metapath.inverse, exclude_masked, exclude_nodes, exclude_edges)
     paths_st = tuple(path for path in paths_s if path[-1].target == target_node)

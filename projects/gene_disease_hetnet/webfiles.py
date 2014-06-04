@@ -7,7 +7,7 @@ import bioparser.data
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--network-dir', type=os.path.expanduser, default=
-    '~/Documents/serg/gene-disease-hetnet/networks/140321-all-assoc')
+    '~/Documents/serg/gene-disease-hetnet/networks/140522-all-assoc-lessmsig')
 args = parser.parse_args()
 
 webdata_dir = os.path.join(args.network_dir, 'webdata')
@@ -43,23 +43,23 @@ for gene in genes:
 
 
 ## Make disease info files
-assoc_per_disease_path = '/home/dhimmels/Documents/serg/data-sources/gwas-catalog/140205/associations-per-disease.txt'
+assoc_per_disease_path = '/home/dhimmels/Documents/serg/data-sources/gwas-catalog/140205/processed/associations-per-disease.txt'
 with open(assoc_per_disease_path) as assoc_per_disease_file:
     reader = csv.DictReader(assoc_per_disease_file, delimiter='\t')
     assoc_per_disease_rows = list(reader)
 
-doid_codes = [row['doid_code'] for row in assoc_per_disease_rows]
+doid_codes = [row['disease_code'] for row in assoc_per_disease_rows]
 doid_graph = bioparser.data.Data().doid.get_graph()
 for doid_code in doid_codes:
     json_doid = doid_graph.node[doid_code].copy()
-    json_doid['doid_code'] = doid_code
+    json_doid['disease_code'] = doid_code
     filename = '{}.json'.format(doid_code.replace(':', '_'))
     path = os.path.join(disease_info_dir, filename)
     with open(path, 'w') as write_file:
         json.dump(json_doid, write_file)
 
 
-
+## Make feature description file
 feature_description_path = '/home/dhimmels/Documents/serg/gene-disease-hetnet/data-integration/feature-descriptions.txt'
 with open(feature_description_path) as feature_description_file:
     reader = csv.DictReader(feature_description_file, delimiter='\t')
