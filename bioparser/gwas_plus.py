@@ -38,6 +38,14 @@ class GwasCatalog(object):
         mapped_gene_split_pattern = re.compile(r" - |;")
         invalid_symbols = {'Intergenic', 'NR', 'Pending'}
         date_format = '%m/%d/%Y'
+        snp_number_pattern = re.compile(r"[[({][^\d]*([\d,.]+)[^\d]*[\])};]")
+        non_decimal_pattern = re.compile(r"[^\d.]+")
+        odds_ratio_ci_pattern = re.compile(r"([\d.]+)-([\d.]+)")
+        case_pattern = r'([\d,]+)[^\d]*?cases'
+        control_pattern = r'([\d,]+)[^\d]*?controls'
+        sample_size_pattern = r'[\d,]+'
+
+
 
         read_file = open(path)
         reader = csv.DictReader(read_file, delimiter='\t')
@@ -79,6 +87,60 @@ class GwasCatalog(object):
             parsed_row['chromosome'] = row['Chr_id']
             parsed_row['position'] = None if row['Chr_pos'] == '' else int(row['Chr_pos'])
             parsed_row['mlog_pval'] = None if row['Pvalue_mlog'] == '' else float(row['Pvalue_mlog'])
+
+            # Parse minor allele frequency
+            try:
+                raf = float(row['Risk Allele Frequency'])
+                maf = min(raf, 1.0 - raf)
+                parsed_row['MAF'] = maf
+            except ValueError:
+                pass
+
+
+            # Parse Odds Ratio
+            try:
+                parsed_row['odds_ratio'] = float(row['OR or beta'])
+            except ValueError:
+                pass
+
+            # Parse Odds Ratio confidence interval
+            try:
+                match = re.search(odds_ratio_ci_pattern, row['95% CI (text)'])
+                match_lower, match_upper = match.group(1), match.group(2)
+                ci_tuple = float(match_lower), float(match_upper)
+                parsed_row['odds_ratio_ci'] = ci_tuple
+            except (IndexError, AttributeError, ValueError):
+                pass
+
+            # parse the number of SNPs assayed that passed QC
+            try:
+                snp_number_field = row['Platform [SNPs passing QC]']
+                match = re.search(snp_number_pattern, snp_number_field)
+                snp_number = match.group(1)
+                snp_number = float(snp_number.replace(',', ''))
+                if 'million' in snp_number_field:
+                    snp_number *= 1e6
+                parsed_row['snp_number'] = int(snp_number)
+            except (IndexError, AttributeError, ValueError):
+                pass
+
+            # parse case and control number
+            discovery_size = row['Initial Sample Size']
+            for key, pattern in [('cases', case_pattern), ('controls', control_pattern)]:
+                try:
+                    match_str = re.search(pattern, discovery_size).group(1)
+                    parsed_row[key] = int(match_str.replace(',', ''))
+                except (IndexError, AttributeError, ValueError):
+                    #print discovery_size
+                    pass
+            if 'cases' not in parsed_row and 'controls' not in parsed_row:
+                try:
+                    match_str = re.search(sample_size_pattern, discovery_size).group(0)
+                    parsed_row['sample_size'] = int(match_str.replace(',', ''))
+                except (IndexError, AttributeError, ValueError):
+                    pass
+
+
             catalog_rows.append(parsed_row)
         read_file.close()
 
@@ -88,8 +150,7 @@ class GwasCatalog(object):
 
     def get_filtered_rows(self, mlog_pval_threshold=None):
         """
-        for 5e-8 use
-        mlog_pval_threshold=7.30103
+
         """
         if hasattr(self, 'filtered_rows'):
             return self.filtered_rows()
@@ -255,8 +316,10 @@ class GwasCatalog(object):
         return max_keys
 
     def get_merged_associations(self, doidprocess_path=None, wingspan_key='dapple_wingspan', mlog_cutoff=7.30103):
-        """association is a list with the first association representing the
+        """
+        association is a list with the first association representing the
         study reporting the strongest association for that region.
+        Default negative log10 p-value threshold = math.log10(5e-8)
         """
         self.annotate_doid(ontoprocess_path=doidprocess_path)
         self.annotate_dapple_genes()
@@ -264,8 +327,11 @@ class GwasCatalog(object):
         associations = self.get_filtered_rows()
         associations = [a for a in associations if a.get('doid_id')]
         associations = [a for a in associations if a.get(wingspan_key)]
-        associations.sort(key=lambda a: (a['mlog_pval'], a['date']))
-        associations.reverse()
+        for key in ['MAF', 'odds_ratio', 'odds_ratio_ci', 'snp_number', 'cases', 'controls', 'sample_size']:
+            print key, sum(key in a for a in associations) * 1. / len(associations)
+
+
+        associations.sort(key=lambda a: (a['mlog_pval'], a['date']), reverse=True)
         doid_to_associations = dict()
         for association in associations:
             doid_id = association['doid_id']
@@ -346,31 +412,30 @@ class GwasCatalog(object):
                           'studies': '|'.join(a['pubmed'] for a in association),
                           'snps': '|'.join(a['rsid'] for a in association),
                           'mlog_pvals': '|'.join('{0:.3f}'.format(a['mlog_pval']) for a in association),
-                          'confidence': 'high' if association[0]['mlog_pval'] >= mlog_cutoff else 'low'}
+                          'confidence': 'HC' if association[0]['mlog_pval'] >= mlog_cutoff else 'LC'}
                 merged_associations.append(merged)
 
                 disease_tuple = merged['disease_code'], merged['disease_name']
                 statuses = disease_to_statuses.setdefault(disease_tuple, dict())
                 confidence = merged['confidence']
-                linked_set = statuses.setdefault('linked_{}'.format(confidence), set())
-                assoc_set = statuses.setdefault('assoc_{}'.format(confidence), set())
-                assoc_set.add(resolved_gene)
-                linked_set.update(candidate_genes)
+                primary_set = statuses.setdefault('{}_primary'.format(confidence), set())
+                secondary_set = statuses.setdefault('{}_secondary'.format(confidence), set())
+                primary_set.add(resolved_gene)
+                secondary_set.update(candidate_genes)
 
         status_rows = list()
         for (disease_code, disease_name), statuses in disease_to_statuses.items():
-            linked_high = statuses.get('linked_high', set())
-            linked_low = statuses.get('linked_low', set())
-            assoc_low = statuses.get('assoc_low', set())
-            assoc_high = statuses.get('assoc_high', set())
-            gene_sets = [linked_high, linked_low, assoc_high, assoc_low]
-            for gene_set in gene_sets:
+            HC_primary = statuses.get('HC_primary', set())
+            HC_secondary = statuses.get('HC_secondary', set())
+            LC_primary = statuses.get('LC_primary', set())
+            LC_secondary = statuses.get('LC_secondary', set())
+            for gene_set in [HC_primary, HC_secondary, LC_primary, LC_secondary]:
                 gene_set.discard(None)
 
-            # pecking order: assoc_high, linked_high, assoc_low, linked_low
-            linked_low.difference_update(assoc_high | linked_high | assoc_low)
-            assoc_low.difference_update(assoc_high | linked_high)
-            linked_high.difference_update(assoc_high)
+            # pecking order: HC_primary, HC_secondary, LC_primary, LC_secondary
+            LC_secondary.difference_update(HC_primary | HC_secondary | LC_primary)
+            LC_primary.difference_update(HC_primary | HC_secondary)
+            HC_secondary.difference_update(HC_primary)
             for status_key, gene_set in statuses.items():
                 for gene in gene_set:
                     status_row = {'disease_code': disease_code, 'disease_name': disease_name,
@@ -414,15 +479,15 @@ class GwasCatalog(object):
         disease_count_rows = list()
         for (disease_code, disease_name), counter in disease_to_counter.items():
             row = {'disease_code': disease_code, 'disease_name': disease_name,
-                   'assoc_high': counter['assoc_high'],
-                   'linked_high': counter['linked_high'],
-                   'assoc_low': counter['assoc_low'],
-                   'linked_low': counter['linked_low'],
-                   'excluded': sum(counter.values()) - counter['assoc_high']}
+                   'HC_primary': counter['HC_primary'],
+                   'HC_secondary': counter['HC_secondary'],
+                   'LC_primary': counter['LC_primary'],
+                   'LC_secondary': counter['LC_secondary'],
+                   'excluded': sum(counter.values()) - counter['HC_primary']}
             disease_count_rows.append(row)
-        disease_count_rows.sort(key=operator.itemgetter('assoc_high', 'assoc_low'), reverse=True)
+        disease_count_rows.sort(key=operator.itemgetter('HC_primary', 'LC_primary'), reverse=True)
 
-        fieldnames = ['disease_code', 'disease_name', 'assoc_high', 'linked_high', 'assoc_low', 'linked_low', 'excluded']
+        fieldnames = ['disease_code', 'disease_name', 'HC_primary', 'HC_secondary', 'LC_primary', 'LC_secondary', 'excluded']
         path = os.path.join(self.processed_dir, 'associations-per-disease.txt')
         with open(path, 'w') as write_file:
             writer = csv.DictWriter(write_file, delimiter='\t', fieldnames=fieldnames)
@@ -468,11 +533,14 @@ if __name__ =='__main__':
 
     doidprocess_path = '/home/dhimmels/Documents/serg/gene-disease-hetnet/data-integration/doid-ontprocess-info.txt'
 
-    gcat = GwasCatalog()
+    gcat = GwasCatalog(processed_dirname='processed-test')
     merged_associations = gcat.get_merged_associations(doidprocess_path=doidprocess_path)
 
-    gcat_no_wtccc2 = GwasCatalog(processed_dirname='processed-no-wtccc2', ignore_pmids={'21833088'})
-    merged_associations_no_wtccc2 = gcat_no_wtccc2.get_merged_associations(doidprocess_path=doidprocess_path)
+    #gcat = GwasCatalog()
+    #merged_associations = gcat.get_merged_associations(doidprocess_path=doidprocess_path)
+
+    #gcat_no_wtccc2 = GwasCatalog(processed_dirname='processed-no-wtccc2', ignore_pmids={'21833088'})
+    #merged_associations_no_wtccc2 = gcat_no_wtccc2.get_merged_associations(doidprocess_path=doidprocess_path)
 
 
     #print len(gcat.get_merged_associations('snap_wingspan'))
