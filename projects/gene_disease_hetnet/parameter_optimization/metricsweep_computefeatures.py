@@ -10,7 +10,7 @@ import hetnet.agents
 import hetnet.algorithms
 
 project_dir = '/home/dhimmels/Documents/serg/gene-disease-hetnet'
-network_dir = os.path.join(project_dir, 'networks', '140518-metricsweep')
+network_dir = os.path.join(project_dir, 'networks', '140614-metricsweep')
 
 graph_agent = hetnet.agents.GraphAgent(network_dir)
 
@@ -50,7 +50,7 @@ for part_row in part_reader:
     percentile = float(part_row['percentile'])
     disease_node = graph.node_dict[part_row['disease_code']]
     gene_node = graph.node_dict[part_row['gene_symbol']]
-    if part_row['status'] == 'assoc_high':
+    if part_row['status'] == 'HC_primary':
         dgs_tuple = disease_node, gene_node, 1
         dgs_tuples.append(dgs_tuple)
     if part_row['status'] == 'negative' and percentile <= negative_prob:

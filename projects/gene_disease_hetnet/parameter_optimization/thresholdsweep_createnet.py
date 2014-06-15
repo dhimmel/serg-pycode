@@ -26,7 +26,7 @@ def create_graph(associations_path, doidprocess_path, partition_path):
     # Define and initialize networkx graph
     metaedge_tuples = [('disease', 'gene', 'association', 'both'),
                        ('gene', 'tissue', 'expression', 'both'),
-                       ('disease', 'tissue', 'cooccurrence', 'both')]
+                       ('disease', 'tissue', 'localization', 'both')]
     metagraph = hetnet.MetaGraph.from_edge_tuples(metaedge_tuples)
     graph = hetnet.Graph(metagraph)
 
@@ -60,7 +60,7 @@ def create_graph(associations_path, doidprocess_path, partition_path):
     # Add (disease, gene, association, both) edges
     with gzip.open(partition_path) as part_file:
         reader = csv.DictReader(part_file, delimiter='\t')
-        part_rows = [row for row in reader if row['status'] == 'assoc_high']
+        part_rows = [row for row in reader if row['status'] == 'HC_primary']
     assoc_to_part = {(row['disease_code'], row['gene_symbol']): row['part']
                      for row in part_rows}
 
@@ -72,7 +72,7 @@ def create_graph(associations_path, doidprocess_path, partition_path):
         disease_code = association['disease_code']
         gene_symbol = association['gene_symbol']
         assoc_tuple = disease_code, gene_symbol
-        if association['status'] != 'assoc_high':
+        if association['status'] != 'HC_primary':
             continue
         part = assoc_to_part.get(assoc_tuple, 'excluded')
         if part == 'test':
@@ -96,8 +96,8 @@ def create_graph(associations_path, doidprocess_path, partition_path):
         graph.add_edge(expression['bto_id'], expression['gene'].symbol, 'expression', 'both', edge_data)
 
 
-    # Add (disease, tissue, cooccurrence, both)
-    logging.info('Adding CoPub disease-tissue cooccurrence.')
+    # Add (disease, tissue, localization, both)
+    logging.info('Adding CoPub disease-tissue localization.')
     r_scaled_cutoff = 10
     logging.info('r_scaled_cutoff: {}'.format(r_scaled_cutoff))
     coocc_gen = copub_analysis.doid_bto_cooccurrence_generator()
@@ -110,7 +110,7 @@ def create_graph(associations_path, doidprocess_path, partition_path):
         if r_scaled < r_scaled_cutoff:
             continue
         edge_data = {'r_scaled': r_scaled}
-        graph.add_edge(doid_id, bto_id, 'cooccurrence', 'both', edge_data)
+        graph.add_edge(doid_id, bto_id, 'localization', 'both', edge_data)
 
     # Print metanode counter
     logging.info('MetaNode Counts')
@@ -134,7 +134,7 @@ if __name__ == '__main__':
     # Parse the arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--network-dir', type=os.path.expanduser, default=
-        '~/Documents/serg/gene-disease-hetnet/networks/140518-thresholdsweep')
+        '~/Documents/serg/gene-disease-hetnet/networks/140614-thresholdsweep')
     parser.add_argument('--doidprocess-path', type=os.path.expanduser, default=
         '~/Documents/serg/gene-disease-hetnet/data-integration/doid-ontprocess-info.txt')
     parser.add_argument('--partition-path', type=os.path.expanduser, default=
@@ -143,8 +143,11 @@ if __name__ == '__main__':
     parser.add_argument('--create', action='store_true')
     args = parser.parse_args()
     network_dir = args.network_dir
-    graph_agent = hetnet.agents.GraphAgent(network_dir)
-    graph_dir = graph_agent.graph_dir
+    graph_dir = os.path.join(network_dir, 'graph')
+
+    for directory in (network_dir, graph_dir):
+        if not os.path.isdir(directory):
+            os.mkdir(directory)
     
     associations_path = os.path.join(
         bioparser.data.Data().gwas_plus.directory,
@@ -161,6 +164,5 @@ if __name__ == '__main__':
                              partition_path=args.partition_path)
         
         # Save the graph
-        graph_agent = hetnet.agents.GraphAgent(network_dir)
-        graph_agent.set(graph)
-        graph_agent.write_additional_formats()
+        pkl_path = os.path.join(network_dir, 'graph', 'graph.pkl.gz')
+        hetnet.readwrite.graph.write_pickle(graph, pkl_path)

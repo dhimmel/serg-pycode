@@ -5,9 +5,64 @@ import re
 import logging
 import datetime
 import operator
+import math
 
 import data
 
+
+def wabf_from_theta(estimate, variance, prior_variance):
+    """
+    From doi:10.1038/nrg2615 (page 683, formula 6)
+    """
+    total_variance = variance + prior_variance
+    z_score = estimate / math.sqrt(variance)
+    try:
+        return math.sqrt(variance / total_variance) * math.exp(
+            prior_variance * z_score ** 2 / (2 * total_variance))
+    except OverflowError:
+        return float('inf')
+
+
+def theta_variance_from_pvalue(theta_hat, mlog10_pvalue):
+    log10_pvalue = -mlog10_pvalue
+    log_pvalue = log10_pvalue / math.log10(math.e)
+    log_pvalue -= math.log(2)
+    import rpy2.robjects
+    qnorm = rpy2.robjects.r['qnorm']
+    z_score = qnorm(p=log_pvalue, log_p=True)[0]
+    theta_hat_sd = theta_hat / z_score
+    return theta_hat_sd ** 2
+
+def theta_variance_from_pvalue_old(theta_hat, pvalue):
+    import scipy.stats
+    z_score = abs(scipy.stats.norm.ppf(pvalue / 2.0))
+    print z_score
+    theta_hat_sd = theta_hat / z_score
+    return theta_hat_sd ** 2
+
+
+def calculate_posterior(bayes_factor, prior_prob):
+    """
+    Calculate the posterior probability of association from the bayes factor
+    and prior probability of association.
+    """
+    if bayes_factor == float('inf'):
+        return 1.0
+    posterior_odds = bayes_factor * prior_prob / (1.0 - prior_prob)
+    return posterior_odds / (1.0 + posterior_odds)
+
+
+def posterior_probability(odds_ratio, mlog10_pvalue, prior_sd=0.2, prior_prob=1e-6):
+    """
+    Returns the posterior probability of association for a GWAS association
+    calculated from the association odds_ratio and pvalue. Priors are
+    required for the standard deviation of the true effect size distribution
+    and prior probability of association.
+    """
+    estimate = math.log(odds_ratio)
+    variance = theta_variance_from_pvalue(estimate, mlog10_pvalue)
+    wabf = wabf_from_theta(estimate, variance, prior_sd ** 2)
+    return calculate_posterior(wabf, prior_prob)
 
 
 class GwasCatalog(object):
@@ -131,15 +186,17 @@ class GwasCatalog(object):
                     match_str = re.search(pattern, discovery_size).group(1)
                     parsed_row[key] = int(match_str.replace(',', ''))
                 except (IndexError, AttributeError, ValueError):
-                    #print discovery_size
                     pass
             if 'cases' not in parsed_row and 'controls' not in parsed_row:
                 try:
                     match_str = re.search(sample_size_pattern, discovery_size).group(0)
-                    parsed_row['sample_size'] = int(match_str.replace(',', ''))
+                    sample_size = int(match_str.replace(',', ''))
+                    parsed_row['sample_size'] = sample_size
+                    parsed_row['merged_sample_size'] = sample_size
                 except (IndexError, AttributeError, ValueError):
-                    pass
-
+                    parsed_row['merged_sample_size'] = 0
+            else:
+                parsed_row['merged_sample_size'] = parsed_row.get('cases', 0) + parsed_row.get('controls', 0)
 
             catalog_rows.append(parsed_row)
         read_file.close()
@@ -163,7 +220,7 @@ class GwasCatalog(object):
             except ValueError:
                 # association not defined by a single lead SNP
                 continue
-            if mlog_pval_threshold is None and catalog_row['mlog_pval'] < mlog_pval_threshold:
+            if mlog_pval_threshold is not None and catalog_row['mlog_pval'] < mlog_pval_threshold:
                 continue
             filtered_rows.append(catalog_row)
 
@@ -315,7 +372,8 @@ class GwasCatalog(object):
         max_keys = [k for k, v in counter.iteritems() if v == max_value]
         return max_keys
 
-    def get_merged_associations(self, doidprocess_path=None, wingspan_key='dapple_wingspan', mlog_cutoff=7.30103):
+    def get_merged_associations(self, doidprocess_path=None, wingspan_key='dapple_wingspan',
+                                mlog_cutoff = -math.log10(5e-8), sample_size_cutoff=1000):
         """
         association is a list with the first association representing the
         study reporting the strongest association for that region.
@@ -327,11 +385,37 @@ class GwasCatalog(object):
         associations = self.get_filtered_rows()
         associations = [a for a in associations if a.get('doid_id')]
         associations = [a for a in associations if a.get(wingspan_key)]
-        for key in ['MAF', 'odds_ratio', 'odds_ratio_ci', 'snp_number', 'cases', 'controls', 'sample_size']:
+
+        # Calculate posterior probabilities of association
+        for a in associations:
+            try:
+                a['ppa'] = posterior_probability(
+                    odds_ratio=a['odds_ratio'], mlog10_pvalue=a['mlog_pval'],
+                    prior_sd=0.2, prior_prob=1e-5)
+            except (KeyError, ValueError):
+                pass
+        # Filters associations without posterior probabilities of association
+        # associations = [a for a in associations if 'ppa' in a]
+
+        for key in ['MAF', 'ppa', 'odds_ratio', 'odds_ratio_ci', 'snp_number', 'cases', 'controls', 'sample_size']:
             print key, sum(key in a for a in associations) * 1. / len(associations)
 
+        path = os.path.join(self.processed_dir, 'catalog-rows.txt')
+        write_file = open(path, 'w')
+        fieldnames = ['doid_id', 'doid_name', 'rsid', 'pubmed', 'mlog_pval',
+                      'odds_ratio', 'ppa', 'cases', 'controls', 'sample_size',
+                      'merged_sample_size', 'snp_number']
+        writer = csv.DictWriter(write_file, fieldnames=fieldnames,
+                                delimiter='\t', extrasaction='ignore')
+        writer.writeheader()
+        writer.writerows(associations)
+        write_file.close()
 
-        associations.sort(key=lambda a: (a['mlog_pval'], a['date']), reverse=True)
+        for a in associations:
+            a['is_HC'] = (a['mlog_pval'] >= mlog_cutoff and
+                          a.get('merged_sample_size', 0) >= sample_size_cutoff)
+
+        associations.sort(key=lambda a: (a['is_HC'], a['mlog_pval'], a['date']), reverse=True)
         doid_to_associations = dict()
         for association in associations:
             doid_id = association['doid_id']
@@ -381,7 +465,7 @@ class GwasCatalog(object):
                     # GWAS catalog finds that rsid is within a single gene
                     if len(mapped_genes) == 1:
                         mapped_gene, = mapped_genes
-                    # GWAS catalog finds that rsid is within a multiple gene
+                    # GWAS catalog finds that rsid is within multiple genes
                     elif len(mapped_genes) > 1:
                         mode_mapped_genes = GwasCatalog.max_counter_keys(report_counter, key_subset=mapped_genes)
                         if len(mode_mapped_genes) == 1:
@@ -403,6 +487,8 @@ class GwasCatalog(object):
                 candidate_genes = all_mapped_genes | set(report_counter)
                 resolved_gene = mode_reported[0] if len(mode_reported) == 1 else sequentially_mapped_gene
 
+                high_confidence = any(a['is_HC'] for a in association)
+
                 merged = {'disease_code': doid, 'disease_name': association[0]['doid_name'],
                           'resolved_gene': resolved_gene,
                           'candidate_genes': '|'.join(map(str, candidate_genes)),
@@ -412,7 +498,7 @@ class GwasCatalog(object):
                           'studies': '|'.join(a['pubmed'] for a in association),
                           'snps': '|'.join(a['rsid'] for a in association),
                           'mlog_pvals': '|'.join('{0:.3f}'.format(a['mlog_pval']) for a in association),
-                          'confidence': 'HC' if association[0]['mlog_pval'] >= mlog_cutoff else 'LC'}
+                          'confidence': 'HC' if high_confidence else 'LC'}
                 merged_associations.append(merged)
 
                 disease_tuple = merged['disease_code'], merged['disease_name']
@@ -533,14 +619,11 @@ if __name__ =='__main__':
 
     doidprocess_path = '/home/dhimmels/Documents/serg/gene-disease-hetnet/data-integration/doid-ontprocess-info.txt'
 
-    gcat = GwasCatalog(processed_dirname='processed-test')
+    gcat = GwasCatalog()
     merged_associations = gcat.get_merged_associations(doidprocess_path=doidprocess_path)
 
-    #gcat = GwasCatalog()
-    #merged_associations = gcat.get_merged_associations(doidprocess_path=doidprocess_path)
-
-    #gcat_no_wtccc2 = GwasCatalog(processed_dirname='processed-no-wtccc2', ignore_pmids={'21833088'})
-    #merged_associations_no_wtccc2 = gcat_no_wtccc2.get_merged_associations(doidprocess_path=doidprocess_path)
+    gcat_no_wtccc2 = GwasCatalog(processed_dirname='processed-no-wtccc2', ignore_pmids={'21833088'})
+    merged_associations_no_wtccc2 = gcat_no_wtccc2.get_merged_associations(doidprocess_path=doidprocess_path)
 
 
     #print len(gcat.get_merged_associations('snap_wingspan'))

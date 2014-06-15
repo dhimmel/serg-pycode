@@ -11,7 +11,7 @@ import hetnet.algorithms
 import utilities.floats
 
 project_dir = '/home/dhimmels/Documents/serg/gene-disease-hetnet'
-network_dir = os.path.join(project_dir, 'networks', '140518-thresholdsweep')
+network_dir = os.path.join(project_dir, 'networks', '140614-thresholdsweep')
 graph_agent = hetnet.agents.GraphAgent(network_dir)
 
 # Load graph
@@ -25,17 +25,17 @@ metaedge_GaD = metagraph.get_edge(('gene', 'disease', 'association', 'both'))
 metaedge_DaG = metaedge_GaD.inverse
 metaedge_GeT = metagraph.get_edge(('gene', 'tissue', 'expression', 'both'))
 metaedge_TeG = metaedge_GeT.inverse
-metaedge_TcD = metagraph.get_edge(('tissue', 'disease', 'cooccurrence', 'both'))
-metaedge_DcT = metaedge_TcD.inverse
+metaedge_TlD = metagraph.get_edge(('tissue', 'disease', 'localization', 'both'))
+metaedge_DlT = metaedge_TlD.inverse
 
 
 # (gene, tissue, expression, both)
 metapath_GeTeGaD = metagraph.get_metapath((metaedge_GeT, metaedge_TeG, metaedge_GaD))
-metapath_GeTcD = metagraph.get_metapath((metaedge_GeT, metaedge_TcD))
+metapath_GeTlD = metagraph.get_metapath((metaedge_GeT, metaedge_TlD))
 log10_expr_thresholds = utilities.floats.sequence(0.5, 4.0, 0.1)
 
-# Add (disease, tissue, cooccurrence, both)
-metapath_GaDcTcD = metagraph.get_metapath((metaedge_GaD, metaedge_DcT, metaedge_TcD))
+# Add (disease, tissue, localization, both)
+metapath_GaDlTlD = metagraph.get_metapath((metaedge_GaD, metaedge_DlT, metaedge_TlD))
 r_scaled_thresholds = utilities.floats.sequence(10, 45, 1)
 
 metanode_to_nodes = graph.get_metanode_to_nodes()
@@ -58,7 +58,7 @@ for part_row in part_reader:
     percentile = float(part_row['percentile'])
     disease_node = graph.node_dict[part_row['disease_code']]
     gene_node = graph.node_dict[part_row['gene_symbol']]
-    if part_row['status'] == 'assoc_high':
+    if part_row['status'] == 'HC_primary':
         dgs_tuple = disease_node, gene_node, 1
         dgs_tuples.append(dgs_tuple)
     if part_row['status'] == 'negative' and percentile <= negative_prob:
@@ -83,23 +83,23 @@ for log10_expr_threshold in log10_expr_thresholds:
     feature['name'] = 'GeTeGaD_GeT={}'.format(log10_expr_threshold)
     features.append(feature)
 
-#DcT
+#DlT
 for r_scaled_threshold in r_scaled_thresholds:
     mask = get_gte_mask('r_scaled', r_scaled_threshold)
     feature = dict()
-    feature['metapath'] = metapath_GaDcTcD
-    feature['metaedge_to_mask'] = {metaedge_DcT: mask, metaedge_TcD: mask}
-    feature['name'] = 'GaDcTcD_DcT={}'.format(r_scaled_threshold)
+    feature['metapath'] = metapath_GaDlTlD
+    feature['metaedge_to_mask'] = {metaedge_DlT: mask, metaedge_TlD: mask}
+    feature['name'] = 'GaDlTlD_DlT={}'.format(r_scaled_threshold)
     features.append(feature)
 
-#GeT and TcD
+#GeT and TlD
 for log10_expr_threshold, r_scaled_threshold in itertools.product(log10_expr_thresholds, r_scaled_thresholds):
     mask_GeT = get_gte_mask('log10_expr', log10_expr_threshold)
-    mask_TcD = get_gte_mask('r_scaled', r_scaled_threshold)
+    mask_TlD = get_gte_mask('r_scaled', r_scaled_threshold)
     feature = dict()
-    feature['metapath'] = metapath_GeTcD
-    feature['metaedge_to_mask'] = {metaedge_GeT: mask_GeT, metaedge_TcD: mask_TcD}
-    feature['name'] = 'GeTcD_GeT={}_TcD={}'.format(log10_expr_threshold, r_scaled_threshold)
+    feature['metapath'] = metapath_GeTlD
+    feature['metaedge_to_mask'] = {metaedge_GeT: mask_GeT, metaedge_TlD: mask_TlD}
+    feature['name'] = 'GeTlD_GeT={}_TlD={}'.format(log10_expr_threshold, r_scaled_threshold)
     features.append(feature)
 
 feature_array = [[0 for i in xrange(len(features))] for j in xrange(len(dgs_tuples))]

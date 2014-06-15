@@ -14,8 +14,8 @@ data = bioparser.data.Data()
 random.seed(0)
 percent_training = 0.75
 min_genes_per_disease = 10
-status_to_int = {'assoc_high': 1, 'negative': 0,
-                 'assoc_low': -1, 'linked_low': -1, 'linked_high': -1}
+status_to_int = {'HC_primary': 1, 'negative': 0,
+                 'HC_secondary': -1, 'LC_primary': -1, 'LC_secondary': -1}
 
 pair_to_status = dict()
 disease_code_to_name = dict()
@@ -36,7 +36,7 @@ for association in statuses_reader:
 statuses_file.close()
 
 disease_counts = collections.Counter(disease_code for (disease_code, gene_code), status in
-    pair_to_status.iteritems() if status == 'assoc_high')
+    pair_to_status.iteritems() if status == 'HC_primary')
 disease_codes = sorted(disease_code for disease_code, count in
                     disease_counts.items() if count >= min_genes_per_disease)
 

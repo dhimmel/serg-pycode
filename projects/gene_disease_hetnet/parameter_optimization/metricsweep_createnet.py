@@ -12,7 +12,7 @@ import gzip
 import bioparser.gxa
 import bioparser.data
 import hetnet
-import hetnet.agents
+import hetnet.readwrite
 
 def create_graph(associations_path, doidprocess_path, pathophys_path, partition_path):
     data = bioparser.data.Data()
@@ -20,13 +20,11 @@ def create_graph(associations_path, doidprocess_path, pathophys_path, partition_
     exclude_doids = doid_remove | set(doid_pop)
 
     msigdb = bioparser.data.Data().msigdb
-    msig_set_types = msigdb.abbrev_to_name.keys()
-    # http://www.broadinstitute.org/gsea/msigdb/collections.jsp
-    #msig_set_types = ['c1.all', 'c2.cgp', 'c2.cp.all', 'c3.mir', 'c3.tft',
-    #                  'c4.cgn', 'c4.cm', 'c5.bp', 'c5.cc', 'c5.mf', 'c6.all', 'c7.all']
-    #msig_set_types = list()
+    msig_set_types = ['c1.all', 'c2.cgp', 'c2.cp.biocarta', 'c2.cp.kegg', 'c2.cp.reactome',
+                      'c3.mir', 'c3.tft', 'c4.cgn', 'c4.cm', 'c5.bp', 'c5.cc', 'c5.mf',
+                      'c6.all', 'c7.all']
 
-    # Define and initialize networkx graph
+    # Define and initialize graph
     metaedge_tuples = [('disease', 'gene', 'association', 'both'),
                        ('gene', 'gene', 'interaction', 'both'),
                        ('disease', 'pathophysiology', 'membership', 'both')]
@@ -73,7 +71,7 @@ def create_graph(associations_path, doidprocess_path, pathophys_path, partition_
     # Add (disease, gene, association, both) edges
     with gzip.open(partition_path) as part_file:
         reader = csv.DictReader(part_file, delimiter='\t')
-        part_rows = [row for row in reader if row['status'] == 'assoc_high']
+        part_rows = [row for row in reader if row['status'] == 'HC_primary']
     assoc_to_part = {(row['disease_code'], row['gene_symbol']): row['part']
                      for row in part_rows}
 
@@ -85,7 +83,7 @@ def create_graph(associations_path, doidprocess_path, pathophys_path, partition_
         disease_code = association['disease_code']
         gene_symbol = association['gene_symbol']
         assoc_tuple = disease_code, gene_symbol
-        if association['status'] != 'assoc_high':
+        if association['status'] != 'HC_primary':
             continue
         part = assoc_to_part.get(assoc_tuple, 'excluded')
         if part == 'test':
@@ -143,7 +141,7 @@ if __name__ == '__main__':
     # Parse the arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--network-dir', type=os.path.expanduser, default=
-        '~/Documents/serg/gene-disease-hetnet/networks/140518-metricsweep')
+        '~/Documents/serg/gene-disease-hetnet/networks/140614-metricsweep')
     parser.add_argument('--doidprocess-path', type=os.path.expanduser, default=
         '~/Documents/serg/gene-disease-hetnet/data-integration/doid-ontprocess-info.txt')
     parser.add_argument('--pathophys-path', type=os.path.expanduser, default=
@@ -154,9 +152,12 @@ if __name__ == '__main__':
     parser.add_argument('--create', action='store_true')
     args = parser.parse_args()
     network_dir = args.network_dir
-    graph_agent = hetnet.agents.GraphAgent(network_dir)
-    graph_dir = graph_agent.graph_dir
-    
+    graph_dir = os.path.join(network_dir, 'graph')
+
+    for directory in (network_dir, graph_dir):
+        if not os.path.isdir(directory):
+            os.mkdir(directory)
+
     associations_path = os.path.join(
         bioparser.data.Data().gwas_plus.directory,
         args.associations_id, 'association-statuses.txt')
@@ -173,6 +174,5 @@ if __name__ == '__main__':
                              partition_path=args.partition_path)
         
         # Save the graph
-        graph_agent = hetnet.agents.GraphAgent(network_dir)
-        graph_agent.set(graph)
-        graph_agent.write_additional_formats()
+        pkl_path = os.path.join(network_dir, 'graph', 'graph.pkl.gz')
+        hetnet.readwrite.graph.write_pickle(graph, pkl_path)

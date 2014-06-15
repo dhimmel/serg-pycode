@@ -26,17 +26,16 @@ def create_graph(associations_path, doidprocess_path, pathophys_path, partition_
     exclude_doids = doid_remove | set(doid_pop)
 
     msigdb = bioparser.data.Data().msigdb
-    #msig_set_types = msigdb.abbrev_to_name.keys()
     # http://www.broadinstitute.org/gsea/msigdb/collections.jsp
     msig_set_types = ['c1.all', 'c2.cgp', 'c2.cp.biocarta', 'c2.cp.kegg', 'c2.cp.reactome',
                       'c3.mir', 'c3.tft', 'c4.cgn', 'c4.cm', 'c5.bp', 'c5.cc', 'c5.mf',
                       'c6.all', 'c7.all']
 
-    # Define and initialize networkx graph
+    # Define and initialize graph
     metaedge_tuples = [('disease', 'gene', 'association', 'both'),
                        ('gene', 'gene', 'interaction', 'both'),
                        ('gene', 'tissue', 'expression', 'both'),
-                       ('disease', 'tissue', 'cooccurrence', 'both'),
+                       ('disease', 'tissue', 'localization', 'both'),
                        ('disease', 'pathophysiology', 'membership', 'both')]
     metaedge_tuples.extend([('gene', set_type, 'membership', 'both') for set_type in msig_set_types])
     metagraph = hetnet.MetaGraph.from_edge_tuples(metaedge_tuples)
@@ -89,7 +88,7 @@ def create_graph(associations_path, doidprocess_path, pathophys_path, partition_
     # Add (disease, gene, association, both) edges
     with gzip.open(partition_path) as part_file:
         reader = csv.DictReader(part_file, delimiter='\t')
-        part_rows = [row for row in reader if row['status'] == 'assoc_high']
+        part_rows = [row for row in reader if row['status'] == 'HC_primary']
     assoc_to_part = {(row['disease_code'], row['gene_symbol']): row['part']
                      for row in part_rows}
 
@@ -101,11 +100,11 @@ def create_graph(associations_path, doidprocess_path, pathophys_path, partition_
         disease_code = association['disease_code']
         gene_symbol = association['gene_symbol']
         assoc_tuple = disease_code, gene_symbol
-        if association['status'] != 'assoc_high':
+        if association['status'] != 'HC_primary':
             continue
         part = assoc_to_part.get(assoc_tuple, 'excluded')
         if exclude_testing and part == 'test':
-            # broken excludes all associations with diseases with 10+ assoc.
+            # only excludes testing associations for diseases with 10+ assoc.
             continue
         graph.add_edge(disease_code, gene_symbol, 'association', 'both')
         doids_with_associations.add(disease_code)
@@ -139,8 +138,8 @@ def create_graph(associations_path, doidprocess_path, pathophys_path, partition_
             pass
 
 
-    # Add (disease, tissue, cooccurrence, both)
-    logging.info('Adding CoPub disease-tissue cooccurrence.')
+    # Add (disease, tissue, localization, both)
+    logging.info('Adding CoPub disease-tissue localization.')
     r_scaled_cutoff = 29
     logging.info('r_scaled_cutoff: {}'.format(r_scaled_cutoff))
     coocc_gen = copub_analysis.doid_bto_cooccurrence_generator()
@@ -155,7 +154,7 @@ def create_graph(associations_path, doidprocess_path, pathophys_path, partition_
         if r_scaled < r_scaled_cutoff:
             continue
         edge_data = {'r_scaled': r_scaled}
-        graph.add_edge(doid_id, bto_id, 'cooccurrence', 'both', edge_data)
+        graph.add_edge(doid_id, bto_id, 'localization', 'both', edge_data)
 
     # Add MSigDB gene sets
     for set_type in msig_set_types:
@@ -192,7 +191,7 @@ if __name__ == '__main__':
     # Parse the arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--network-dir', type=os.path.expanduser, default=
-        '~/Documents/serg/gene-disease-hetnet/networks/140528-all-assoc')
+        '~/Documents/serg/gene-disease-hetnet/networks/140614-all-assoc')
     parser.add_argument('--doidprocess-path', type=os.path.expanduser, default=
         '~/Documents/serg/gene-disease-hetnet/data-integration/doid-ontprocess-info.txt')
     parser.add_argument('--pathophys-path', type=os.path.expanduser, default=
@@ -202,10 +201,15 @@ if __name__ == '__main__':
     parser.add_argument('--exclude-testing', action='store_true')
     parser.add_argument('--associations-id', default='processed')
     parser.add_argument('--create', action='store_true')
+    parser.add_argument('--extra-formats', action='store_true')
+
     args = parser.parse_args()
     network_dir = args.network_dir
-    graph_agent = hetnet.agents.GraphAgent(network_dir)
-    graph_dir = graph_agent.graph_dir
+    graph_dir = os.path.join(network_dir, 'graph')
+
+    for directory in (network_dir, graph_dir):
+        if not os.path.isdir(directory):
+            os.mkdir(directory)
 
     associations_path = os.path.join(
         bioparser.data.Data().gwas_plus.directory,
@@ -224,12 +228,16 @@ if __name__ == '__main__':
                              exclude_testing=args.exclude_testing)
 
         # Save the graph
-        graph_agent = hetnet.agents.GraphAgent(network_dir)
-        graph_agent.set(graph)
-        graph_agent.write_additional_formats()
-        sif_path = os.path.join(network_dir, 'graph', 'graph.sif.gz')
-        hetnet.readwrite.graph.write_sif(graph, sif_path)
-        sif_subset_path = os.path.join(network_dir, 'graph', 'graph-10k.sif.gz')
-        hetnet.readwrite.graph.write_sif(graph, sif_subset_path, max_edges=int(1e4), seed=0)
-        nodetable_path = os.path.join(network_dir, 'graph', 'node_table.tsv')
-        hetnet.readwrite.graph.write_nodetable(graph, nodetable_path)
+        pkl_path = os.path.join(network_dir, 'graph', 'graph.pkl.gz')
+        hetnet.readwrite.graph.write_pickle(graph, pkl_path)
+
+        if args.extra_formats:
+            json_path = os.path.join(network_dir, 'graph', 'graph.json.gz')
+            hetnet.readwrite.graph.write_json(graph, json_path)
+
+            sif_path = os.path.join(network_dir, 'graph', 'graph.sif.gz')
+            hetnet.readwrite.graph.write_sif(graph, sif_path)
+            sif_subset_path = os.path.join(network_dir, 'graph', 'graph-10k.sif.gz')
+            hetnet.readwrite.graph.write_sif(graph, sif_subset_path, max_edges=int(1e4), seed=0)
+            nodetable_path = os.path.join(network_dir, 'graph', 'node_table.tsv')
+            hetnet.readwrite.graph.write_nodetable(graph, nodetable_path)
