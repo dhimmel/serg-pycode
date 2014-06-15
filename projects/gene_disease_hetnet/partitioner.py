@@ -62,7 +62,6 @@ for status, rows in status_to_rows.iteritems():
     n = len(rows)
     rindexes = range(n)
     random.shuffle(rindexes)
-    random.shuffle(rindexes)
     for rindex, row in zip(rindexes, rows):
         percentile = round(float(rindex + 1) / n, 9)
         row['percentile'] = percentile
@@ -80,6 +79,9 @@ writer.writerows(all_rows)
 partition_file.close()
 
 partition_dir = os.path.join(project_dir, 'disease-partitions')
+if not os.path.isdir(partition_dir):
+    os.mkdir(partition_dir)
+
 doid_to_writer = dict()
 write_files = list()
 for disease_code in disease_codes:

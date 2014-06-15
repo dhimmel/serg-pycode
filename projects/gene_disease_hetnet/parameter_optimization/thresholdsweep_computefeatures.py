@@ -4,21 +4,28 @@ import os
 import gzip
 import random
 import csv
+import argparse
 
 import hetnet
-import hetnet.agents
 import hetnet.algorithms
+import hetnet.readwrite
 import utilities.floats
 
-project_dir = '/home/dhimmels/Documents/serg/gene-disease-hetnet'
-network_dir = os.path.join(project_dir, 'networks', '140614-thresholdsweep')
-graph_agent = hetnet.agents.GraphAgent(network_dir)
 
-# Load graph
+# Parse the arguments
+parser = argparse.ArgumentParser()
+parser.add_argument('--network-dir', type=os.path.expanduser, default=
+    '~/Documents/serg/gene-disease-hetnet/networks/140614-thresholdsweep')
+parser.add_argument('--partition-path', type=os.path.expanduser, default=
+        '~/Documents/serg/gene-disease-hetnet/partitions.txt.gz')
+args = parser.parse_args()
+
+
 print 'loading graph'
-graph = graph_agent.get()
-print 'graph loaded'
+pkl_path = os.path.join(args.network_dir, 'graph', 'graph.pkl.gz')
+graph = hetnet.readwrite.graph.read_pickle(pkl_path)
 metagraph = graph.metagraph
+print 'graph loaded'
 
 
 metaedge_GaD = metagraph.get_edge(('gene', 'disease', 'association', 'both'))
@@ -48,8 +55,7 @@ for node_list in genes, diseases:
 negative_prob = 0.005
 print 'Negative Inclusion Probability: {}'.format(negative_prob)
 dgs_tuples = list()
-part_path = os.path.join(project_dir, 'partitions.txt.gz')
-part_file = gzip.open(part_path)
+part_file = gzip.open(args.partition_path)
 part_reader = csv.DictReader(part_file, delimiter='\t')
 for part_row in part_reader:
     if part_row['part'] == 'test':
@@ -125,7 +131,7 @@ for feature_index, feature in enumerate(features):
         dwpc = hetnet.algorithms.DWPC(paths, damping_exponent=damping_exponent, exclude_edges=exclude_edges)
         feature_array[edge_index][feature_index] = dwpc
 
-feature_path = os.path.join(network_dir, 
+feature_path = os.path.join(args.network_dir,
     'features-exp{}.txt.gz'.format(damping_exponent))
 feature_file = gzip.open(feature_path, 'w')
 fieldnames = ['source', 'target', 'target_name', 'status'] + [f['name'] for f in features]

@@ -3,23 +3,25 @@ import itertools
 import os
 import gzip
 import csv
-import random
+import argparse
 
 import hetnet
-import hetnet.agents
+import hetnet.readwrite
 import hetnet.algorithms
 
-project_dir = '/home/dhimmels/Documents/serg/gene-disease-hetnet'
-network_dir = os.path.join(project_dir, 'networks', '140614-metricsweep')
+# Parse the arguments
+parser = argparse.ArgumentParser()
+parser.add_argument('--network-dir', type=os.path.expanduser, default=
+    '~/Documents/serg/gene-disease-hetnet/networks/140614-metricsweep')
+parser.add_argument('--partition-path', type=os.path.expanduser, default=
+        '~/Documents/serg/gene-disease-hetnet/partitions.txt.gz')
+args = parser.parse_args()
 
-graph_agent = hetnet.agents.GraphAgent(network_dir)
-
-# Load graph
 print 'loading graph'
-graph = graph_agent.get()
-print 'graph loaded'
+pkl_path = os.path.join(args.network_dir, 'graph', 'graph.pkl.gz')
+graph = hetnet.readwrite.graph.read_pickle(pkl_path)
 metagraph = graph.metagraph
-
+print 'graph loaded'
 
 
 # Define Metrics
@@ -40,8 +42,7 @@ for node_list in genes, diseases:
 negative_prob = 0.05
 print 'Negative Inclusion Probability: {}'.format(negative_prob)
 dgs_tuples = list()
-part_path = os.path.join(project_dir, 'partitions.txt.gz')
-part_file = gzip.open(part_path)
+part_file = gzip.open(args.partition_path)
 part_reader = csv.DictReader(part_file, delimiter='\t')
 for part_row in part_reader:
     if part_row['part'] == 'test':
@@ -64,7 +65,7 @@ feature_names = ['{}:{}'.format(metric['name'], metapath)
     for metapath, metric in itertools.product(metapaths, metrics)]
 fieldnames = ['source', 'target', 'target_name', 'status'] + feature_names
 
-feature_path = os.path.join(network_dir, 'features.txt.gz')
+feature_path = os.path.join(args.network_dir, 'features.txt.gz')
 feature_file = gzip.open(feature_path, 'w')
 
 writer = csv.DictWriter(feature_file, delimiter='\t', fieldnames=fieldnames)
