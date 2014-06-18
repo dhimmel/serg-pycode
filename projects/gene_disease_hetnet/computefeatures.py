@@ -8,7 +8,7 @@ import hetnet
 import hetnet.algorithms
 import hetnet.readwrite
 
-def compute_features(graph, part_rows, feature_path, dwpc_exponent):
+def compute_features(graph, part_rows, feature_path, dwpc_exponent, network_status=False):
 
     # Define Metapaths
     metagraph = graph.metagraph
@@ -36,6 +36,8 @@ def compute_features(graph, part_rows, feature_path, dwpc_exponent):
         features['gene_symbol'] = gene_symbol
         features['disease_code'] = disease_code
         features['disease_name'] = part_row['disease_name']
+        if network_status:
+            features['network_status'] = int(bool(edge))
         features['status'] = part_row['status']
         features['status_int'] = part_row['status_int']
         features['percentile'] = part_row['percentile']
@@ -89,6 +91,7 @@ if __name__ == '__main__':
     parser.add_argument('--partition-path', type=os.path.expanduser)
     parser.add_argument('--feature-path', type=os.path.expanduser)
     parser.add_argument('--dwpc-exponent', default=0.4, type=float)
+    parser.add_argument('--network-status', action='store_true')
     args = parser.parse_args()
 
     # filesystem
@@ -102,4 +105,4 @@ if __name__ == '__main__':
     part_rows = read_part(args.partition_path)
 
     # Compute features
-    compute_features(graph, part_rows, args.feature_path, args.dwpc_exponent)
+    compute_features(graph, part_rows, args.feature_path, args.dwpc_exponent, args.network_status)
