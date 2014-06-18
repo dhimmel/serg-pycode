@@ -1,15 +1,38 @@
+import argparse
+import os
 
 import hetnet.readwrite.graph
 import hetnet.permutation
 
-graph_path = '/home/dhimmels/Documents/serg/gene-disease-hetnet/networks/140522-all-assoc-lessmsig/graph/graph.pkl.gz'
-graph = hetnet.readwrite.graph.read_pickle(graph_path)
 
-permuted_graph = hetnet.permutation.permute_graph2(graph, verbose=True)
+parser = argparse.ArgumentParser()
+parser.add_argument('--origin-dir', type=os.path.expanduser, default=
+        '~/Documents/serg/gene-disease-hetnet/networks/XXXX')
+parser.add_argument('--permuted-dir', type=os.path.expanduser, default=
+        '~/Documents/serg/gene-disease-hetnet/networks/XXXX')
+parser.add_argument('--overwrite', action='store_true')
+args = parser.parse_args()
 
 
-permuted_graph_path = '/home/dhimmels/Documents/serg/gene-disease-hetnet/networks/140522-all-assoc-lessmsig/graph/graph-permuted.pkl.gz'
-hetnet.readwrite.graph.write_pickle(permuted_graph, permuted_graph_path)
+# Read unpermuted graph
+pkl_path = os.path.join(args.origin_dir, 'graph', 'graph.pkl.gz')
+graph = hetnet.readwrite.graph.read_pickle(pkl_path)
+
+# Permute graph
+permuted_graph = hetnet.permutation.permute_graph(graph, verbose=True)
+
+# Create directories for permuted network and save graph
+permuted_dir = args.permuted_dir
+pgraph_dir = os.path.join(permuted_dir, 'graph')
+ppkl_path = os.path.join(pgraph_dir, 'graph.pkl.gz')
+for directory in (permuted_dir, pgraph_dir):
+    if not os.path.isdir(directory):
+        os.mkdir(directory)
+
+if not args.overwrite:
+    assert not os.path.exists(ppkl_path)
+
+hetnet.readwrite.graph.write_pickle(permuted_graph, ppkl_path)
 
 
 
