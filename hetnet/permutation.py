@@ -2,7 +2,7 @@ import random
 
 import hetnet.graph
 
-def permute_graph(graph, seed=0, verbose=False):
+def permute_graph(graph, seed=0, metaedge_to_excluded=dict(), verbose=False):
     """
     Shuffle edges within metaedge category. Preserves node degree but randomizes
     edges.
@@ -19,8 +19,11 @@ def permute_graph(graph, seed=0, verbose=False):
     if verbose: print 'Adding permuted edges'
     for metaedge, edges in metaedge_to_edges.items():
         if verbose: print metaedge
+
+        excluded_pair_set = metaedge_to_excluded.get(metaedge, set())
         pair_list = [(edge.source.id_, edge.target.id_) for edge in edges]
-        permuted_pair_list = permute_pair_list(pair_list, seed=seed)
+        permuted_pair_list = permute_pair_list(pair_list,
+            excluded_pair_set=excluded_pair_set, seed=seed)
 
         kind = metaedge.kind
         direction = metaedge.direction
@@ -30,7 +33,7 @@ def permute_graph(graph, seed=0, verbose=False):
     return permuted_graph
 
 
-def permute_pair_list(pair_list, n_perm=None, seed=0):
+def permute_pair_list(pair_list, n_perm=None, excluded_pair_set=set(), seed=0):
     """
     If n_perm is not specific, perform 10 times the number of edges of permutations
     """
@@ -57,14 +60,17 @@ def permute_pair_list(pair_list, n_perm=None, seed=0):
         # Prevent self-connections
         self_loop = False
         duplicate = False
+        excluded = False
         for pair in new_pair_0, new_pair_1:
             if pair[0] == pair[1]:
                 self_loop = True
             if pair in pair_set:
                 duplicate = True
+            if pair in excluded_pair_set:
+                excluded = True
 
-        # If edge already exists
-        if duplicate or self_loop:
+        # If edge is invalid
+        if duplicate or self_loop or excluded:
             for pair in pair_0, pair_1:
                 pair_list.append(pair)
 
