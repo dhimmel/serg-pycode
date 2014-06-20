@@ -16,7 +16,7 @@ import pandas.io.parsers
 
 #network_dir = '/home/dhimmels/Documents/serg/ashg13/140310-parsweep'
 project_dir = '/home/dhimmels/Documents/serg/gene-disease-hetnet'
-network_dir = os.path.join(project_dir, 'networks', '140614-thresholdsweep')
+network_dir = os.path.join(project_dir, 'networks', '140615-thresholdsweep')
 
 
 
