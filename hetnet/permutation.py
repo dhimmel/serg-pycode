@@ -2,7 +2,7 @@ import random
 
 import hetnet.graph
 
-def permute_graph(graph, seed=0, metaedge_to_excluded=dict(), verbose=False):
+def permute_graph(graph, multiplier=10, seed=0, metaedge_to_excluded=dict(), verbose=False):
     """
     Shuffle edges within metaedge category. Preserves node degree but randomizes
     edges.
@@ -22,8 +22,10 @@ def permute_graph(graph, seed=0, metaedge_to_excluded=dict(), verbose=False):
 
         excluded_pair_set = metaedge_to_excluded.get(metaedge, set())
         pair_list = [(edge.source.id_, edge.target.id_) for edge in edges]
-        permuted_pair_list = permute_pair_list(pair_list,
-            excluded_pair_set=excluded_pair_set, seed=seed)
+        directed = metaedge.direction != 'both'
+        permuted_pair_list = permute_pair_list(
+            pair_list, directed=directed, multiplier=multiplier,
+            excluded_pair_set=excluded_pair_set, seed=seed, verbose=verbose)
 
         kind = metaedge.kind
         direction = metaedge.direction
@@ -33,16 +35,25 @@ def permute_graph(graph, seed=0, metaedge_to_excluded=dict(), verbose=False):
     return permuted_graph
 
 
-def permute_pair_list(pair_list, n_perm=None, excluded_pair_set=set(), seed=0):
+def permute_pair_list(pair_list, directed=False, multiplier=10, excluded_pair_set=set(), seed=0, verbose=False):
     """
     If n_perm is not specific, perform 10 times the number of edges of permutations
+    May not work for directed edges
     """
     random.seed(seed)
 
     pair_set = set(pair_list)
+    assert len(pair_set) == len(pair_list)
+
     edge_number = len(pair_list)
-    if n_perm is None:
-        n_perm = edge_number * 10
+    n_perm = int(edge_number * multiplier)
+
+    if verbose:
+        orig_pair_set = pair_set.copy()
+        print '{} edges, {} permutations (seed = {}, directed = {}, {} excluded_edges)'.format(
+            edge_number, n_perm, seed, directed, len(excluded_pair_set))
+        print_at = range(0, n_perm, n_perm / 10) + [n_perm - 1]
+
     for i in xrange(n_perm):
 
         # Same two random edges
@@ -54,6 +65,7 @@ def permute_pair_list(pair_list, n_perm=None, excluded_pair_set=set(), seed=0):
             continue
         pair_0 = pair_list.pop(i_0)
         pair_1 = pair_list.pop(i_1 - 1 if i_0 < i_1 else i_1)
+
         new_pair_0 = pair_0[0], pair_1[1]
         new_pair_1 = pair_1[0], pair_0[1]
 
@@ -65,6 +77,8 @@ def permute_pair_list(pair_list, n_perm=None, excluded_pair_set=set(), seed=0):
             if pair[0] == pair[1]:
                 self_loop = True
             if pair in pair_set:
+                duplicate = True
+            if not directed and (pair[1], pair[0]) in pair_set:
                 duplicate = True
             if pair in excluded_pair_set:
                 excluded = True
@@ -82,7 +96,13 @@ def permute_pair_list(pair_list, n_perm=None, excluded_pair_set=set(), seed=0):
                 pair_set.add(pair)
                 pair_list.append(pair)
 
-    assert len(pair_list) == edge_number
+        # print updates
+        if verbose and i in print_at:
+            percent_done = 100.0 * float(i) / n_perm
+            percent_same = 100.0 * float(len(orig_pair_set & pair_set)) / len(pair_set)
+            print '{:.1f}% complete: {:.1f}% unchanged'.format(percent_done, percent_same)
+
+    assert len(pair_set) == edge_number
     return pair_list
 
 
