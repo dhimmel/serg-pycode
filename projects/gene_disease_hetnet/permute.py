@@ -88,19 +88,16 @@ def write_partition_files(all_rows, directory, diseases):
         write_file.close()
 
 
-def get_testing_edges(graph, all_rows):
+def mask_testing_edges(graph, all_rows):
     # create set of testing edges to exclude while saving network
-    testing_edges = set()
     for row in all_rows:
         if row['status'] != 'HC_primary':
             continue
         if row['part'] != 'test':
             continue
         edge = graph.edge_dict[(row['gene_symbol'], row['disease_code'], 'association', 'both')]
-        testing_edges.add(edge)
-        testing_edges.add(edge.inverse)
-    return testing_edges
-
+        edge.mask()
+        edge.inverse.mask()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -110,7 +107,6 @@ if __name__ == '__main__':
         default='~/Documents/serg/gene-disease-hetnet/networks/')
     parser.add_argument('--percent-training', type=float, default=0.75)
     parser.add_argument('--min-genes', type=int, default=10)
-    parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--network-number', type=int, default=3)
     parser.add_argument('--multiplier', type=int, default=10)
     parser.add_argument('--overwrite', action='store_true')
@@ -144,19 +140,19 @@ if __name__ == '__main__':
             for directory in (network_dir, graph_dir):
                 if not os.path.isdir(directory):
                     os.mkdir(directory)
-            pkl_path = os.path.join(network_dir, 'graph.pkl.gz')
+            pkl_path = os.path.join(graph_dir, 'graph.pkl.gz')
             if not args.overwrite:
                 assert not os.path.exists(pkl_path)
             pkl_paths.append(pkl_path)
 
         current_graph = hetnet.permutation.permute_graph(
-            current_graph, multiplier=args.multiplier, seed=args.seed, verbose=True)
+            current_graph, multiplier=args.multiplier, seed=i, verbose=True)
         print 'Permuted graph metrics'.center(60, '-')
         print hetnet.display.graph_metrics(current_graph)
 
         # compute and save partitions
         all_rows, diseases = get_part_rows(
-            current_graph, percent_training=args.percent_training, min_genes=args.min_genes)
+            current_graph, percent_training=args.percent_training, min_genes=args.min_genes, seed=i)
         write_partition_file(all_rows, network_dirs[0])
         write_partition_files(all_rows, network_dirs[0], diseases=diseases)
 
@@ -165,11 +161,13 @@ if __name__ == '__main__':
         hetnet.readwrite.graph.write_pickle(current_graph, pkl_paths[0])
         # Save training-testing graph
         if training:
-            testing_edges = get_testing_edges(current_graph, all_rows)
-            print '{} testing edges'.format(len(testing_edges))
+            mask_testing_edges(current_graph, all_rows)
+            masked_edges = [edge for edge in current_graph.edge_dict.itervalues() if edge.is_masked()]
+            print '{} masked testing edges (including inverts)'.format(len(masked_edges))
             hetnet.readwrite.graph.write_pickle(
-                current_graph, pkl_paths[0], exclude_edges=testing_edges)
+                current_graph, pkl_paths[1], masked=False)
             write_partition_file(all_rows, network_dirs[1])
             print 'saving permuted training graph'
             write_partition_files(all_rows, network_dirs[1], diseases=diseases)
+            current_graph.unmask()
 

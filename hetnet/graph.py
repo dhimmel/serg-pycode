@@ -382,12 +382,12 @@ class Graph(BaseGraph):
         metaedge = self.metagraph.edge_dict[metaedge_id]
         edge = Edge(source, target, metaedge, data)
         self.edge_dict[edge.get_id()] = edge
-        edge.inverted = False
+        edge.inverted = metaedge.inverted
         
         inverse = Edge(target, source, metaedge.inverse, data)
         inverse_id = inverse.get_id()
         self.edge_dict[inverse_id] = inverse
-        inverse.inverted = True
+        inverse.inverted = metaedge.inverse.inverted
 
         edge.inverse = inverse
         inverse.inverse = edge
@@ -633,10 +633,10 @@ class Graph(BaseGraph):
         return metanode_to_nodes
 
     def get_metaedge_to_edges(self, exclude_inverts=False):
-        metaedge_to_edges = dict()
+        metaedges = self.metagraph.get_edges(exclude_inverts)
+        metaedge_to_edges = {metaedge: list() for metaedge in metaedges}
         for edge in self.get_edges(exclude_inverts):
-            metaedge = edge.metaedge
-            metaedge_to_edges.setdefault(metaedge, list()).append(edge)
+            metaedge_to_edges[edge.metaedge].append(edge)
         return metaedge_to_edges
 
 

@@ -16,8 +16,8 @@ def open_ext(path, *args, **kwargs):
     open_fxn = gzip.open if path.endswith('.gz') else open
     return open_fxn(path, *args, **kwargs)
 
-def write_pickle(graph, path, exclude_edges=set()):
-    writable = writable_from_graph(graph, exclude_edges)
+def write_pickle(graph, path, masked=True):
+    writable = writable_from_graph(graph, masked)
     write_file = open_ext(path, 'wb')
     pickle.dump(writable, write_file)
     write_file.close()
@@ -139,8 +139,9 @@ def write_nodetable(graph, path):
     write_file.close()
 
 
-def writable_from_graph(graph, ordered=True, int_id=False, exclude_edges=set()):
+def writable_from_graph(graph, ordered=True, int_id=False, masked=True):
     """ """
+    print 'getting writable from graph, masked =', masked
     metanode_kinds = graph.metagraph.node_dict.keys()
     
     metaedge_tuples = [edge.get_id() for edge in
@@ -148,6 +149,8 @@ def writable_from_graph(graph, ordered=True, int_id=False, exclude_edges=set()):
     
     nodes = list()
     for i, node in enumerate(graph.node_dict.itervalues()):
+        if not masked and node.is_masked():
+            continue
         node_as_dict = collections.OrderedDict() if ordered else dict()
         node_as_dict['id_'] = node.id_
         node_as_dict['kind'] = node.metanode.id_
@@ -159,7 +162,8 @@ def writable_from_graph(graph, ordered=True, int_id=False, exclude_edges=set()):
 
     edges = list()
     for edge in graph.get_edges(exclude_inverts=True):
-        if edge in exclude_edges:
+        if not masked and edge.is_masked():
+            print 'masked edge not written:', edge
             continue
         edge_id_keys = ('source_id', 'target_id', 'kind', 'direction')
         edge_id = edge.get_id()
