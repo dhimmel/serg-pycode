@@ -17,7 +17,7 @@ def open_ext(path, *args, **kwargs):
     return open_fxn(path, *args, **kwargs)
 
 def write_pickle(graph, path, masked=True):
-    writable = writable_from_graph(graph, masked)
+    writable = writable_from_graph(graph, masked=masked)
     write_file = open_ext(path, 'wb')
     pickle.dump(writable, write_file)
     write_file.close()
@@ -141,7 +141,6 @@ def write_nodetable(graph, path):
 
 def writable_from_graph(graph, ordered=True, int_id=False, masked=True):
     """ """
-    print 'getting writable from graph, masked =', masked
     metanode_kinds = graph.metagraph.node_dict.keys()
     
     metaedge_tuples = [edge.get_id() for edge in
@@ -163,7 +162,6 @@ def writable_from_graph(graph, ordered=True, int_id=False, masked=True):
     edges = list()
     for edge in graph.get_edges(exclude_inverts=True):
         if not masked and edge.is_masked():
-            print 'masked edge not written:', edge
             continue
         edge_id_keys = ('source_id', 'target_id', 'kind', 'direction')
         edge_id = edge.get_id()

@@ -165,7 +165,7 @@ if __name__ == '__main__':
             masked_edges = [edge for edge in current_graph.edge_dict.itervalues() if edge.is_masked()]
             print '{} masked testing edges (including inverts)'.format(len(masked_edges))
             hetnet.readwrite.graph.write_pickle(
-                current_graph, pkl_paths[1], masked=False)
+                graph=current_graph, path=pkl_paths[1], masked=False)
             write_partition_file(all_rows, network_dirs[1])
             print 'saving permuted training graph'
             write_partition_files(all_rows, network_dirs[1], diseases=diseases)
