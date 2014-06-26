@@ -104,7 +104,7 @@ if __name__ == '__main__':
     parser.add_argument('--origin-dir', type=os.path.expanduser,
         default='~/Documents/serg/gene-disease-hetnet/networks/XXXXXX-all-assoc')
     parser.add_argument('--networks-dir', type=os.path.expanduser,
-        default='~/Documents/serg/gene-disease-hetnet/networks/')
+        default='~/Documents/serg/gene-disease-hetnet/networks/permuted')
     parser.add_argument('--percent-training', type=float, default=0.75)
     parser.add_argument('--min-genes', type=int, default=10)
     parser.add_argument('--network-number', type=int, default=3)
@@ -123,12 +123,12 @@ if __name__ == '__main__':
     # Permute graph
     for i in range(args.network_number):
         print 'Permuting network {}'.format(i).center(60, '#')
-        network_id = '{}-permuted{}'.format(args.prefix, i)
+        network_id = '{}-{}'.format(args.prefix, i)
         network_ids = [network_id]
 
         training = i == 0
         if training:
-            training_id = '{}-permuted{}-training'.format(args.prefix, i)
+            training_id = '{}-{}-training'.format(args.prefix, i)
             network_ids.append(training_id)
 
         pkl_paths = list()
