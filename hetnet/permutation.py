@@ -48,6 +48,12 @@ def permute_pair_list(pair_list, directed=False, multiplier=10, excluded_pair_se
     edge_number = len(pair_list)
     n_perm = int(edge_number * multiplier)
 
+    count_same_edge = 0
+    count_self_loop = 0
+    count_duplicate = 0
+    count_undir_dup = 0
+    count_excluded = 0
+
     if verbose:
         orig_pair_set = pair_set.copy()
         print '{} edges, {} permutations (seed = {}, directed = {}, {} excluded_edges)'.format(
@@ -62,6 +68,7 @@ def permute_pair_list(pair_list, directed=False, multiplier=10, excluded_pair_se
 
         # Same edge selected twice
         if i_0 == i_1:
+            count_same_edge += 1
             continue
         pair_0 = pair_list.pop(i_0)
         pair_1 = pair_list.pop(i_1 - 1 if i_0 < i_1 else i_1)
@@ -69,26 +76,30 @@ def permute_pair_list(pair_list, directed=False, multiplier=10, excluded_pair_se
         new_pair_0 = pair_0[0], pair_1[1]
         new_pair_1 = pair_1[0], pair_0[1]
 
-        # Prevent self-connections
-        self_loop = False
-        duplicate = False
-        excluded = False
+        valid = False
         for pair in new_pair_0, new_pair_1:
             if pair[0] == pair[1]:
-                self_loop = True
+                count_self_loop += 1
+                break  # edge is a self-loop
             if pair in pair_set:
-                duplicate = True
+                count_duplicate += 1
+                break  # edge is a duplicate
             if not directed and (pair[1], pair[0]) in pair_set:
-                duplicate = True
+                count_undir_dup += 1
+                break  # edge is a duplicate
             if pair in excluded_pair_set:
-                excluded = True
+                count_excluded += 1
+                break  # edge is excluded
+        else:
+            # edge passed all validity conditions
+            valid = True
 
-        # If edge is invalid
-        if duplicate or self_loop or excluded:
+        # If new edges are invalid
+        if not valid:
             for pair in pair_0, pair_1:
                 pair_list.append(pair)
 
-        # If edge is a novel permutation
+        # If new edges are valid
         else:
             for pair in pair_0, pair_1:
                 pair_set.remove(pair)
@@ -101,10 +112,24 @@ def permute_pair_list(pair_list, directed=False, multiplier=10, excluded_pair_se
             percent_done = 100.0 * float(i) / n_perm
             percent_same = 100.0 * float(len(orig_pair_set & pair_set)) / len(pair_set)
             print '{:.1f}% complete: {:.1f}% unchanged'.format(percent_done, percent_same)
+            counts = [count_same_edge, count_self_loop, count_duplicate,
+                      count_undir_dup, count_excluded]
+            index = print_at.index(i)
+            iterations = i if index == 0 else print_at[index] - print_at[index - 1]
+            if iterations:
+                percents = [100.0 * count / float(iterations) for count in counts]
+                count_str = 'Counts last {} iterations: same_edge {}; self_loop {}; ' \
+                            'duplicate {}; undirected_duplicate {}; excluded {}'
+                count_str.format(iterations, *percents)
+                print count_str
+            count_same_edge = 0
+            count_self_loop = 0
+            count_duplicate = 0
+            count_undir_dup = 0
+            count_excluded = 0
 
     assert len(pair_set) == edge_number
     return pair_list
-
 
 
 
