@@ -118,10 +118,9 @@ def permute_pair_list(pair_list, directed=False, multiplier=10, excluded_pair_se
             iterations = i if index == 0 else print_at[index] - print_at[index - 1]
             if iterations:
                 percents = [100.0 * count / float(iterations) for count in counts]
-                count_str = 'Counts last {} iterations: same_edge {}; self_loop {}; ' \
-                            'duplicate {}; undirected_duplicate {}; excluded {}'
-                count_str.format(iterations, *percents)
-                print count_str
+                count_str = 'Counts last {} iterations: same_edge {:.1f}%; self_loop {:.1f}%; ' \
+                            'duplicate {:.1f}%; undirected_duplicate {:.1f}%; excluded {:.1f}%'
+                print count_str.format(iterations, *percents)
             count_same_edge = 0
             count_self_loop = 0
             count_duplicate = 0

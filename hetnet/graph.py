@@ -387,7 +387,7 @@ class Graph(BaseGraph):
         inverse = Edge(target, source, metaedge.inverse, data)
         inverse_id = inverse.get_id()
         self.edge_dict[inverse_id] = inverse
-        inverse.inverted = metaedge.inverse.inverted
+        inverse.inverted = not edge.inverted
 
         edge.inverse = inverse
         inverse.inverse = edge
