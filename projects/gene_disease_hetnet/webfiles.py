@@ -7,7 +7,7 @@ import bioparser.data
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--network-dir', type=os.path.expanduser, default=
-    '~/Documents/serg/gene-disease-hetnet/networks/140522-all-assoc-lessmsig')
+    '~/Documents/serg/gene-disease-hetnet/networks/140615-all-assoc')
 args = parser.parse_args()
 
 webdata_dir = os.path.join(args.network_dir, 'webdata')
