@@ -44,7 +44,7 @@ description_path = os.path.join(website_dir, 'download-descriptions.html')
 with open(description_path, 'w') as write_file:
     write_file.write(html_str)
 
-#Description List Code
+# Description List Code
 '''
 #css
 .dl-horizontal dt{
