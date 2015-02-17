@@ -43,15 +43,12 @@ for metapath in metagraph.extract_metapaths('gene', 'gene', max_length=2):
     metapath = metagraph.get_metapath(metapath.edges + (metaedge_GaD, ))
     gene_set_metapaths.append(metapath) 
 
-
+# read disease-gene pairs
 part_rows = dict()
 with gzip.open(partition_path) as part_file:
     part_reader = csv.DictReader(part_file, delimiter='\t')
     for row in part_reader:
-        #row['disease_node']
         part_rows.setdefault(row['status'], list()).append(row)
-
-part_rows.keys()
 
 
 def generate_dgs_tuples(negative_prob = 0.005):

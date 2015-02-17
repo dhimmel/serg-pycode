@@ -7,6 +7,7 @@ import re
 import operator
 import csv
 import random
+import simplejson
 
 import yaml
 
@@ -28,6 +29,12 @@ def read_pickle(path):
     read_file.close()
     return graph_from_writable(writable)
 
+def read_json(path):
+    """Untested"""
+    read_file = open_ext(path)
+    writable = simplejson.load(read_file)
+    read_file.close()
+    return graph_from_writable(writable)
 
 def read_yaml(path):
     """ """
